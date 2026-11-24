@@ -8,6 +8,7 @@ except ImportError:
 if HAS_QT:
     from agora.ui import MainWindow
 from agora.storage import Storage
+from agora.answer_import import ImportedKey
 from agora.modules import MODULES
 
 @unittest.skipUnless(HAS_QT,'PySide6 no disponible')
@@ -27,7 +28,7 @@ class UITests(unittest.TestCase):
             w=MainWindow(Storage(d)); w.show(); w.go('manual'); self.app.processEvents(); m=w.manual
             m.name.setText('Prueba 3'); m.n.setValue(3); m.r.setValue(1); m.apply_config(); self.app.processEvents()
             self.assertEqual(m.stage,1)
-            for i,v in enumerate('AXBC'): m.choose(i,v)
+            m.install_key(ImportedKey(tuple('AXB'),('C',)),'prueba.pdf',3)
             m.next_entry(); self.app.processEvents(); self.assertEqual(m.stage,2)
             for i,v in enumerate('AB-C'): m.choose(i,v)
             m.next_entry(); self.app.processEvents(); self.assertEqual(m.stage,3)
@@ -41,6 +42,7 @@ class UITests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             w=MainWindow(Storage(d)); w.show(); w.go('manual'); self.app.processEvents(); m=w.manual
             m.n.setValue(2); m.r.setValue(0); m.apply_config(); self.app.processEvents(); m.focus_entry(); self.app.processEvents()
+            m.install_key(ImportedKey(('C','C'),()),'prueba.pdf',3); self.app.processEvents()
             # Exercise the keyboard handlers via their real QShortcut signals as well as mouse clicks.
             m.shortcuts[0].activated.emit(); self.assertEqual(m.key[0],'A'); self.assertEqual(m.cursor,1)
             m.grid_rows[1][2][1][1].click(); self.assertEqual(m.key[1],'B'); m.next_entry(); self.app.processEvents()
@@ -52,7 +54,8 @@ class UITests(unittest.TestCase):
             w=MainWindow(Storage(d)); w.show(); w.go('manual'); self.app.processEvents(); m=w.manual
             m.n.setValue(2); m.r.setValue(0); m.step_labels[1].click()
             self.assertEqual(m.stage,1)
-            m.choose(0,'A'); m.choose(1,'B'); m.step_labels[2].click()
+            m.step_labels[2].click(); self.assertEqual(m.stage,1)
+            m.install_key(ImportedKey(('A','B'),()),'prueba.pdf',3); m.step_labels[2].click()
             m.choose(0,'A'); m.choose(1,'C'); m.step_labels[3].click()
             self.assertEqual(m.stage,3); self.assertEqual(m.result.wrong,1)
             m.step_labels[0].click(); self.assertEqual(m.stage,0)
