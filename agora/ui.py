@@ -1,0 +1,142 @@
+from pathlib import Path
+from PySide6.QtCore import Qt, QSize, QUrl
+from PySide6.QtGui import QIcon, QDesktopServices, QFont
+from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
+    QLabel, QPushButton, QFrame, QStackedWidget, QScrollArea, QLineEdit, QMessageBox, QSizePolicy)
+from . import VERSION, BLOCK
+from .modules import MODULES
+from .storage import Storage
+
+ASSETS = Path(__file__).resolve().parent.parent / 'assets'
+STYLE = '''
+QWidget {font-family: "Segoe UI", sans-serif; font-size: 14px; color: #563D49;}
+QMainWindow, QWidget#root, QWidget#canvas {background: #FFF7FA;}
+QFrame#sidebar {background: #FFFFFF; border-right: 1px solid #EFDFE7;}
+QFrame#hero {background: #F4D6E3; border: 1px solid #EFCBDD; border-radius: 20px;}
+QFrame#tile, QFrame#panel {background: white; border: 1px solid #EEDDE5; border-radius: 16px;}
+QLabel#brand {font-size: 30px; font-weight: 700; color: #8C4667;}
+QLabel#headline {font-size: 30px; font-weight: 650; color: #75405B;}
+QLabel#heading {font-size: 25px; font-weight: 650; color: #75405B;}
+QLabel#tileTitle {font-size: 17px; font-weight: 600; color: #73425A;}
+QLabel#muted {color: #795C6B; font-size: 13px;}
+QLabel#tag {background: #FAEDF3; color: #8D5070; border-radius: 8px; padding: 5px 9px; font-size: 12px;}
+QPushButton {border: 1px solid #EBD5E0; border-radius: 9px; padding: 9px 13px; background: #FFFFFF; font-weight: 500; text-align: left;}
+QPushButton:hover {background: #FAEAF1; border-color: #DDAEC4;}
+QPushButton:focus, QLineEdit:focus {border: 2px solid #B45F86;}
+QPushButton#nav {border: 1px solid transparent; padding: 10px 12px; background: transparent;}
+QPushButton#nav:checked {background: #F6DCE8; color: #803D5E; border: 1px solid #EBC5D8; font-weight: 600;}
+QPushButton#nav:hover {background: #FBEDF3;}
+QPushButton#primary {background: #A55379; color: white; border: 1px solid #A55379; text-align:center;}
+QPushButton#primary:hover {background: #904268;}
+QLineEdit {background: #FFF9FB; border: 1px solid #E8CEDB; border-radius: 9px; padding: 10px; selection-background-color: #A55379;}
+QScrollArea {border: none; background: transparent;}
+QScrollBar:vertical {background: #F9ECF2; width: 9px; border-radius: 4px; margin: 2px;}
+QScrollBar::handle:vertical {background: #D8A9BF; border-radius: 4px; min-height: 28px;}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {height: 0;}
+'''
+
+def icon(name):
+    return QIcon(str(ASSETS / (name + '.svg')))
+
+def label(text, role='', wrap=False):
+    w = QLabel(text)
+    w.setTextFormat(Qt.TextFormat.PlainText)
+    if role: w.setObjectName(role)
+    w.setWordWrap(wrap)
+    return w
+
+def button(text, symbol=None, role=''):
+    b = QPushButton(text)
+    b.setCursor(Qt.CursorShape.PointingHandCursor)
+    if role: b.setObjectName(role)
+    if symbol:
+        b.setIcon(icon(symbol)); b.setIconSize(QSize(20,20))
+    return b
+
+def frame(role='panel'):
+    w = QFrame(); w.setObjectName(role); return w
+
+def vertical(parent, margins=(0,0,0,0), spacing=12):
+    l=QVBoxLayout(parent); l.setContentsMargins(*margins); l.setSpacing(spacing); return l
+
+class MainWindow(QMainWindow):
+    def __init__(self, storage: Storage):
+        super().__init__(); self.storage=storage
+        self.setWindowTitle(f'Ágora · v{VERSION} · Block {BLOCK}')
+        self.setWindowIcon(icon('logo')); self.resize(1200, 830); self.setMinimumSize(850, 620)
+        root=QWidget(); root.setObjectName('root'); self.setCentralWidget(root); self.setStyleSheet(STYLE)
+        layout=QHBoxLayout(root); layout.setContentsMargins(0,0,0,0); layout.setSpacing(0)
+        side=frame('sidebar'); side.setFixedWidth(235); layout.addWidget(side)
+        sl=vertical(side,(16,22,16,16),7)
+        brand=QHBoxLayout(); brand.setSpacing(10)
+        mark=QLabel(); mark.setPixmap(icon('logo').pixmap(47,47)); brand.addWidget(mark)
+        brand.addWidget(label('ágora','brand')); brand.addStretch(); sl.addLayout(brand)
+        sl.addWidget(label('Tu espacio de aprendizaje','muted')); sl.addSpacing(18)
+        self.nav={}; self.pages={}; self.stack=QStackedWidget(); layout.addWidget(self.stack,1)
+        self.add_nav(sl,'home','Inicio','home')
+        for m in MODULES: self.add_nav(sl,m.key,m.name,m.icon)
+        sl.addStretch(); self.add_nav(sl,'settings','Configuración','settings')
+        sl.addWidget(label('v0.1.0  ·  BLOCK 01','muted')); sl.addWidget(label('Datos locales · Sin cuenta','muted'))
+        self.make_home()
+        for m in MODULES: self.make_module(m)
+        self.make_settings(); self.go('home')
+    def add_nav(self, layout, key, name, symbol):
+        b=button(name,symbol,'nav'); b.setCheckable(True); b.clicked.connect(lambda checked=False,k=key:self.go(k)); layout.addWidget(b); self.nav[key]=b
+    def page(self,key):
+        scroll=QScrollArea(); scroll.setWidgetResizable(True); scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        canvas=QWidget(); canvas.setObjectName('canvas'); scroll.setWidget(canvas)
+        self.pages[key]=scroll; self.stack.addWidget(scroll)
+        return vertical(canvas,(30,25,30,25),16)
+    def go(self,key):
+        if key=='home': self.refresh_home()
+        if key=='settings': self.load_settings()
+        for k,b in self.nav.items(): b.setChecked(k==key)
+        self.stack.setCurrentWidget(self.pages[key])
+    def make_home(self):
+        l=self.page('home'); top=QHBoxLayout(); top.addWidget(label('Inicio','heading')); top.addStretch(); top.addWidget(label('Versión inicial · BLOCK 01','tag')); l.addLayout(top)
+        hero=frame('hero'); hl=QHBoxLayout(hero); hl.setContentsMargins(25,22,25,22)
+        words=QVBoxLayout(); self.greeting=label('Tu plaza, un paso más cerca.','headline',True); words.addWidget(self.greeting)
+        self.motto=label('', 'muted',True); words.addWidget(self.motto); hl.addLayout(words,1)
+        art=QLabel(); art.setPixmap(icon('hero').pixmap(142,104)); hl.addWidget(art,0,Qt.AlignmentFlag.AlignVCenter); l.addWidget(hero)
+        l.addWidget(label('Tus herramientas','tileTitle'))
+        grid=QGridLayout(); grid.setSpacing(12)
+        for i,m in enumerate(MODULES):
+            tile=frame('tile'); tl=vertical(tile,(15,13,15,13),6)
+            top=QHBoxLayout(); pic=QLabel(); pic.setPixmap(icon(m.icon).pixmap(30,30)); top.addWidget(pic); top.addStretch(); top.addWidget(label('Bloque '+m.block,'tag')); tl.addLayout(top)
+            tl.addWidget(label(m.name,'tileTitle',True)); tl.addWidget(label(m.description,'muted',True)); tl.addStretch()
+            b=button('Ver módulo  ›'); b.clicked.connect(lambda checked=False,k=m.key:self.go(k)); tl.addWidget(b)
+            grid.addWidget(tile,i//2,i%2)
+        grid.setColumnStretch(0,1); grid.setColumnStretch(1,1); l.addLayout(grid)
+        l.addWidget(label('Esta versión contiene la estructura y los ajustes. Los correctores se habilitarán en los siguientes bloques.','muted',True)); l.addStretch()
+    def refresh_home(self):
+        name=self.storage.get('student_name').strip()
+        self.greeting.setText(f'¡Hola, {name}!' if name else 'Tu plaza, un paso más cerca.')
+        self.motto.setText(self.storage.get('welcome_message') or 'Aprende. Comprende. Avanza.')
+    def make_module(self,m):
+        l=self.page(m.key); back=button('Volver al inicio','home'); back.clicked.connect(lambda:self.go('home')); l.addWidget(back,0,Qt.AlignmentFlag.AlignLeft)
+        l.addWidget(label(m.name,'heading',True)); l.addWidget(label(m.description,'muted',True))
+        panel=frame(); p=vertical(panel,(24,24,24,24),15)
+        logo=QLabel(); logo.setPixmap(icon(m.icon).pixmap(54,54)); p.addWidget(logo)
+        p.addWidget(label('Disponible en un próximo bloque','tileTitle')); p.addWidget(label('Desarrollo previsto: BLOCK '+m.block,'tag'),0,Qt.AlignmentFlag.AlignLeft)
+        p.addWidget(label('Qué podrás hacer aquí','tileTitle'))
+        for f in m.features: p.addWidget(label('•  '+f,wrap=True))
+        p.addWidget(label('En BLOCK 01 todavía no se procesan ni se importan documentos.','muted',True)); l.addWidget(panel); l.addStretch()
+    def make_settings(self):
+        l=self.page('settings'); l.addWidget(label('Configuración','heading')); l.addWidget(label('Personaliza tu espacio. Los cambios se guardan en este equipo.','muted',True))
+        panel=frame(); p=vertical(panel,(22,22,22,22),10)
+        p.addWidget(label('Perfil','tileTitle')); p.addWidget(label('Nombre (opcional)'))
+        self.name=QLineEdit(); self.name.setPlaceholderText('Tu nombre'); self.name.setMaxLength(50); p.addWidget(self.name)
+        p.addWidget(label('Frase de bienvenida')); self.message=QLineEdit(); self.message.setMaxLength(120); p.addWidget(self.message)
+        save=button('Guardar cambios','check','primary'); save.clicked.connect(self.save_settings); p.addWidget(save,0,Qt.AlignmentFlag.AlignLeft)
+        self.status=label('','muted',True); p.addWidget(self.status); l.addWidget(panel)
+        panel2=frame(); p2=vertical(panel2,(22,22,22,22),10); p2.addWidget(label('Almacenamiento local','tileTitle'))
+        p2.addWidget(label(str(self.storage.directory),'muted',True)); op=button('Abrir carpeta de datos','folder'); op.clicked.connect(self.open_data); p2.addWidget(op,0,Qt.AlignmentFlag.AlignLeft); l.addWidget(panel2)
+        panel3=frame(); p3=vertical(panel3,(22,22,22,22),10); p3.addWidget(label('Acerca de Ágora','tileTitle')); p3.addWidget(label('Versión 0.1.0 · BLOCK 01\nEstructura inicial. No contiene todavía OCR, OMR, QR ni cálculo de notas.',wrap=True)); l.addWidget(panel3); l.addStretch()
+    def load_settings(self):
+        self.name.setText(self.storage.get('student_name')); self.message.setText(self.storage.get('welcome_message')); self.status.setText('')
+    def save_settings(self):
+        try:
+            self.storage.save({'student_name':self.name.text().strip(),'welcome_message':self.message.text().strip()}); self.status.setText('Cambios guardados correctamente.'); self.refresh_home()
+        except Exception as e: QMessageBox.warning(self,'No se pudo guardar',str(e))
+    def open_data(self):
+        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.storage.directory.resolve()))): QMessageBox.warning(self,'Ágora','No se pudo abrir la carpeta de datos.')
