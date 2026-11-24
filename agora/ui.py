@@ -14,7 +14,7 @@ QMainWindow, QWidget#root, QWidget#canvas {background: #FFF7FA;}
 QFrame#sidebar {background: #FFFFFF; border-right: 1px solid #EFDFE7;}
 QFrame#hero {background: #F4D6E3; border: 1px solid #EFCBDD; border-radius: 20px;}
 QFrame#tile, QFrame#panel {background: white; border: 1px solid #EEDDE5; border-radius: 16px;}
-QLabel#brand {font-size: 30px; font-weight: 700; color: #8C4667;}
+QLabel#brand {font-family: "Palatino Linotype", "Georgia", serif; font-size: 30px; font-weight: 700; color: #8C4667;}
 QLabel#headline {font-size: 30px; font-weight: 650; color: #75405B;}
 QLabel#heading {font-size: 25px; font-weight: 650; color: #75405B;}
 QLabel#tileTitle {font-size: 17px; font-weight: 600; color: #73425A;}
@@ -100,7 +100,7 @@ class MainWindow(QMainWindow):
         sl=vertical(side,(16,22,16,16),7)
         brand=QHBoxLayout(); brand.setSpacing(10)
         mark=QLabel(); mark.setPixmap(icon('logo').pixmap(47,47)); brand.addWidget(mark)
-        brand.addWidget(label('ágora','brand')); brand.addStretch(); sl.addLayout(brand)
+        brand.addWidget(label('ÁGORA','brand')); brand.addStretch(); sl.addLayout(brand)
         sl.addWidget(label('Tu espacio de aprendizaje','muted')); sl.addSpacing(18)
         self.nav={}; self.pages={}; self.stack=QStackedWidget(); layout.addWidget(self.stack,1)
         self.add_nav(sl,'home','Inicio','home')
