@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import closing
 import tempfile
 import unittest
 from pathlib import Path
@@ -23,8 +24,12 @@ class StorageTests(unittest.TestCase):
     def test_future_db_not_downgraded(self):
         with tempfile.TemporaryDirectory() as d:
             s=Storage(d)
-            with sqlite3.connect(s.path) as db: db.execute('PRAGMA user_version=2')
+            with closing(sqlite3.connect(s.path)) as db:
+                with db:
+                    db.execute('PRAGMA user_version=2')
             with self.assertRaises(RuntimeError): Storage(d)
+            with closing(sqlite3.connect(s.path)) as db:
+                self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0], 2)
     def test_module_registry(self):
         self.assertEqual(len(MODULES),8)
         self.assertEqual(len({m.key for m in MODULES}),8)
