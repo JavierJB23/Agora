@@ -1,15 +1,7 @@
-BLOCK 02 RC1 — validación manual
-1. Iniciar EXE, confirmar v0.2.0 y que inicio conserva el diseño FIX03.
-2. Abrir Corrector manual. Configurar 5 preguntas ordinarias, 2 reservas, 3 opciones, penalización 1/3 y nota máxima 10.
-3. Soluciones: A B X C A / reservas B C. Guardar plantilla si se desea.
-4. Respuestas: A C B - A / reservas B A. Corregir.
-   Esperado: 3 aciertos, 1 error, 1 blanco, 1 anulada ordinaria, 1 reserva utilizada, 5 evaluables, nota 5,33. R1 sustituye a 3; R2 no utilizada.
-5. Filtrar errores: solo pregunta 2. Filtrar en blanco: solo pregunta 4. Editar respuesta 2 a B y corregir: 8,00.
-6. Cerrar y reabrir: comprobar que el resultado del último borrador se mantiene. Abrir configuración y comprobar perfil anterior.
-7. Nuevo simulacro, cargar plantilla guardada; comprobar que recupera soluciones y no las respuestas del intento anterior.
-8. Probar 120 ordinarias y 9 reservas, teclado y salto de página; probar ventana reducida y cinco opciones. No se debe bloquear ni perder respuestas.
-
-Automatizadas: python -m unittest discover -s tests -v
-23 superadas localmente, 3 de interfaz omitidas por falta de PySide6. GitHub debe ejecutar las 26. No hay compilación Windows realizada en este entorno.
-
-FIX01: comprobar rueda sobre penalización, número de preguntas, plantillas y filtro (sin cambio de valor); comprobar que se puede usar rueda en la lista desplegada. Resultado → Configuración → Resultado, cambiar penalización y comprobar recálculo; editar una respuesta y saltar a Resultado. Si faltan soluciones/respuestas, no mostrar resultado inválido. Consultar plantilla guardada sin sustituir borrador. Tres nuevas pruebas GUI pendientes de GitHub.
+BLOCK 03–04 RC1 — validación manual
+1. Inicio y configuración: aspecto idéntico, salvo flechas/popup renovados. Rueda no cambia controles. Confirmación al cargar plantilla: Sí/No.
+2. Nuevo examen manual > configuración > soluciones. Importar desde ordenador S24 Respuestas correctas.pdf. Debe mostrar 120 ordinarias + 9 reservas; 1 B, 2 A, 120 A, R1 B, R9 C. Confirmar y verificar que no se requiere transcribir soluciones. Guardar plantilla opcionalmente.
+3. Nuevo examen, importar Preguntas_ Temas 56, 57, 58 y 59.pdf: 107 ordinarias, 0 reservas; 1 C, 107 B. Confirmar. El PDF incluye preguntas antes del solucionario; no deben contarse.
+4. Desde móvil: abrir QR, escanear con cámara, misma red privada, seleccionar el PDF y enviar. Debe abrir la misma pantalla de revisión. Si Windows pregunta, permitir redes privadas. Comprobar otra IP en el desplegable si no conecta. Cancelar y comprobar que una sesión nueva genera otro QR. No probar en red pública.
+5. Word .docx con números explícitos 1A, 2B, 3X, 4C, 5A y reservas R1B, R2C. Importar, revisar 5+2. Respuestas personales A C B - A / B A; nota esperada 5,33, 3 aciertos, 1 error, 1 blanco, R1 sustituye a 3. Cerrar/reabrir, consultar plantilla, editar y recalcular. Probar también PDF inválido o con un hueco: no se deben perder datos existentes.
+6. Validación de Windows y móvil pendiente; 31 pruebas no gráficas superadas (6 GUI omitidas localmente). GitHub ejecuta todas.
