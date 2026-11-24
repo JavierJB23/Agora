@@ -46,3 +46,57 @@ class UITests(unittest.TestCase):
             m.grid_rows[1][2][1][1].click(); self.assertEqual(m.key[1],'B'); m.next_entry(); self.app.processEvents()
             m.shortcuts[0].activated.emit(); m.shortcuts[3].activated.emit(); self.assertEqual(m.answers,['A','-']); m.next_entry(); self.app.processEvents(); self.assertEqual(m.result.grade,5)
             w.close(); w.deleteLater(); self.app.processEvents()
+
+    def test_direct_steps_and_current_result(self):
+        with tempfile.TemporaryDirectory() as d:
+            w=MainWindow(Storage(d)); w.show(); w.go('manual'); self.app.processEvents(); m=w.manual
+            m.n.setValue(2); m.r.setValue(0); m.step_labels[1].click()
+            self.assertEqual(m.stage,1)
+            m.choose(0,'A'); m.choose(1,'B'); m.step_labels[2].click()
+            m.choose(0,'A'); m.choose(1,'C'); m.step_labels[3].click()
+            self.assertEqual(m.stage,3); self.assertEqual(m.result.wrong,1)
+            m.step_labels[0].click(); self.assertEqual(m.stage,0)
+            m.penalty.setCurrentText('0'); m.step_labels[3].click()
+            self.assertEqual(m.stage,3); self.assertEqual(m.result.grade,5)
+            m.step_labels[2].click(); m.choose(1,'B'); m.step_labels[3].click()
+            self.assertEqual(m.result.grade,10)
+            m.step_labels[2].click(); m.clear(1); m.step_labels[3].click()
+            self.assertEqual(m.stage,2); self.assertEqual(m.answers[1],'')
+            w.close(); w.deleteLater(); self.app.processEvents()
+
+    def test_wheel_does_not_change_form_controls(self):
+        from PySide6.QtCore import QPoint,QPointF,Qt
+        from PySide6.QtGui import QWheelEvent
+        from agora.controls import SafeComboBox, SafeSpinBox, SafeDoubleSpinBox
+        widgets=[SafeComboBox(),SafeComboBox(),SafeSpinBox(),SafeDoubleSpinBox()]
+        for i,w in enumerate(widgets):
+            if i<2:
+                w.setEditable(i==1); w.addItems(['0','1/3','1/2']); w.setCurrentIndex(1)
+                before=w.currentText(); get=w.currentText
+            else:
+                w.setRange(0,100); w.setValue(10); before=w.value(); get=w.value
+            w.show(); w.setFocus(); self.app.processEvents()
+            for delta in (120,-120):
+                event=QWheelEvent(QPointF(5,5),QPointF(5,5),QPoint(),QPoint(0,delta),Qt.MouseButton.NoButton,Qt.KeyboardModifier.NoModifier,Qt.ScrollPhase.NoScrollPhase,False)
+                self.app.sendEvent(w,event); self.assertEqual(get(),before); self.assertFalse(event.isAccepted())
+            w.close(); w.deleteLater()
+        self.app.processEvents()
+
+    def test_view_template_without_replacing_draft(self):
+        from PySide6.QtCore import QTimer
+        from PySide6.QtWidgets import QDialog,QTableWidget
+        from dataclasses import asdict
+        from agora.grading import ExamConfig
+        with tempfile.TemporaryDirectory() as d:
+            storage=Storage(d); storage.save_template('Guardada',{'config':asdict(ExamConfig(questions=2,reserves=1)),'key':['A','X','C']})
+            w=MainWindow(storage); w.show(); w.go('manual'); self.app.processEvents(); m=w.manual
+            m.templates_combo.setCurrentIndex(1); m.name.setText('Borrador sin confirmar'); seen=[]
+            def inspect():
+                dlg=self.app.activeModalWidget()
+                if isinstance(dlg,QDialog):
+                    table=dlg.findChild(QTableWidget)
+                    if table: seen.extend((table.rowCount(),table.item(1,1).text(),table.item(2,0).text()))
+                    dlg.accept()
+            QTimer.singleShot(0,inspect); m.view_template()
+            self.assertEqual(seen,[3,'Anulada','R1']); self.assertEqual(m.name.text(),'Borrador sin confirmar'); self.assertIsNone(storage.load_draft()); self.assertEqual(len(storage.templates()),1)
+            w.close(); w.deleteLater(); self.app.processEvents()
