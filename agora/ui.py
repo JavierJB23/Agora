@@ -2,7 +2,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QSize, QUrl
 from PySide6.QtGui import QIcon, QDesktopServices, QFont
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QLabel, QPushButton, QFrame, QStackedWidget, QScrollArea, QLineEdit, QMessageBox, QSizePolicy)
+    QLabel, QPushButton, QToolButton, QFrame, QStackedWidget, QScrollArea, QLineEdit, QMessageBox, QSizePolicy)
 from . import VERSION, BLOCK
 from .modules import MODULES
 from .storage import Storage
@@ -28,6 +28,10 @@ QPushButton#nav:checked {background: #F6DCE8; color: #803D5E; border: 1px solid 
 QPushButton#nav:hover {background: #FBEDF3;}
 QPushButton#primary {background: #A55379; color: white; border: 1px solid #A55379; text-align:center;}
 QPushButton#primary:hover {background: #904268;}
+QToolButton#homeTile {background: #FFFFFF; border: 1px solid #EEDDE5; border-radius: 16px; padding: 10px 8px; color: #73425A; font-size: 17px; font-weight: 600;}
+QToolButton#homeTile:hover {background: #FAEAF1; border-color: #DDAEC4;}
+QToolButton#homeTile:pressed {background: #F1D0DF; border-color: #C987A6;}
+QToolButton#homeTile:focus {border: 2px solid #B45F86;}
 QLineEdit {background: #FFF9FB; border: 1px solid #E8CEDB; border-radius: 9px; padding: 10px; selection-background-color: #A55379;}
 QScrollArea {border: none; background: transparent;}
 QScrollBar:vertical {background: #F9ECF2; width: 9px; border-radius: 4px; margin: 2px;}
@@ -58,6 +62,32 @@ def frame(role='panel'):
 
 def vertical(parent, margins=(0,0,0,0), spacing=12):
     l=QVBoxLayout(parent); l.setContentsMargins(*margins); l.setSpacing(spacing); return l
+
+class HomeTile(QToolButton):
+    """Whole tile is a keyboard-accessible button with an icon above its name."""
+    def __init__(self, module):
+        super().__init__()
+        self.full_name=module.name
+        self.setObjectName('homeTile')
+        self.setText(self.full_name)
+        self.setAccessibleName(self.full_name)
+        self.setIcon(icon(module.icon))
+        self.setIconSize(QSize(64,64))
+        self.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
+        self.setSizePolicy(QSizePolicy.Policy.Ignored,QSizePolicy.Policy.Fixed)
+        self.setMinimumWidth(0)
+        self.setFixedHeight(170)
+    def resizeEvent(self,event):
+        super().resizeEvent(event)
+        name=self.full_name
+        # Keep one line on normal windows; split long names on small windows.
+        if self.fontMetrics().horizontalAdvance(name)>self.width()-24 and ' ' in name:
+            words=name.split()
+            cut=min(range(1,len(words)),key=lambda i:abs(len(' '.join(words[:i]))-len(' '.join(words[i:]))))
+            name=' '.join(words[:cut])+'\n'+' '.join(words[cut:])
+        if self.text()!=name: self.setText(name)
 
 class MainWindow(QMainWindow):
     def __init__(self, storage: Storage):
@@ -99,15 +129,14 @@ class MainWindow(QMainWindow):
         self.motto=label('', 'muted',True); words.addWidget(self.motto); hl.addLayout(words,1)
         art=QLabel(); art.setPixmap(icon('hero').pixmap(142,104)); hl.addWidget(art,0,Qt.AlignmentFlag.AlignVCenter); l.addWidget(hero)
         l.addWidget(label('Tus herramientas','tileTitle'))
-        grid=QGridLayout(); grid.setSpacing(12)
+        grid=QGridLayout(); grid.setSpacing(14)
+        self.home_tiles={}
         for i,m in enumerate(MODULES):
-            tile=frame('tile'); tl=vertical(tile,(15,13,15,13),6)
-            top=QHBoxLayout(); pic=QLabel(); pic.setPixmap(icon(m.icon).pixmap(30,30)); top.addWidget(pic); top.addStretch(); top.addWidget(label('Bloque '+m.block,'tag')); tl.addLayout(top)
-            tl.addWidget(label(m.name,'tileTitle',True)); tl.addWidget(label(m.description,'muted',True)); tl.addStretch()
-            b=button('Ver módulo  ›'); b.clicked.connect(lambda checked=False,k=m.key:self.go(k)); tl.addWidget(b)
-            grid.addWidget(tile,i//2,i%2)
-        grid.setColumnStretch(0,1); grid.setColumnStretch(1,1); l.addLayout(grid)
-        l.addWidget(label('Esta versión contiene la estructura y los ajustes. Los correctores se habilitarán en los siguientes bloques.','muted',True)); l.addStretch()
+            tile=HomeTile(m); tile.clicked.connect(lambda checked=False,k=m.key:self.go(k))
+            self.home_tiles[m.key]=tile
+            grid.addWidget(tile,i//4,i%4)
+        for col in range(4): grid.setColumnStretch(col,1)
+        l.addLayout(grid); l.addStretch()
     def refresh_home(self):
         name=self.storage.get('student_name').strip()
         self.greeting.setText(f'¡Hola, {name}!' if name else 'Tu plaza, un paso más cerca.')
