@@ -42,7 +42,23 @@ QPushButton#manualStep {background: #FFFFFF; border: 1px solid #EEDDE5; border-r
 QPushButton#manualStep[active="true"] {background:#F4D6E3; color:#75405B; font-weight:700;}
 QPushButton#manualStep:hover {background:#FAEAF1; border-color:#DDAEC4;}
 QSpinBox, QComboBox {background:#FFF9FB; border:1px solid #E8CEDB; border-radius:8px; padding:8px; min-height:20px;}
-QComboBox QAbstractItemView {background:white; selection-background-color:#F4D6E3; selection-color:#563D49;}
+QComboBox {padding-right:34px; combobox-popup:0;}
+QComboBox::drop-down {subcontrol-origin:padding; subcontrol-position:top right; width:30px; border:0; border-left:1px solid #EEDDE5; border-top-right-radius:8px; border-bottom-right-radius:8px; background:#FAEDF3;}
+QComboBox::drop-down:hover {background:#F4D6E3;}
+QComboBox::down-arrow {image:url("@ASSETS@/chevron-down.svg"); width:14px; height:14px;}
+QComboBox QAbstractItemView {background:white; border:1px solid #E8CEDB; border-radius:8px; padding:5px; outline:0; selection-background-color:#F4D6E3; selection-color:#563D49;}
+QComboBox QAbstractItemView::item {min-height:30px; padding:4px 8px;}
+QComboBox QLineEdit {border:0; padding:0; background:transparent;}
+QSpinBox {padding-right:32px;}
+QSpinBox::up-button, QSpinBox::down-button {subcontrol-origin:padding; width:27px; border:0; border-left:1px solid #EEDDE5; background:#FAEDF3;}
+QSpinBox::up-button {subcontrol-position:top right; border-top-right-radius:8px;}
+QSpinBox::down-button {subcontrol-position:bottom right; border-bottom-right-radius:8px;}
+QSpinBox::up-button:hover, QSpinBox::down-button:hover {background:#F4D6E3;}
+QSpinBox::up-arrow {image:url("@ASSETS@/chevron-up.svg"); width:13px; height:13px;}
+QSpinBox::down-arrow {image:url("@ASSETS@/chevron-down.svg"); width:13px; height:13px;}
+QSpinBox:focus, QComboBox:focus {border:1px solid #B45F86;}
+QDialog, QMessageBox {background:#FFF7FA;}
+QMessageBox QPushButton {min-width:65px; text-align:center;}
 QCheckBox {spacing:8px;}
 QPushButton#manualNumber {text-align:center; padding:5px; background:#FAEDF3; border:1px solid #EEDDE5;}
 QPushButton#manualNumber[selected="true"] {background:#A55379; color:white; font-weight:700;}
@@ -112,7 +128,7 @@ class MainWindow(QMainWindow):
         super().__init__(); self.storage=storage
         self.setWindowTitle(f'Ágora · v{VERSION} · Block {BLOCK}')
         self.setWindowIcon(icon('logo')); self.resize(1200, 830); self.setMinimumSize(850, 620)
-        root=QWidget(); root.setObjectName('root'); self.setCentralWidget(root); self.setStyleSheet(STYLE)
+        root=QWidget(); root.setObjectName('root'); self.setCentralWidget(root); self.setStyleSheet(STYLE.replace('@ASSETS@', ASSETS.as_posix()))
         layout=QHBoxLayout(root); layout.setContentsMargins(0,0,0,0); layout.setSpacing(0)
         side=frame('sidebar'); side.setFixedWidth(235); layout.addWidget(side)
         sl=vertical(side,(16,22,16,16),7)
@@ -182,7 +198,7 @@ class MainWindow(QMainWindow):
         self.status=label('','muted',True); p.addWidget(self.status); l.addWidget(panel)
         panel2=frame(); p2=vertical(panel2,(22,22,22,22),10); p2.addWidget(label('Almacenamiento local','tileTitle'))
         p2.addWidget(label(str(self.storage.directory),'muted',True)); op=button('Abrir carpeta de datos','folder'); op.clicked.connect(self.open_data); p2.addWidget(op,0,Qt.AlignmentFlag.AlignLeft); l.addWidget(panel2)
-        panel3=frame(); p3=vertical(panel3,(22,22,22,22),10); p3.addWidget(label('Acerca de Ágora','tileTitle')); p3.addWidget(label(f'Versión {VERSION} · BLOCK {BLOCK}\nCorrector manual disponible. Importación, OCR, OMR y QR en futuros bloques.',wrap=True)); l.addWidget(panel3); l.addStretch()
+        panel3=frame(); p3=vertical(panel3,(22,22,22,22),10); p3.addWidget(label('Acerca de Ágora','tileTitle')); p3.addWidget(label(f'Versión {VERSION} · BLOCK {BLOCK}\nCorrector manual con importación PDF/Word y QR. OCR y OMR en futuros bloques.',wrap=True)); l.addWidget(panel3); l.addStretch()
     def load_settings(self):
         self.name.setText(self.storage.get('student_name')); self.message.setText(self.storage.get('welcome_message')); self.status.setText('')
     def save_settings(self):
