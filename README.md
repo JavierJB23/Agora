@@ -1,28 +1,21 @@
-# Ágora v0.1.0 — BLOCK 01 — RC1
+# ÁGORA v0.2.0 — BLOCK 02 — RC1
 
-**Estado: candidato a validación, no STABLE.**
+Corrector manual local. Conserva el diseño de BLOCK 01 FIX03 (validado visualmente en Windows). Sin Python, instalación de fuentes ni dependencias para el usuario del EXE.
 
-Primer bloque del asistente personal de oposiciones para Windows. Python 3.12, PySide6, SQLite. Interfaz rosa pastel y blanca, logo provisional de inspiración griega, menú lateral, ocho módulos con pantallas informativas y configuración persistente. Los módulos futuros están identificados como no disponibles; no hay notas, historiales o correcciones simuladas.
+## Actualizar el repositorio existente
+Descomprime Agora_BLOCK02_RC1.zip. Desde la raíz del repositorio Agora (rama main), usa Add file > Upload files y arrastra el contenido descomprimido: carpetas agora y tests, y README.md, ROADMAP.md, TESTS.txt. Confirma con Commit changes. No borres los archivos anteriores ni modifiques .github/workflows/windows.yml. El flujo existente compila la versión nueva, aunque el nombre del artefacto conserva BLOCK01. Descarga el artefacto de la ejecución del nuevo commit, no de un commit anterior. El EXE debe indicar v0.2.0 · Block 02.
 
-## Compilar en GitHub (sin instalar Python)
-1. Descomprime el ZIP completo.
-2. Crea un repositorio privado llamado Agora en GitHub, con README inicial.
-3. En Code > Add file > Upload files, arrastra todos los archivos y carpetas del ZIP descomprimido, incluida `.github`, a la raíz del repositorio. Confirma Commit changes.
-4. En Actions, selecciona Compilar Agora Windows. El push a main o master inicia la compilación automáticamente; también se puede iniciar mediante Run workflow.
-5. Cuando el proceso finalice en verde, abre esa ejecución y descarga el artefacto Agora-v0.1-BLOCK01-Windows.
-6. Descomprime el artefacto y ejecuta Agora.exe. No necesitas Python ni dependencias en tu ordenador. Windows puede mostrar un aviso de firma digital porque el EXE no está firmado.
+## Corrector manual
+1. Configura nombre, 1–500 preguntas ordinarias, 0–100 reservas, 2–5 opciones, penalización y nota máxima. La penalización inicial 1/3 es provisional, no un criterio oficial verificado. También puede limitarse la nota a cero.
+2. Introduce todas las soluciones; X = anulada (también en reservas). Guarda una plantilla si quieres reutilizarla.
+3. Introduce las respuestas originales. A–E según configuración; guion = blanco; Retroceso = borrar a pendiente; flechas arriba/abajo = selección. La selección avanza automáticamente. Clic en el número para cambiar la pregunta activa. Las páginas muestran hasta 16 preguntas. Las pendientes solo pasan a blanco con confirmación.
+4. Corrige y consulta la nota, contadores y detalle filtrable. Puedes editar soluciones o respuestas y volver a calcular.
 
-Si la carpeta `.github` no aparece en GitHub, verifica que se haya subido `.github/workflows/windows.yml`. No subas documentos personales ni los ejemplos de estudio. El pipeline aún no se ha ejecutado en Windows en este entorno.
+Regla de reservas: sustituir las anuladas ordinarias en orden ascendente por reservas válidas en orden ascendente. Las reservas anuladas no se usan. Las reservas sobrantes no cuentan; si faltan reservas válidas, se reduce el denominador por cada anulada no sustituida. Si no hay preguntas evaluables, no se calcula nota. Nota = (aciertos − penalización × errores) × nota máxima / preguntas evaluables; cálculo exacto y redondeo de visualización a dos decimales, mitad alejándose de cero. No aplica baremos oficiales especiales ni notas de corte.
 
-## Validación manual antes de STABLE
-- Inicio: logo, textos en castellano, rosa pastel y blanco, sin solapamientos a 100% y 125% de escala.
-- Abrir los ocho módulos desde el menú y desde sus tarjetas; regresar a Inicio.
-- Configuración: guardar nombre y frase, cerrar y abrir, verificar persistencia. Probar nombre vacío.
-- Abrir carpeta de datos; confirmar SQLite en `%LOCALAPPDATA%\Agora`.
-- Reducir ventana y comprobar desplazamiento vertical.
-- Probar el EXE en Windows y reportar errores o capturas de interfaz. No avanzar al bloque 02 hasta confirmar STABLE.
+Se guarda un solo borrador local automáticamente tras confirmar configuración y registrar respuestas, además de las plantillas de soluciones que se guarden expresamente. Editar campos de configuración sin pulsar Continuar no guarda dichos cambios. Iniciar otro examen sustituye el borrador tras confirmación. No existe aún historial de exámenes ni exportación. La base de datos pasa de esquema 1 a 2 conservando el perfil. La versión antigua no puede abrir una base actualizada; no borres datos para volver atrás. No se incluyen documentos privados.
 
-## Estado y límites
-- BLOCK 01: navegación, diseño, identidad provisional, ajustes locales. No importa documentos, no realiza correcciones, no usa Internet.
-- Pruebas de almacenamiento y registro de módulos ejecutables sin Qt. Prueba de interfaz disponible y se ejecutará cuando PySide6 esté instalado. En el entorno de entrega no se dispone de PySide6 ni de compilador Windows; la UI y el EXE aún no se han validado allí.
-- No incluir archivos de estudio en el repositorio. El almacenamiento se separa del directorio del programa.
+## Validación
+23 pruebas sin interfaz superadas localmente. 3 pruebas gráficas añadidas o conservadas, pendientes de GitHub Actions (PySide6 no disponible en el entorno de entrega). El EXE y su aspecto en Windows están pendientes de validación. No declarar STABLE hasta aprobarlos.
+
+Bloques 03+: importación universal PC/móvil QR, lectura de PDF, OMR y corrección automática; bloque 07: historial y exportación. Ver ROADMAP.md.

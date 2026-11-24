@@ -2,8 +2,8 @@
 
 Desarrollo incremental por bloques; mantener la última versión STABLE y no avanzar sin aprobación. Windows, Python/PySide6/SQLite, estética rosa pastel y blanco. Primera versión funcional del corrector: fin de BLOCK 06.
 
-1. Interfaz, arquitectura, menú y configuración local.
-2. Corrector manual: número de preguntas y opciones configurables, reservas, anulaciones, blancos, puntuación configurable, plantilla manual y navegación rápida. No contar casillas fuera del examen como blancas.
+1. Interfaz, arquitectura, menú y configuración local. STABLE visual: FIX03, marca ÁGORA clásica y ocho botones 4×2.
+2. Corrector manual (v0.2.0 RC1, pendiente de Windows): número de preguntas y opciones configurables, reservas, anulaciones, blancos, puntuación configurable, plantilla manual y navegación rápida. No contar casillas fuera del examen como blancas.
 3. Importador universal: **toda** importación presente o futura ofrece ordenador (selección y arrastre) o móvil (QR, red local, selección múltiple, fotografías, progreso, sin nube). Seguridad: token temporal, límites de tamaño, validación de tipo, cerrar servidor al terminar.
 4. Extracción de soluciones: texto de PDF, documento independiente o soluciones al final del examen, numeración de reserva diferenciada y revisión editable; OCR para imágenes cuando necesario.
 5. OMR: hoja real de 120 ordinarias + 9 reservas y A/B/C, alineación de perspectiva, marcas azules y rojas separadas, ignorar resaltado verde, advertir ambigüedades; prueba con foto original sin correcciones y con correcciones. No inferir automáticamente respuestas dudosas ni asumir que el rojo representa respuesta original.

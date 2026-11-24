@@ -1,11 +1,13 @@
-test_future_db_not_downgraded (test_storage.StorageTests.test_future_db_not_downgraded) ... ok
-test_initialization (test_storage.StorageTests.test_initialization) ... ok
-test_module_registry (test_storage.StorageTests.test_module_registry) ... ok
-test_persistence (test_storage.StorageTests.test_persistence) ... ok
-test_reject_unknown (test_storage.StorageTests.test_reject_unknown) ... ok
-test_navigation_and_settings (test_ui.UITests.test_navigation_and_settings) ... skipped 'PySide6 no disponible'
+BLOCK 02 RC1 — validación manual
+1. Iniciar EXE, confirmar v0.2.0 y que inicio conserva el diseño FIX03.
+2. Abrir Corrector manual. Configurar 5 preguntas ordinarias, 2 reservas, 3 opciones, penalización 1/3 y nota máxima 10.
+3. Soluciones: A B X C A / reservas B C. Guardar plantilla si se desea.
+4. Respuestas: A C B - A / reservas B A. Corregir.
+   Esperado: 3 aciertos, 1 error, 1 blanco, 1 anulada ordinaria, 1 reserva utilizada, 5 evaluables, nota 5,33. R1 sustituye a 3; R2 no utilizada.
+5. Filtrar errores: solo pregunta 2. Filtrar en blanco: solo pregunta 4. Editar respuesta 2 a B y corregir: 8,00.
+6. Cerrar y reabrir: comprobar que el resultado del último borrador se mantiene. Abrir configuración y comprobar perfil anterior.
+7. Nuevo simulacro, cargar plantilla guardada; comprobar que recupera soluciones y no las respuestas del intento anterior.
+8. Probar 120 ordinarias y 9 reservas, teclado y salto de página; probar ventana reducida y cinco opciones. No se debe bloquear ni perder respuestas.
 
-----------------------------------------------------------------------
-Ran 6 tests in 0.018s
-
-OK (skipped=1)
+Automatizadas: python -m unittest discover -s tests -v
+23 superadas localmente, 3 de interfaz omitidas por falta de PySide6. GitHub debe ejecutar las 26. No hay compilación Windows realizada en este entorno.
