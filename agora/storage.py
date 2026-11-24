@@ -2,10 +2,11 @@
 from pathlib import Path
 import os
 import sqlite3
+import json
 from contextlib import contextmanager
 
 DEFAULTS = {'student_name': '', 'welcome_message': 'Aprende. Comprende. Avanza.'}
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 def default_data_dir():
     override = os.environ.get('AGORA_DATA_DIR')
@@ -26,6 +27,8 @@ class Storage:
                 raise RuntimeError('La base de datos pertenece a una versión más reciente de Ágora.')
             db.execute('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)')
             db.executemany('INSERT OR IGNORE INTO settings VALUES (?, ?)', DEFAULTS.items())
+            db.execute('CREATE TABLE IF NOT EXISTS manual_draft (id INTEGER PRIMARY KEY CHECK(id=1), payload TEXT NOT NULL)')
+            db.execute('CREATE TABLE IF NOT EXISTS manual_templates (id INTEGER PRIMARY KEY, name TEXT NOT NULL, payload TEXT NOT NULL)')
             db.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
     @contextmanager
     def connection(self):
@@ -48,3 +51,27 @@ class Storage:
             raise ValueError('Ajuste desconocido')
         with self.connection() as db:
             db.executemany('INSERT INTO settings VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', values.items())
+
+    def load_draft(self):
+        with self.connection() as db:
+            row=db.execute('SELECT payload FROM manual_draft WHERE id=1').fetchone()
+        return json.loads(row[0]) if row else None
+
+    def save_draft(self, payload):
+        with self.connection() as db:
+            db.execute('INSERT INTO manual_draft VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload', (json.dumps(payload,ensure_ascii=False),))
+
+    def clear_draft(self):
+        with self.connection() as db: db.execute('DELETE FROM manual_draft WHERE id=1')
+
+    def save_template(self, name, payload):
+        with self.connection() as db:
+            db.execute('INSERT INTO manual_templates(name,payload) VALUES (?,?)',(name,json.dumps(payload,ensure_ascii=False)))
+
+    def templates(self):
+        with self.connection() as db:
+            rows=db.execute('SELECT id,name,payload FROM manual_templates ORDER BY id DESC').fetchall()
+        return [(i,n,json.loads(p)) for i,n,p in rows]
+
+    def delete_template(self, template_id):
+        with self.connection() as db: db.execute('DELETE FROM manual_templates WHERE id=?',(template_id,))

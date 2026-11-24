@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, Q
 from . import VERSION, BLOCK
 from .modules import MODULES
 from .storage import Storage
+from .manual import ManualPage
 
 ASSETS = Path(__file__).resolve().parent.parent / 'assets'
 STYLE = '''
@@ -37,6 +38,22 @@ QScrollArea {border: none; background: transparent;}
 QScrollBar:vertical {background: #F9ECF2; width: 9px; border-radius: 4px; margin: 2px;}
 QScrollBar::handle:vertical {background: #D8A9BF; border-radius: 4px; min-height: 28px;}
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {height: 0;}
+QLabel#manualStep {background: #FFFFFF; border: 1px solid #EEDDE5; border-radius: 9px; padding: 9px; color:#795C6B; font-size:13px;}
+QLabel#manualStep[active="true"] {background:#F4D6E3; color:#75405B; font-weight:700;}
+QSpinBox, QComboBox {background:#FFF9FB; border:1px solid #E8CEDB; border-radius:8px; padding:8px; min-height:20px;}
+QComboBox QAbstractItemView {background:white; selection-background-color:#F4D6E3; selection-color:#563D49;}
+QCheckBox {spacing:8px;}
+QPushButton#manualNumber {text-align:center; padding:5px; background:#FAEDF3; border:1px solid #EEDDE5;}
+QPushButton#manualNumber[selected="true"] {background:#A55379; color:white; font-weight:700;}
+QPushButton#manualChoice, QPushButton#manualClear {text-align:center; padding:5px 2px; border-radius:7px;}
+QPushButton#manualChoice:checked {background:#A55379; color:white; border-color:#904268; font-weight:700;}
+QPushButton:disabled {color:#BBA9B2; background:#F8F5F7;}
+QFrame#manualMetric {background:#FFF7FA; border:1px solid #EEDDE5; border-radius:10px;}
+QLabel#correct, QLabel#wrong, QLabel#neutral {font-size:25px; font-weight:650; color:#75405B;}
+QLabel#correct {color:#30764D;} QLabel#wrong {color:#A13952;}
+QTableWidget {background:white; alternate-background-color:#FFF7FA; border:1px solid #EEDDE5; gridline-color:#F2E3EB; selection-background-color:#F4D6E3; selection-color:#563D49;}
+QHeaderView::section {background:#F4D6E3; border:0; padding:7px; color:#75405B; font-weight:600;}
+
 '''
 
 def icon(name):
@@ -106,9 +123,12 @@ class MainWindow(QMainWindow):
         self.add_nav(sl,'home','Inicio','home')
         for m in MODULES: self.add_nav(sl,m.key,m.name,m.icon)
         sl.addStretch(); self.add_nav(sl,'settings','Configuración','settings')
-        sl.addWidget(label('v0.1.0  ·  BLOCK 01','muted')); sl.addWidget(label('Datos locales · Sin cuenta','muted'))
+        sl.addWidget(label(f'v{VERSION}  ·  BLOCK {BLOCK}','muted')); sl.addWidget(label('Datos locales · Sin cuenta','muted'))
         self.make_home()
-        for m in MODULES: self.make_module(m)
+        for m in MODULES:
+            if m.key=='manual':
+                l=self.page('manual'); self.manual=ManualPage(self.storage,lambda:self.go('home')); l.addWidget(self.manual)
+            else: self.make_module(m)
         self.make_settings(); self.go('home')
     def add_nav(self, layout, key, name, symbol):
         b=button(name,symbol,'nav'); b.setCheckable(True); b.clicked.connect(lambda checked=False,k=key:self.go(k)); layout.addWidget(b); self.nav[key]=b
@@ -122,8 +142,9 @@ class MainWindow(QMainWindow):
         if key=='settings': self.load_settings()
         for k,b in self.nav.items(): b.setChecked(k==key)
         self.stack.setCurrentWidget(self.pages[key])
+        if key=='manual': self.manual.focus_entry()
     def make_home(self):
-        l=self.page('home'); top=QHBoxLayout(); top.addWidget(label('Inicio','heading')); top.addStretch(); top.addWidget(label('Versión inicial · BLOCK 01','tag')); l.addLayout(top)
+        l=self.page('home'); top=QHBoxLayout(); top.addWidget(label('Inicio','heading')); top.addStretch(); top.addWidget(label(f'Versión v{VERSION} · BLOCK {BLOCK}','tag')); l.addLayout(top)
         hero=frame('hero'); hl=QHBoxLayout(hero); hl.setContentsMargins(25,22,25,22)
         words=QVBoxLayout(); self.greeting=label('Tu plaza, un paso más cerca.','headline',True); words.addWidget(self.greeting)
         self.motto=label('', 'muted',True); words.addWidget(self.motto); hl.addLayout(words,1)
@@ -149,7 +170,7 @@ class MainWindow(QMainWindow):
         p.addWidget(label('Disponible en un próximo bloque','tileTitle')); p.addWidget(label('Desarrollo previsto: BLOCK '+m.block,'tag'),0,Qt.AlignmentFlag.AlignLeft)
         p.addWidget(label('Qué podrás hacer aquí','tileTitle'))
         for f in m.features: p.addWidget(label('•  '+f,wrap=True))
-        p.addWidget(label('En BLOCK 01 todavía no se procesan ni se importan documentos.','muted',True)); l.addWidget(panel); l.addStretch()
+        p.addWidget(label('Este módulo todavía no está disponible.','muted',True)); l.addWidget(panel); l.addStretch()
     def make_settings(self):
         l=self.page('settings'); l.addWidget(label('Configuración','heading')); l.addWidget(label('Personaliza tu espacio. Los cambios se guardan en este equipo.','muted',True))
         panel=frame(); p=vertical(panel,(22,22,22,22),10)
@@ -160,7 +181,7 @@ class MainWindow(QMainWindow):
         self.status=label('','muted',True); p.addWidget(self.status); l.addWidget(panel)
         panel2=frame(); p2=vertical(panel2,(22,22,22,22),10); p2.addWidget(label('Almacenamiento local','tileTitle'))
         p2.addWidget(label(str(self.storage.directory),'muted',True)); op=button('Abrir carpeta de datos','folder'); op.clicked.connect(self.open_data); p2.addWidget(op,0,Qt.AlignmentFlag.AlignLeft); l.addWidget(panel2)
-        panel3=frame(); p3=vertical(panel3,(22,22,22,22),10); p3.addWidget(label('Acerca de Ágora','tileTitle')); p3.addWidget(label('Versión 0.1.0 · BLOCK 01\nEstructura inicial. No contiene todavía OCR, OMR, QR ni cálculo de notas.',wrap=True)); l.addWidget(panel3); l.addStretch()
+        panel3=frame(); p3=vertical(panel3,(22,22,22,22),10); p3.addWidget(label('Acerca de Ágora','tileTitle')); p3.addWidget(label(f'Versión {VERSION} · BLOCK {BLOCK}\nCorrector manual disponible. Importación, OCR, OMR y QR en futuros bloques.',wrap=True)); l.addWidget(panel3); l.addStretch()
     def load_settings(self):
         self.name.setText(self.storage.get('student_name')); self.message.setText(self.storage.get('welcome_message')); self.status.setText('')
     def save_settings(self):
