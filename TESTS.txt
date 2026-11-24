@@ -1,0 +1,11 @@
+test_future_db_not_downgraded (test_storage.StorageTests.test_future_db_not_downgraded) ... ok
+test_initialization (test_storage.StorageTests.test_initialization) ... ok
+test_module_registry (test_storage.StorageTests.test_module_registry) ... ok
+test_persistence (test_storage.StorageTests.test_persistence) ... ok
+test_reject_unknown (test_storage.StorageTests.test_reject_unknown) ... ok
+test_navigation_and_settings (test_ui.UITests.test_navigation_and_settings) ... skipped 'PySide6 no disponible'
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.018s
+
+OK (skipped=1)
