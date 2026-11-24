@@ -38,8 +38,9 @@ QScrollArea {border: none; background: transparent;}
 QScrollBar:vertical {background: #F9ECF2; width: 9px; border-radius: 4px; margin: 2px;}
 QScrollBar::handle:vertical {background: #D8A9BF; border-radius: 4px; min-height: 28px;}
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {height: 0;}
-QLabel#manualStep {background: #FFFFFF; border: 1px solid #EEDDE5; border-radius: 9px; padding: 9px; color:#795C6B; font-size:13px;}
-QLabel#manualStep[active="true"] {background:#F4D6E3; color:#75405B; font-weight:700;}
+QPushButton#manualStep {background: #FFFFFF; border: 1px solid #EEDDE5; border-radius: 9px; padding: 9px; color:#795C6B; font-size:13px;}
+QPushButton#manualStep[active="true"] {background:#F4D6E3; color:#75405B; font-weight:700;}
+QPushButton#manualStep:hover {background:#FAEAF1; border-color:#DDAEC4;}
 QSpinBox, QComboBox {background:#FFF9FB; border:1px solid #E8CEDB; border-radius:8px; padding:8px; min-height:20px;}
 QComboBox QAbstractItemView {background:white; selection-background-color:#F4D6E3; selection-color:#563D49;}
 QCheckBox {spacing:8px;}

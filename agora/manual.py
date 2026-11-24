@@ -3,8 +3,9 @@ from dataclasses import asdict
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QShortcut, QKeySequence
 from PySide6.QtWidgets import (QWidget,QLabel,QPushButton,QVBoxLayout,QHBoxLayout,QGridLayout,QFrame,
- QLineEdit,QSpinBox,QComboBox,QCheckBox,QMessageBox,QInputDialog,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,QApplication)
+ QLineEdit,QCheckBox,QMessageBox,QInputDialog,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,QApplication,QDialog)
 from .grading import ExamConfig, evaluate, format_number
+from .controls import SafeComboBox, SafeSpinBox
 
 ALIGN=Qt.AlignmentFlag
 
@@ -32,8 +33,8 @@ class ManualPage(QWidget):
         self.root.addWidget(btn('‹  Volver al inicio',go_home),0,ALIGN.AlignLeft)
         self.root.addWidget(label('Corrector manual','heading')); self.root.addWidget(label('Introduce las soluciones y tus respuestas. Ágora calcula el resultado.','muted',True))
         self.steps=QHBoxLayout(); self.step_labels=[]
-        for s in ('1 · Configuración','2 · Soluciones','3 · Respuestas','4 · Resultado'):
-            x=label(s,'manualStep',True); self.steps.addWidget(x,1); self.step_labels.append(x)
+        for i,s in enumerate(('1 · Configuración','2 · Soluciones','3 · Respuestas','4 · Resultado')):
+            x=btn(s,lambda checked=False,j=i:self.navigate(j),'manualStep'); x.setAccessibleName(s); self.steps.addWidget(x,1); self.step_labels.append(x)
         self.root.addLayout(self.steps)
         self.notice=label('','muted',True); self.root.addWidget(self.notice)
         self.content=QWidget(); self.body=QVBoxLayout(self.content); self.body.setContentsMargins(0,0,0,0); self.body.setSpacing(10); self.root.addWidget(self.content); self.root.addStretch()
@@ -66,21 +67,43 @@ class ManualPage(QWidget):
             it=self.body.takeAt(0); w=it.widget()
             if w: w.hide(); w.deleteLater()
         for i,x in enumerate(self.step_labels):
-            x.setProperty('active',i==self.stage); x.style().unpolish(x); x.style().polish(x)
+            x.setProperty('active',i==self.stage); x.setToolTip('Paso actual' if i==self.stage else 'Ir a '+x.text()); x.style().unpolish(x); x.style().polish(x)
         (self.show_config,self.show_key,self.show_answers,self.show_result)[self.stage]()
 
     def move_stage(self,stage):
         self.stage=stage; self.cursor=0; self.persist(); self.render()
 
+    def navigate(self,target):
+        if target==self.stage: return
+        if self.stage==0:
+            self.apply_config(target=target)
+            return
+        self.open_stage(target)
+
+    def open_stage(self,target):
+        if target>=2 and '' in self.key:
+            self.move_stage(1)
+            self.complete_key()
+            return
+        if target==3:
+            if '' in self.answers:
+                self.move_stage(2)
+                self.notice.setText('Completa las respuestas o pulsa Corregir examen para confirmar las pendientes como blancas.')
+                return
+            try: self.result=evaluate(self.config,self.key,self.answers)
+            except ValueError as e:
+                QMessageBox.warning(self,'No se pudo corregir',str(e)); return
+        self.move_stage(target)
+
     def spin(self,min_,max_,value):
-        w=QSpinBox(); w.setRange(min_,max_); w.setValue(value); return w
+        w=SafeSpinBox(); w.setRange(min_,max_); w.setValue(value); return w
 
     def show_config(self):
         p=panel(self.body); p.addWidget(label('Datos del examen','tileTitle'))
         p.addWidget(label('Nombre del simulacro')); self.name=QLineEdit(self.config.name); self.name.setMaxLength(120); p.addWidget(self.name)
         grid=QGridLayout(); grid.setHorizontalSpacing(18); grid.setVerticalSpacing(7)
         self.n=self.spin(1,500,self.config.questions); self.r=self.spin(0,100,self.config.reserves); self.o=self.spin(2,5,self.config.options)
-        self.penalty=QComboBox(); self.penalty.setEditable(True)
+        self.penalty=SafeComboBox(); self.penalty.setEditable(True)
         self.penalty.addItems(['0','1/4','1/3','1/2','1']); self.penalty.setCurrentText(self.config.penalty)
         self.maximum=QLineEdit(self.config.maximum); self.maximum.setMaxLength(24)
         for i,(title,widget) in enumerate((('Preguntas ordinarias',self.n),('Preguntas de reserva',self.r),('Opciones (A–E)',self.o),('Penalización por error',self.penalty),('Nota máxima',self.maximum))):
@@ -89,8 +112,8 @@ class ManualPage(QWidget):
         self.floor=QCheckBox('Limitar la nota mínima a 0'); self.floor.setChecked(self.config.floor_zero); p.addWidget(self.floor)
         p.addWidget(label('Cada acierto vale 1; cada error resta la penalización indicada; los blancos valen 0. Puedes usar una fracción (1/3) o un decimal (0,5). La penalización inicial es provisional: comprueba las reglas de tu examen.','muted',True))
         p.addWidget(label('Las anuladas se sustituyen por las reservas válidas en orden. Si no hay suficientes, se excluyen del total evaluable.','muted',True))
-        t=panel(self.body); t.addWidget(label('Plantillas guardadas','tileTitle')); self.templates_combo=QComboBox(); t.addWidget(self.templates_combo)
-        row=QHBoxLayout(); row.addWidget(btn('Cargar plantilla',self.load_template)); row.addWidget(btn('Eliminar plantilla',self.remove_template)); row.addStretch(); t.addLayout(row); self.refresh_templates()
+        t=panel(self.body); t.addWidget(label('Plantillas guardadas','tileTitle')); self.templates_combo=SafeComboBox(); t.addWidget(self.templates_combo)
+        row=QHBoxLayout(); row.addWidget(btn('Consultar plantilla',self.view_template)); row.addWidget(btn('Cargar plantilla',self.load_template)); row.addWidget(btn('Eliminar plantilla',self.remove_template)); row.addStretch(); t.addLayout(row); self.refresh_templates()
         p2=panel(self.body,12); row=QHBoxLayout(); row.addWidget(btn('Nuevo / limpiar borrador',self.reset)); row.addStretch(); p2.addLayout(row); p2.addWidget(btn('Continuar a soluciones  ›',self.apply_config,'primary'))
 
     def refresh_templates(self):
@@ -99,6 +122,25 @@ class ManualPage(QWidget):
             self._template_items=self.storage.templates()
             for i,name,d in self._template_items: self.templates_combo.addItem(name,i)
         except Exception as e: self.notice.setText('No se pudieron cargar las plantillas: '+str(e))
+
+    def view_template(self):
+        tid=self.templates_combo.currentData()
+        if tid is None:
+            QMessageBox.information(self,'Plantillas guardadas','Selecciona primero una plantilla.'); return
+        try:
+            name,d=next((n,p) for i,n,p in self._template_items if i==tid)
+            c=ExamConfig(**d['config']); k=list(d['key']); evaluate(c,k,['-']*c.size)
+        except Exception as e:
+            QMessageBox.warning(self,'Plantilla no válida',str(e)); return
+        dialog=QDialog(self); dialog.setWindowTitle('Consultar plantilla'); dialog.resize(540,560)
+        lay=QVBoxLayout(dialog); lay.addWidget(label(name,'heading',True))
+        lay.addWidget(label(f'{c.questions} preguntas · {c.reserves} reservas · {c.options} opciones · Penalización: {c.penalty} · Nota máxima: {c.maximum}', 'muted',True))
+        lay.addWidget(label('Solo lectura. Consultar no modifica el simulacro actual.','muted',True))
+        table=QTableWidget(c.size,2); table.setHorizontalHeaderLabels(['Pregunta','Respuesta correcta']); table.verticalHeader().hide(); table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers); table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch); table.setAlternatingRowColors(True)
+        for i,v in enumerate(k):
+            for j,text in enumerate((c.number(i),'Anulada' if v=='X' else v)):
+                item=QTableWidgetItem(text); item.setTextAlignment(ALIGN.AlignCenter); table.setItem(i,j,item)
+        lay.addWidget(table,1); lay.addWidget(btn('Cerrar',dialog.accept,'primary')); dialog.exec()
 
     def load_template(self):
         tid=self.templates_combo.currentData()
@@ -121,14 +163,14 @@ class ManualPage(QWidget):
         if not confirm(self,'Nuevo simulacro','Se borrará el borrador actual, no las plantillas guardadas. ¿Continuar?'): return
         self.config=ExamConfig(); self.key=['']*self.config.size; self.answers=['']*self.config.size; self.result=None; self.move_stage(0)
 
-    def apply_config(self):
+    def apply_config(self,checked=False,*,target=1):
         try: c=ExamConfig(self.name.text().strip(),self.n.value(),self.r.value(),self.o.value(),self.penalty.currentText().strip().replace(',','.'),self.maximum.text().strip().replace(',','.'),self.floor.isChecked())
         except ValueError as e: QMessageBox.warning(self,'Revisa la configuración',str(e)); return
         changed=(c.questions,c.reserves,c.options)!=(self.config.questions,self.config.reserves,self.config.options)
         if changed:
             if (any(self.key) or any(self.answers)) and not confirm(self,'Cambiar estructura','Cambiar el número de preguntas, reservas u opciones borrará las soluciones y respuestas actuales. ¿Continuar?'): return
             self.key=['']*c.size; self.answers=['']*c.size
-        self.config=c; self.result=None; self.move_stage(1)
+        self.config=c; self.result=None; self.open_stage(target)
 
     def show_key(self): self.show_entry(True)
     def show_answers(self): self.show_entry(False)
@@ -150,7 +192,7 @@ class ManualPage(QWidget):
             self.entries_grid.addWidget(holder,i%8,i//8); self.grid_rows.append((holder,num,choices,clear))
         self.entries_grid.setColumnStretch(0,1); self.entries_grid.setColumnStretch(1,1)
         row=QHBoxLayout(); row.addWidget(btn('‹ Configuración' if is_key else '‹ Soluciones',lambda:self.move_stage(0 if is_key else 1))); row.addStretch()
-        if is_key: row.addWidget(btn('Guardar plantilla',self.save_template))
+        if is_key: row.addWidget(btn('Guardar plantilla de respuestas',self.save_template))
         else: row.addWidget(btn('Pendientes → blanco',self.fill_blanks))
         p.addLayout(row); p.addWidget(btn('Continuar a respuestas ›' if is_key else 'Corregir examen',self.next_entry,'primary'))
         p.addWidget(label('Teclado: '+self.config.letters+' · '+('X: anulada' if is_key else 'Guion (-): en blanco')+' · Retroceso: borrar · ↑/↓: cambiar pregunta. R = reserva.','muted',True))
@@ -186,17 +228,17 @@ class ManualPage(QWidget):
     def clear_slot(self,j): self.clear((self.cursor//16)*16+j)
     def choose(self,i,v):
         if not 0<=i<self.config.size: return
-        self.values[i]=v; self.cursor=min(i+1,self.config.size-1); self.persist(); self.refresh_entries()
+        self.result=None; self.values[i]=v; self.cursor=min(i+1,self.config.size-1); self.persist(); self.refresh_entries()
     def clear(self,i):
         if not 0<=i<self.config.size: return
-        self.values[i]=''; self.cursor=i; self.persist(); self.refresh_entries()
+        self.result=None; self.values[i]=''; self.cursor=i; self.persist(); self.refresh_entries()
     def complete_key(self):
         if '' in self.key:
             QMessageBox.warning(self,'Soluciones pendientes','Completa todas las soluciones, incluidas las reservas configuradas, o marca X si están anuladas.'); self.select(self.key.index('')); return False
         return True
     def save_template(self):
         if not self.complete_key(): return
-        name,ok=QInputDialog.getText(self,'Guardar plantilla','Nombre de la plantilla:',text=self.config.name)
+        name,ok=QInputDialog.getText(self,'Guardar plantilla de respuestas','Nombre de la plantilla:',text=self.config.name)
         if not ok or not name.strip(): return
         if len(name.strip())>120: QMessageBox.warning(self,'Nombre demasiado largo','Usa como máximo 120 caracteres.'); return
         try: self.storage.save_template(name.strip(),{'config':asdict(self.config),'key':self.key}); self.notice.setText('Plantilla guardada: '+name.strip())
@@ -204,7 +246,7 @@ class ManualPage(QWidget):
     def fill_blanks(self):
         n=self.answers.count('')
         if n and confirm(self,'Respuestas pendientes',f'¿Marcar las {n} respuestas pendientes como en blanco?'):
-            self.answers[:]=[v or '-' for v in self.answers]; self.persist(); self.refresh_entries()
+            self.result=None; self.answers[:]=[v or '-' for v in self.answers]; self.persist(); self.refresh_entries()
     def next_entry(self):
         if self.is_key:
             if self.complete_key(): self.move_stage(2)
@@ -228,7 +270,7 @@ class ManualPage(QWidget):
         p.addWidget(label(f'Puntuación neta: {format_number(r.net)} · Penalización: {self.config.penalty} por error. Nota = puntuación neta × nota máxima / preguntas evaluables.','muted',True))
         if r.raw_grade!=r.grade: p.addWidget(label('Nota sin límite mínimo: '+format_number(r.raw_grade),'muted'))
         if r.annulled>r.reserve_used: p.addWidget(label(f'{r.annulled-r.reserve_used} anuladas sin reserva válida: excluidas del denominador.','muted',True))
-        t=panel(self.body); t.addWidget(label('Detalle de preguntas','tileTitle')); self.filter=QComboBox(); self.filter.addItems(['Todas','Aciertos','Errores','En blanco','Anuladas','Reservas']); t.addWidget(self.filter)
+        t=panel(self.body); t.addWidget(label('Detalle de preguntas','tileTitle')); self.filter=SafeComboBox(); self.filter.addItems(['Todas','Aciertos','Errores','En blanco','Anuladas','Reservas']); t.addWidget(self.filter)
         self.table=QTableWidget(0,5); self.table.setHorizontalHeaderLabels(['Pregunta','Solución','Tu respuesta','Resultado','Sustituye a']); self.table.verticalHeader().hide(); self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers); self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows); self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch); self.table.setMinimumHeight(270); self.table.setAlternatingRowColors(True); t.addWidget(self.table); self.filter.currentIndexChanged.connect(self.populate_table); self.populate_table()
         row=QHBoxLayout(); row.addWidget(btn('‹ Editar respuestas',lambda:self.move_stage(2))); row.addWidget(btn('Editar soluciones',lambda:self.move_stage(1))); row.addStretch(); row.addWidget(btn('Nuevo simulacro',self.reset,'primary')); t.addLayout(row)
         t.addWidget(label('El último resultado se conserva como borrador. El historial de simulacros llegará en BLOCK 07.','muted',True))
