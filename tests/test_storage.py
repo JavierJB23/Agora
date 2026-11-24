@@ -26,11 +26,30 @@ class StorageTests(unittest.TestCase):
             s=Storage(d)
             with closing(sqlite3.connect(s.path)) as db:
                 with db:
-                    db.execute('PRAGMA user_version=2')
+                    db.execute('PRAGMA user_version=3')
             with self.assertRaises(RuntimeError): Storage(d)
             with closing(sqlite3.connect(s.path)) as db:
-                self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0], 2)
+                self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0], 3)
     def test_module_registry(self):
         self.assertEqual(len(MODULES),8)
         self.assertEqual(len({m.key for m in MODULES}),8)
         for m in MODULES: self.assertTrue((Path(__file__).resolve().parents[1]/'assets'/f'{m.icon}.svg').exists())
+
+class ManualStorageTests(unittest.TestCase):
+    def test_upgrade_from_block01(self):
+        with tempfile.TemporaryDirectory() as d:
+            path=Path(d)/'agora.sqlite3'
+            with closing(sqlite3.connect(path)) as db:
+                with db:
+                    db.execute('CREATE TABLE settings (key TEXT PRIMARY KEY,value TEXT NOT NULL)')
+                    db.execute('INSERT INTO settings VALUES (?,?)',('student_name','Perfil anterior'))
+                    db.execute('PRAGMA user_version=1')
+            s=Storage(d); self.assertEqual(s.get('student_name'),'Perfil anterior')
+            with s.connection() as db: self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],2)
+    def test_draft_roundtrip(self):
+        with tempfile.TemporaryDirectory() as d:
+            s=Storage(d); self.assertIsNone(s.load_draft()); s.save_draft({'key':['A','X'],'answers':['','-']}); self.assertEqual(Storage(d).load_draft()['key'],['A','X']); s.clear_draft(); self.assertIsNone(s.load_draft())
+    def test_templates_independent(self):
+        with tempfile.TemporaryDirectory() as d:
+            s=Storage(d); s.save_template('Tema 1',{'key':['A']}); s.save_template('Tema 2',{'key':['B']}); s.save_draft({'key':['C']}); s.clear_draft()
+            t=Storage(d).templates(); self.assertEqual([x[1] for x in t],['Tema 2','Tema 1']); s.delete_template(t[0][0]); self.assertEqual(len(s.templates()),1)
