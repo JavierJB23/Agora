@@ -11,3 +11,5 @@ BLOCK 02 RC1 — validación manual
 
 Automatizadas: python -m unittest discover -s tests -v
 23 superadas localmente, 3 de interfaz omitidas por falta de PySide6. GitHub debe ejecutar las 26. No hay compilación Windows realizada en este entorno.
+
+FIX01: comprobar rueda sobre penalización, número de preguntas, plantillas y filtro (sin cambio de valor); comprobar que se puede usar rueda en la lista desplegada. Resultado → Configuración → Resultado, cambiar penalización y comprobar recálculo; editar una respuesta y saltar a Resultado. Si faltan soluciones/respuestas, no mostrar resultado inválido. Consultar plantilla guardada sin sustituir borrador. Tres nuevas pruebas GUI pendientes de GitHub.

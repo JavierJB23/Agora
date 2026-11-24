@@ -1,4 +1,4 @@
-# ÁGORA v0.2.0 — BLOCK 02 — RC1
+# ÁGORA v0.2.0 — BLOCK 02 — FIX01
 
 Corrector manual local. Conserva el diseño de BLOCK 01 FIX03 (validado visualmente en Windows). Sin Python, instalación de fuentes ni dependencias para el usuario del EXE.
 
@@ -19,3 +19,6 @@ Se guarda un solo borrador local automáticamente tras confirmar configuración 
 23 pruebas sin interfaz superadas localmente. 3 pruebas gráficas añadidas o conservadas, pendientes de GitHub Actions (PySide6 no disponible en el entorno de entrega). El EXE y su aspecto en Windows están pendientes de validación. No declarar STABLE hasta aprobarlos.
 
 Bloques 03+: importación universal PC/móvil QR, lectura de PDF, OMR y corrección automática; bloque 07: historial y exportación. Ver ROADMAP.md.
+
+## FIX01
+Subir desde la raíz las carpetas agora y tests y los archivos README.md, ROADMAP.md, TESTS.txt incluidos en el parche. No tocar el workflow ni borrar archivos. Mantiene esquema SQLite 2 y los datos existentes. Los pasos superiores son botones; los saltos aplican la configuración y validan las soluciones/respuestas, y el resultado se recalcula. Desplegables cerrados y campos numéricos ignoran la rueda. Consultar plantilla es de solo lectura; Guardar plantilla de respuestas conserva el solucionario y configuración. El flujo definitivo importará soluciones en ambos modos en BLOCK 04; la entrada provisional del BLOCK 02 se conserva mientras tanto.

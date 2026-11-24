@@ -3,9 +3,11 @@
 Desarrollo incremental por bloques; mantener la última versión STABLE y no avanzar sin aprobación. Windows, Python/PySide6/SQLite, estética rosa pastel y blanco. Primera versión funcional del corrector: fin de BLOCK 06.
 
 1. Interfaz, arquitectura, menú y configuración local. STABLE visual: FIX03, marca ÁGORA clásica y ocho botones 4×2.
-2. Corrector manual (v0.2.0 RC1, pendiente de Windows): número de preguntas y opciones configurables, reservas, anulaciones, blancos, puntuación configurable, plantilla manual y navegación rápida. No contar casillas fuera del examen como blancas.
+2. Corrector manual (v0.2.0 RC1 validado en Windows; FIX01 pendiente): número de preguntas y opciones configurables, reservas, anulaciones, blancos, puntuación configurable, plantillas guardadas y navegación rápida. No contar casillas fuera del examen como blancas.
+Regla transversal de interfaz: la rueda nunca modifica desplegables cerrados ni valores numéricos; navegación directa por pasos con validación y recálculo de resultados. Guardar plantilla de respuestas = guardar solucionario y configuración, no respuestas personales; consulta de solo lectura.
+
 3. Importador universal: **toda** importación presente o futura ofrece ordenador (selección y arrastre) o móvil (QR, red local, selección múltiple, fotografías, progreso, sin nube). Seguridad: token temporal, límites de tamaño, validación de tipo, cerrar servidor al terminar.
-4. Extracción de soluciones: texto de PDF, documento independiente o soluciones al final del examen, numeración de reserva diferenciada y revisión editable; OCR para imágenes cuando necesario.
+4. Extracción de soluciones: importar obligatoriamente el solucionario PDF/Word (o reutilizar uno ya importado) en ambos correctores; nunca exigir transcribirlo. Leer texto digital, formatos compactos, columnas, documento independiente o soluciones al final del examen, numeración de reserva diferenciada y revisión editable de incidencias; OCR si necesario. Manual = introducir respuestas personales a mano; automático = importar también hoja de respuestas.
 5. OMR: hoja real de 120 ordinarias + 9 reservas y A/B/C, alineación de perspectiva, marcas azules y rojas separadas, ignorar resaltado verde, advertir ambigüedades; prueba con foto original sin correcciones y con correcciones. No inferir automáticamente respuestas dudosas ni asumir que el rojo representa respuesta original.
 6. Revisión visual editable de respuestas y corrección automática. Verificar contra datos manuales antes de aprobar.
 7. Historial y exportación.
