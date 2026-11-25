@@ -6,7 +6,7 @@ import json
 from contextlib import contextmanager
 
 DEFAULTS = {'student_name': '', 'welcome_message': 'Aprende. Comprende. Avanza.'}
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 def default_data_dir():
     override = os.environ.get('AGORA_DATA_DIR')
@@ -31,6 +31,7 @@ class Storage:
             db.execute('CREATE TABLE IF NOT EXISTS automatic_draft (id INTEGER PRIMARY KEY CHECK(id=1), payload TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS manual_templates (id INTEGER PRIMARY KEY, name TEXT NOT NULL, payload TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS saved_attempts (id INTEGER PRIMARY KEY, updated TEXT NOT NULL, payload TEXT NOT NULL)')
+            db.execute('CREATE TABLE IF NOT EXISTS optical_pages (id TEXT PRIMARY KEY, original BLOB NOT NULL, aligned BLOB NOT NULL, marks TEXT NOT NULL)')
             db.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
     @contextmanager
     def connection(self):
@@ -60,14 +61,19 @@ class Storage:
             row=db.execute(f'SELECT payload FROM {table} WHERE id=1').fetchone()
         return json.loads(row[0]) if row else None
 
-    def save_draft(self, payload, mode="manual"):
+    def save_draft(self, payload, mode="manual", pages=()):
         table = self.draft_table(mode)
         with self.connection() as db:
+            old=db.execute(f'SELECT payload FROM {table} WHERE id=1').fetchone()
+            self._store_pages(db,pages,payload)
             db.execute(f'INSERT INTO {table} VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload', (json.dumps(payload,ensure_ascii=False),))
+            if old and json.loads(old[0]).get('optical_pages',{})!=payload.get('optical_pages',{}): self._prune_pages(db)
 
     def clear_draft(self, mode="manual"):
         table=self.draft_table(mode)
-        with self.connection() as db: db.execute(f'DELETE FROM {table} WHERE id=1')
+        with self.connection() as db:
+            db.execute(f'DELETE FROM {table} WHERE id=1')
+            self._prune_pages(db)
 
     @staticmethod
     def draft_table(mode):
@@ -87,7 +93,7 @@ class Storage:
     def delete_template(self, template_id):
         with self.connection() as db: db.execute('DELETE FROM manual_templates WHERE id=?',(template_id,))
 
-    def save_attempt(self, payload, attempt_id=None):
+    def save_attempt(self, payload, attempt_id=None, pages=()):
         from datetime import datetime, timezone
         stamp=datetime.now(timezone.utc).isoformat(timespec='seconds')
         with self.connection() as db:
@@ -95,10 +101,12 @@ class Storage:
                 attempt_id=db.execute('INSERT INTO saved_attempts(updated,payload) VALUES (?,?)',(stamp,'{}')).lastrowid
             record=dict(payload, attempt_id=attempt_id)
             table=self.draft_table(record.get("mode","manual"))
+            self._store_pages(db,pages,record)
             encoded=json.dumps(record,ensure_ascii=False)
             cur=db.execute('UPDATE saved_attempts SET updated=?,payload=? WHERE id=?',(stamp,encoded,attempt_id))
             if cur.rowcount!=1: raise ValueError('El simulacro guardado ya no existe.')
             db.execute(f'INSERT INTO {table} VALUES (1,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload',(encoded,))
+            self._prune_pages(db)
         return attempt_id
 
     def attempts(self):
@@ -120,4 +128,31 @@ class Storage:
                 row=db.execute(f'SELECT payload FROM {table} WHERE id=1').fetchone()
                 if row and json.loads(row[0]).get('attempt_id')==attempt_id:
                     db.execute(f'DELETE FROM {table} WHERE id=1')
+            self._prune_pages(db)
             return True
+
+    @staticmethod
+    def _store_pages(db,pages,payload):
+        # Immutable snapshots; the draft and archived attempt can share an image.
+        for record in pages:
+            if not db.execute('SELECT 1 FROM optical_pages WHERE id=?',(record[0],)).fetchone():
+                db.execute('INSERT INTO optical_pages VALUES (?,?,?,?)',record)
+        for ref in payload.get('optical_pages',{}).values():
+            if not db.execute('SELECT 1 FROM optical_pages WHERE id=?',(ref,)).fetchone():
+                raise ValueError('No se encuentra una imagen del simulacro.')
+
+    def load_optical_page(self,ref):
+        with self.connection() as db:
+            row=db.execute('SELECT id,original,aligned,marks FROM optical_pages WHERE id=?',(ref,)).fetchone()
+        if row is None: raise ValueError('No se encuentra la imagen guardada.')
+        return row
+
+    @staticmethod
+    def _prune_pages(db):
+        # Only delete images no longer referenced by ANY saved attempt or draft.
+        refs=set()
+        for table in ('manual_draft','automatic_draft','saved_attempts'):
+            for (p,) in db.execute(f'SELECT payload FROM {table}'):
+                refs.update(json.loads(p).get('optical_pages',{}).values())
+        for (ref,) in db.execute('SELECT id FROM optical_pages').fetchall():
+            if ref not in refs: db.execute('DELETE FROM optical_pages WHERE id=?',(ref,))

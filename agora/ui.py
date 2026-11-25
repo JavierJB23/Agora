@@ -63,7 +63,9 @@ QDialog, QMessageBox {background:#FFF7FA;}
 QMessageBox QPushButton {min-width:65px; text-align:center;}
 QCheckBox {spacing:8px;}
 QPushButton#manualNumber {text-align:center; padding:5px; background:#FAEDF3; border:1px solid #EEDDE5;}
-QPushButton#manualNumber[selected="true"] {background:#A55379; color:white; font-weight:700;}
+QPushButton#manualNumber[pending="true"] {background:#E6AFC9; color:#75405B; font-weight:700; border:1px solid #C27A9E;}
+QPushButton#manualNumber[selected="true"] {border:2px solid #A55379; background:#A55379; color:white; font-weight:700;}
+QPushButton#manualNumber[pending="true"][selected="true"] {background:#E6AFC9; color:#75405B; border:2px solid #A55379; font-weight:700;}
 QPushButton#manualChoice, QPushButton#manualClear {text-align:center; padding:5px 2px; border-radius:7px;}
 QPushButton#manualChoice:checked {background:#A55379; color:white; border-color:#904268; font-weight:700;}
 QPushButton:disabled {color:#BBA9B2; background:#F8F5F7;}

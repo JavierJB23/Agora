@@ -68,6 +68,28 @@ def align(im,corners=None):
     if q.shape!=(4,2) or not cv.isContourConvex(q) or cv.contourArea(q)<.2*im.shape[0]*im.shape[1]: raise ValueError('Selecciona las cuatro esquinas de la hoja en orden.')
     return cv.warpPerspective(im,cv.getPerspectiveTransform(q,np.float32([[0,0],[WIDTH-1,0],[WIDTH-1,HEIGHT-1],[0,HEIGHT-1]])),(WIDTH,HEIGHT))
 
+def grid_anchors(page):
+    rows=list(locations(page)); n=30 if page==0 else 3
+    return np.float32([(rows[0][1][0],rows[0][2]),(rows[-n][1][-1],rows[-n][2]),(rows[-1][1][-1],rows[-1][2]),(rows[n-1][1][0],rows[n-1][2])])
+
+
+def align_grid(im,page,points):
+    """Four printed circle centers, not paper corners. Works with cropped margins."""
+    q=np.asarray(points,dtype=np.float32); h,w=im.shape[:2]
+    if q.shape!=(4,2) or not np.isfinite(q).all() or not cv.isContourConvex(q) or cv.contourArea(q)<h*w*(.07 if page==0 else .002):
+        raise ValueError('Marca los centros de los cuatro círculos indicados, en orden.')
+    if np.any(q<0) or np.any(q[:,0]>=w) or np.any(q[:,1]>=h) or q[0,0]>=q[1,0] or q[3,0]>=q[2,0] or q[0,1]>=q[3,1] or q[1,1]>=q[2,1]:
+        raise ValueError('Comprueba el orden de los cuatro círculos de referencia.')
+    if page==1:
+        # Three rows occupy a very shallow strip: projective extrapolation is unstable.
+        mat=np.linalg.lstsq(np.column_stack([q,np.ones(4)]),grid_anchors(page),rcond=None)[0].T
+        if not np.isfinite(mat).all(): raise ValueError('Referencias no válidas.')
+        return cv.warpAffine(im,mat,(WIDTH,HEIGHT),borderValue=(255,255,255))
+    mat=cv.getPerspectiveTransform(q,grid_anchors(page))
+    if not np.isfinite(mat).all(): raise ValueError('Referencias no válidas.')
+    return cv.warpPerspective(im,mat,(WIDTH,HEIGHT),borderValue=(255,255,255))
+
+
 def locations(page):
     xs=[102.59,231.83,359.39,489.76] if page==0 else [127.38,300.27,475.04]
     n=30 if page==0 else 3; start=179.55 if page==0 else 63.75
