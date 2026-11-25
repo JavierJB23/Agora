@@ -1,5 +1,5 @@
-FIX03 — v0.6.3
-56 pruebas no gráficas superadas, 17 GUI omitidas por falta de PySide6. Ver salida local:
+FIX04 — v0.6.4
+61 pruebas no gráficas superadas, 18 GUI omitidas (PySide6 no disponible).
 test_columns_with_reserves (test_answer_import.ImportTests.test_columns_with_reserves) ... ok
 test_compact (test_answer_import.ImportTests.test_compact) ... ok
 test_docx (test_answer_import.ImportTests.test_docx) ... ok
@@ -24,6 +24,14 @@ test_real_size_example (test_grading.GradingTests.test_real_size_example) ... ok
 test_replacement_order (test_grading.GradingTests.test_replacement_order) ... ok
 test_unused_reserves (test_grading.GradingTests.test_unused_reserves) ... ok
 test_zero_penalty (test_grading.GradingTests.test_zero_penalty) ... ok
+test_batch_library_limit (test_library.LibraryTests.test_batch_library_limit) ... ok
+test_deleted_template_original_preserved_not_relisted (test_library.LibraryTests.test_deleted_template_original_preserved_not_relisted) ... ok
+test_duplicate_pattern_and_overwrite (test_library.LibraryTests.test_duplicate_pattern_and_overwrite) ... ok
+test_linked_and_legacy_entries (test_library.LibraryTests.test_linked_and_legacy_entries) ... ok
+test_migration_keeps_unknown_dates (test_library.LibraryTests.test_migration_keeps_unknown_dates) ... invalid pdf header: b'old'
+EOF marker not found
+EOF marker not found
+ok
 test_black_not_guessed (test_omr.OpticalTests.test_black_not_guessed) ... ok
 test_blue_red_and_blank (test_omr.OpticalTests.test_blue_red_and_blank) ... ok
 test_decode_and_alignment (test_omr.OpticalTests.test_decode_and_alignment) ... ok
@@ -72,13 +80,12 @@ test_navigation_and_settings (test_ui.UITests.test_navigation_and_settings) ... 
 test_optical_reopen_images_and_review (test_ui.UITests.test_optical_reopen_images_and_review) ... skipped 'PySide6 no disponible'
 test_same_template_consult_does_not_change_name_or_answers (test_ui.UITests.test_same_template_consult_does_not_change_name_or_answers) ... skipped 'PySide6 no disponible'
 test_saved_progress_and_reopen (test_ui.UITests.test_saved_progress_and_reopen) ... skipped 'PySide6 no disponible'
+test_shared_library_from_both_directions (test_ui.UITests.test_shared_library_from_both_directions) ... skipped 'PySide6 no disponible'
 test_template_auto_load_cancel_preserves_active (test_ui.UITests.test_template_auto_load_cancel_preserves_active) ... skipped 'PySide6 no disponible'
 test_view_template_without_replacing_draft (test_ui.UITests.test_view_template_without_replacing_draft) ... skipped 'PySide6 no disponible'
 test_wheel_does_not_change_form_controls (test_ui.UITests.test_wheel_does_not_change_form_controls) ... skipped 'PySide6 no disponible'
 
 ----------------------------------------------------------------------
-Ran 73 tests in 1.755s
+Ran 79 tests in 2.643s
 
-OK (skipped=17)
-
-Verificación adicional: originales de los dos solucionarios reales archivados y recuperados byte a byte; render de su primera página con pypdfium2. GUI y EXE Windows pendientes.
+OK (skipped=18)

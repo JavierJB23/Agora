@@ -1,3 +1,13 @@
+# ÁGORA v0.6.4 — BLOCK 06 — FIX04
+
+- Biblioteca compartida entre correctores y Mi temario > Mis plantillas. Importación confirmada registra automáticamente una plantilla con el nombre de archivo; Guardar plantilla permite nombrarla o guardar otra copia. Coincidencia de patrón exacto (ordinarias, reservas y letras, incluidas anuladas) avisa y permite sustituir o guardar otro nombre. No altera intentos archivados.
+- Una ficha por plantilla con original y clave interpretada; orden A–Z, Z–A, reciente, antigua; tamaño y fecha/hora local. Las fechas antiguas no registradas se muestran como desconocidas. Originales huérfanos previos se recuperan cuando el lector puede extraer sus soluciones, o quedan consultables para registrar más tarde. Eliminar una plantilla oculta su ficha, conserva originales necesarios para consultas de intentos.
+- Importación de hasta 20 solucionarios PDF/DOCX por sesión (100 MiB total), PC y QR, revisión individual. Lector de respuestas mantiene su límite de dos hojas. PDF se visualiza dentro de Ágora; DOCX vista de texto y exportación del original. Imágenes/escaneos sin texto no admitidos como solucionarios.
+- Botones de Mi temario con iconos, acciones compactas y textos redundantes retirados. Mis temas se mantiene para BLOCK 09. SQLite esquema 7; hacer copia de datos antes de actualizar y no abrir con EXE anterior. No cambia motor de corrección ni OMR. FIX03 validado por usuario. FIX04 pendiente Windows.
+- Subir paquete completo, conservar windows.yml actual. No instalar Python. Pruebas locales en TESTS.txt; interfaz pendiente porque PySide6 no está disponible aquí.
+
+---
+
 # ÁGORA v0.6.3 — BLOCK 06 — FIX03
 
 ## FIX03 — biblioteca y nuevo ciclo del simulacro
