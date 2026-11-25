@@ -6,7 +6,7 @@ import json
 from contextlib import contextmanager
 
 DEFAULTS = {'student_name': '', 'welcome_message': 'Aprende. Comprende. Avanza.'}
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 def default_data_dir():
     override = os.environ.get('AGORA_DATA_DIR')
@@ -32,6 +32,7 @@ class Storage:
             db.execute('CREATE TABLE IF NOT EXISTS manual_templates (id INTEGER PRIMARY KEY, name TEXT NOT NULL, payload TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS saved_attempts (id INTEGER PRIMARY KEY, updated TEXT NOT NULL, payload TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS optical_pages (id TEXT PRIMARY KEY, original BLOB NOT NULL, aligned BLOB NOT NULL, marks TEXT NOT NULL)')
+            db.execute('CREATE TABLE IF NOT EXISTS solution_documents (id TEXT PRIMARY KEY, name TEXT NOT NULL, data BLOB NOT NULL)')
             db.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
     @contextmanager
     def connection(self):
@@ -80,6 +81,27 @@ class Storage:
         if mode not in ('manual','automatic'): raise ValueError('Modo no válido')
         return mode+'_draft'
 
+
+    def archive_solution_document(self, name, data):
+        """Keep the original bytes independently of attempts and named templates."""
+        from hashlib import sha256
+        suffix=Path(name).suffix.lower()
+        if suffix not in ('.pdf','.docx') or not data or len(data)>100*1024*1024:
+            raise ValueError('Documento de soluciones no válido.')
+        ref=sha256(suffix.encode()+b'\0'+data).hexdigest()
+        with self.connection() as db:
+            db.execute('INSERT OR IGNORE INTO solution_documents VALUES (?,?,?)',(ref,Path(name).name,data))
+        return ref
+
+    def solution_documents(self):
+        with self.connection() as db:
+            return db.execute('SELECT id,name,length(data) FROM solution_documents ORDER BY rowid DESC').fetchall()
+
+    def load_solution_document(self, ref):
+        with self.connection() as db:
+            row=db.execute('SELECT name,data FROM solution_documents WHERE id=?',(ref,)).fetchone()
+        if row is None: raise ValueError('No se conserva el documento original de esta plantilla.')
+        return row
 
     def save_template(self, name, payload):
         with self.connection() as db:

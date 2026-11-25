@@ -2,7 +2,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QSize, QUrl
 from PySide6.QtGui import QIcon, QDesktopServices, QFont
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QLabel, QPushButton, QToolButton, QFrame, QStackedWidget, QScrollArea, QLineEdit, QMessageBox, QSizePolicy)
+    QLabel, QPushButton, QToolButton, QFrame, QStackedWidget, QScrollArea, QLineEdit, QMessageBox, QSizePolicy, QTabWidget)
 from . import VERSION, BLOCK
 from .modules import MODULES
 from .storage import Storage
@@ -21,6 +21,9 @@ QLabel#headline {font-size: 30px; font-weight: 650; color: #75405B;}
 QLabel#heading {font-size: 25px; font-weight: 650; color: #75405B;}
 QLabel#tileTitle {font-size: 17px; font-weight: 600; color: #73425A;}
 QLabel#historyMode {font-size: 14px; font-style: italic; font-weight: 600; color: #A55379;}
+QTabWidget#libraryTabs::pane {border: 1px solid #EEDDE5; background: white; border-radius: 10px;}
+QTabBar::tab {background: #FFFFFF; border: 1px solid #EEDDE5; padding: 10px 22px; border-top-left-radius: 8px; border-top-right-radius: 8px;}
+QTabBar::tab:selected {background: #F4D6E3; color: #75405B; font-weight: 600;}
 QLabel#muted {color: #795C6B; font-size: 13px;}
 QLabel#tag {background: #FAEDF3; color: #8D5070; border-radius: 8px; padding: 5px 9px; font-size: 12px;}
 QPushButton {border: 1px solid #EBD5E0; border-radius: 9px; padding: 9px 13px; background: #FFFFFF; font-weight: 500; text-align: left;}
@@ -150,6 +153,7 @@ class MainWindow(QMainWindow):
             if m.key=='manual':
                 l=self.page('manual'); self.manual=ManualPage(self.storage,lambda:self.go('home')); l.addWidget(self.manual)
             elif m.key=='history': self.make_history()
+            elif m.key=='library': self.make_library()
             elif m.key=='automatic':
                 l=self.page('automatic'); self.automatic=ManualPage(self.storage,lambda:self.go('home'),mode='automatic'); l.addWidget(self.automatic)
             else: self.make_module(m)
@@ -171,6 +175,7 @@ class MainWindow(QMainWindow):
         if key=='home': self.refresh_home()
         if key=='settings': self.load_settings()
         if key=='history': self.refresh_history()
+        if key=='library': self.refresh_library()
         self.sync_nav(key); self.stack.setCurrentWidget(self.pages[key])
         if key in ('manual','automatic'): getattr(self,key).focus_entry()
     def sync_nav(self,key):
@@ -179,6 +184,32 @@ class MainWindow(QMainWindow):
         for mode in ('manual','automatic'):
             if self.stack.currentWidget() is self.pages.get(mode) and not getattr(self,mode).allow_leave(): event.ignore(); return
         super().closeEvent(event)
+    def make_library(self):
+        l=self.page('library'); back=button('Volver al inicio','home'); back.clicked.connect(lambda:self.go('home')); l.addWidget(back,0,Qt.AlignmentFlag.AlignLeft)
+        l.addWidget(label('Mi temario','heading')); tabs=QTabWidget(); tabs.setObjectName('libraryTabs'); l.addWidget(tabs)
+        themes=QWidget(); tl=vertical(themes,(18,18,18,18),10); tl.addWidget(label('Temario de estudio','tileTitle')); tl.addWidget(label('Disponible en el BLOCK 09.','muted')); tl.addStretch(); tabs.addTab(themes,'Mis temas')
+        archive=QWidget(); self.library_layout=vertical(archive,(18,18,18,18),12); tabs.addTab(archive,'Mis plantillas'); self.library_tabs=tabs; tabs.setCurrentIndex(1)
+        l.addStretch()
+    def refresh_library(self):
+        from .library_ui import consult_document,consult_template
+        l=self.library_layout
+        while l.count():
+            it=l.takeAt(0); w=it.widget()
+            if w: w.hide(); w.deleteLater()
+        try: documents=self.storage.solution_documents(); templates=self.storage.templates()
+        except Exception as e: l.addWidget(label('No se pudo consultar la biblioteca: '+str(e),wrap=True)); return
+        l.addWidget(label('Documentos originales','tileTitle'))
+        if not documents: l.addWidget(label('Los solucionarios PDF y Word que importes y confirmes aparecerán aquí.','muted',True))
+        for ref,name,size in documents:
+            item=frame('tile'); h=QHBoxLayout(item); h.setContentsMargins(12,12,12,12); info=QVBoxLayout(); info.addWidget(label(name,'tileTitle',True)); info.addWidget(label(f'{size/1024/1024:.2f} MB','muted')); h.addLayout(info,1)
+            b=button('Consultar PDF' if name.lower().endswith('.pdf') else 'Consultar Word'); b.clicked.connect(lambda checked=False,r=ref:consult_document(self,self.storage,r)); h.addWidget(b); l.addWidget(item)
+        l.addWidget(label('Plantillas de respuestas guardadas','tileTitle'))
+        if not templates: l.addWidget(label('Todavía no has guardado ninguna plantilla reutilizable.','muted',True))
+        for tid,name,d in templates:
+            item=frame('tile'); h=QHBoxLayout(item); h.setContentsMargins(12,12,12,12); h.addWidget(label(name,'tileTitle',True),1)
+            b=button('Consultar plantilla'); b.clicked.connect(lambda checked=False,n=name,p=d:consult_template(self,self.storage,n,p)); h.addWidget(b); l.addWidget(item)
+        l.addStretch()
+
     def make_history(self):
         l=self.page('history'); back=button('Volver al inicio','home'); back.clicked.connect(lambda:self.go('home')); l.addWidget(back,0,Qt.AlignmentFlag.AlignLeft)
         l.addWidget(label('Mis simulacros','heading')); l.addWidget(label('Simulacros manuales y automáticos, tanto en curso como finalizados.','muted',True))
