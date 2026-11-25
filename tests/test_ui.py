@@ -277,13 +277,33 @@ class UITests(unittest.TestCase):
         from PySide6.QtWidgets import QPushButton
         with tempfile.TemporaryDirectory() as d:
             s=Storage(d); w=MainWindow(s); w.show(); w.go('library')
-            with patch('agora.answer_import.extract_key',return_value=ImportedKey(('A','B'),())), patch('agora.template_ui.review_key',return_value=3):
+            with patch('agora.answer_import.extract_key',return_value=ImportedKey(('A','B'),())), patch('agora.template_ui.review_key',return_value=3), patch('agora.template_ui.ask_template_name',return_value='Biblioteca'):
                 w.register_library_document('Biblioteca.pdf',b'original')
             w.refresh_library(); self.assertEqual(len(s.library_entries()),1)
             self.assertEqual(w.library_tabs.tabText(1),'Mis plantillas')
             w.go('manual'); m=w.manual; m.refresh_templates(); self.assertGreaterEqual(m.templates_combo.findText('Biblioteca'),1)
             m.move_stage(1)
             with patch('agora.template_ui.review_key',return_value=3): m.review_import(ImportedKey(('C','B'),()),'Corrector.pdf',b'original2')
-            self.assertEqual(len(s.library_entries()),2); self.assertTrue(any(b.text()=='Guardar plantilla' for b in m.findChildren(QPushButton)))
+            self.assertEqual(len(s.library_entries()),1); self.assertTrue(any(b.text()=='Guardar plantilla' for b in m.findChildren(QPushButton)))
+            with patch('agora.template_ui.ask_template_name',return_value=None): m.save_template()
+            self.assertEqual(len(s.library_entries()),1)
+            with patch('agora.template_ui.ask_template_name',return_value='Corrector'): m.save_template()
+            self.assertEqual(len(s.library_entries()),2)
             w.go('automatic'); w.automatic.refresh_templates(); self.assertGreaterEqual(w.automatic.templates_combo.findText('Corrector'),1)
             w.close()
+
+    def test_library_root_and_deletion_confirmation(self):
+        from unittest.mock import patch
+        from dataclasses import asdict
+        from agora.grading import ExamConfig
+        from PySide6.QtWidgets import QPushButton
+        with tempfile.TemporaryDirectory() as d:
+            s=Storage(d); p={'config':asdict(ExamConfig(questions=2,reserves=0)),'key':['A','B']}; tid=s.save_template('Vinculada',p); aid=s.save_attempt(dict(p,template_id=tid,answers=['A','B']))
+            w=MainWindow(s); w.show(); w.go('library'); self.assertEqual(w.library_stack.currentIndex(),0)
+            w.library_buttons[0].click(); self.assertEqual(w.library_stack.currentIndex(),1); self.assertEqual(w.library_tabs.currentIndex(),0)
+            w.go('library'); self.assertEqual(w.library_stack.currentIndex(),0); w.library_buttons[1].click(); self.assertEqual(w.library_tabs.currentIndex(),1)
+            self.assertTrue(any(b.text()=='Eliminar plantilla' for b in w.library_tabs.widget(1).findChildren(QPushButton)))
+            with patch('agora.template_ui.confirm',return_value=False) as ask:
+                w.delete_library_template(tid); self.assertIn('1 simulacro',ask.call_args.args[2]); self.assertIsNotNone(s.load_attempt(aid))
+            with patch('agora.template_ui.confirm',return_value=True): w.delete_library_template(tid)
+            self.assertIsNone(s.load_attempt(aid)); self.assertEqual(s.library_entries(),[]); w.close(); w.deleteLater(); self.app.processEvents()
