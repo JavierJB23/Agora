@@ -102,7 +102,7 @@ class UITests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             storage=Storage(d); storage.save_template('Guardada',{'config':asdict(ExamConfig(questions=2,reserves=1)),'key':['A','X','C']})
             w=MainWindow(storage); w.show(); w.go('manual'); self.app.processEvents(); m=w.manual
-            m.templates_combo.setCurrentIndex(1); m.name.setText('Borrador sin confirmar'); seen=[]
+            m.templates_combo.setCurrentIndex(1); m.templates_combo.activated.emit(1); self.assertEqual(m.stage,0); self.assertEqual(m.key,['A','X','C']); self.assertEqual(m.answers,['','','']); m.name.setText('Borrador sin confirmar'); before=storage.load_draft(); seen=[]
             def inspect():
                 dlg=self.app.activeModalWidget()
                 if isinstance(dlg,QDialog):
@@ -110,7 +110,7 @@ class UITests(unittest.TestCase):
                     if table: seen.extend((table.rowCount(),table.item(1,1).text(),table.item(2,0).text()))
                     dlg.accept()
             QTimer.singleShot(0,inspect); m.view_template()
-            self.assertEqual(seen,[3,'Anulada','R1']); self.assertEqual(m.name.text(),'Borrador sin confirmar'); self.assertIsNone(storage.load_draft()); self.assertEqual(len(storage.templates()),1)
+            self.assertEqual(seen,[3,'Anulada','R1']); self.assertEqual(m.name.text(),'Borrador sin confirmar'); self.assertEqual(storage.load_draft(),before); self.assertEqual(len(storage.templates()),1)
             w.close(); w.deleteLater(); self.app.processEvents()
 
     def test_saved_progress_and_reopen(self):
@@ -192,5 +192,22 @@ class UITests(unittest.TestCase):
             self.assertEqual(m.answers,['A','B','C']); self.assertIsNone(s.load_draft()); self.assertEqual(s.load_draft('automatic')['answers'],['A','B','C'])
             with patch('agora.manual.confirm',return_value=True): m.correct_optical()
             self.assertEqual(m.stage,3); self.assertEqual(m.result.correct,2); self.assertEqual(m.result.reserve_used,0); self.assertTrue(m.save_progress()); aid=m.attempt_id
-            w.go('history'); m.start_new(); w.open_history(aid); self.assertIs(w.stack.currentWidget(),w.pages['automatic']); self.assertEqual(m.result.correct,2)
+            w.go('history'); from PySide6.QtWidgets import QLabel
+            self.assertTrue(any(x.text()=='· Corrección automática' for x in w.history_panel.findChildren(QLabel,'historyMode'))); m.start_new(); w.open_history(aid); self.assertIs(w.stack.currentWidget(),w.pages['automatic']); self.assertEqual(m.result.correct,2)
+            w.close(); w.deleteLater(); self.app.processEvents()
+
+    def test_template_auto_load_cancel_preserves_active(self):
+        from unittest.mock import patch
+        from dataclasses import asdict
+        from agora.grading import ExamConfig
+        with tempfile.TemporaryDirectory() as d:
+            s=Storage(d); s.save_template('Primera',{'config':asdict(ExamConfig(name='Primera',questions=2,reserves=0)),'key':['A','B']}); s.save_template('Segunda',{'config':asdict(ExamConfig(name='Segunda',questions=3,reserves=0)),'key':['C','B','A']})
+            w=MainWindow(s); w.show(); w.go('manual'); m=w.manual
+            m.templates_combo.setCurrentIndex(m.templates_combo.findText('Primera')); m.templates_combo.activated.emit(m.templates_combo.currentIndex()); self.assertEqual(m.key,['A','B']); self.assertEqual(m.stage,0)
+            m.name.setText('En curso'); before=m.payload(True)
+            with patch('agora.manual.confirm',return_value=False):
+                m.templates_combo.setCurrentIndex(m.templates_combo.findText('Segunda')); m.templates_combo.activated.emit(m.templates_combo.currentIndex())
+            self.assertEqual(m.payload(True),before); self.assertEqual(m.templates_combo.currentText(),'Segunda')
+            with patch('agora.manual.confirm',return_value=True): m.templates_combo.activated.emit(m.templates_combo.currentIndex())
+            self.assertEqual(m.key,['C','B','A']); self.assertEqual(m.answers,['','','']); self.assertEqual(m.name.text(),'Segunda')
             w.close(); w.deleteLater(); self.app.processEvents()

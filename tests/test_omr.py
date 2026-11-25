@@ -41,3 +41,13 @@ class OpticalTests(unittest.TestCase):
     def test_proposals_clear_ambiguous_blank(self):
         im=sheet(); mark(im,0,0,1,(20,40,120)); mark(im,0,1,0,(20,40,120)); mark(im,0,1,1,(20,40,120)); mark(im,0,3,1,(160,20,30))
         m=omr.scan(im,0); self.assertEqual([omr.proposed(x) for x in m[:4]],['B','','-',''])
+
+    def test_shifted_main_grid_preserves_rows(self):
+        im=sheet(); mark(im,0,0,1,(20,40,120)); mark(im,0,29,2,(20,40,120)); mark(im,0,30,0,(20,40,120)); mark(im,0,119,2,(20,40,120))
+        shifted=cv.warpAffine(im,np.float32([[1,0,10],[0,1,8]]),(omr.WIDTH,omr.HEIGHT),borderValue=(250,250,250))
+        self.assertEqual(omr.identify(shifted),0)
+        positions=omr.centers(shifted,0)
+        for (_,pts),(_,xs,y) in zip(positions,omr.locations(0)):
+            for (x2,y2),x in zip(pts,xs): self.assertLessEqual(abs(x2-x-10),4); self.assertLessEqual(abs(y2-y-8),4)
+        ans=[omr.proposed(m) for m in omr.scan(shifted,0)]
+        self.assertEqual([ans[i] for i in (0,29,30,119)],['B','C','A','C']); self.assertEqual(ans.count('-'),116)
