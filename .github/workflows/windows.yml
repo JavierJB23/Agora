@@ -20,7 +20,9 @@ jobs:
         run: python scripts/build_name.py
       - run: python -m pip install -r requirements-build.txt
       - run: python -m unittest discover -s tests -v
-      - run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name Agora --icon assets/logo.ico --add-data 'assets;assets' --hidden-import PySide6.QtSvg --collect-all pypdfium2 --collect-all pypdfium2_raw main.py
+      - run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name Agora --icon assets/logo.ico --add-data 'assets;assets' --hidden-import PySide6.QtSvg --hidden-import numpy._core._exceptions --collect-all pypdfium2 --collect-all pypdfium2_raw main.py
+      - name: Comprobar arranque del EXE y lector optico
+        run: python scripts/check_exe.py dist/Agora.exe
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.version.outputs.artifact }}
