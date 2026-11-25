@@ -51,3 +51,17 @@ class OpticalTests(unittest.TestCase):
             for (x2,y2),x in zip(pts,xs): self.assertLessEqual(abs(x2-x-10),4); self.assertLessEqual(abs(y2-y-8),4)
         ans=[omr.proposed(m) for m in omr.scan(shifted,0)]
         self.assertEqual([ans[i] for i in (0,29,30,119)],['B','C','A','C']); self.assertEqual(ans.count('-'),116)
+
+    def test_manual_grid_anchors_with_crop_and_perspective(self):
+        for slot,qidx in ((0,59),(1,8)):
+            im=sheet(slot); mark(im,slot,qidx,2,(20,40,120))
+            src=omr.grid_anchors(slot)
+            dst=src+np.float32([[22,18],[-15,12],[-9,-13],[17,-10]]) if slot==0 else src+np.float32([[15,5],[-9,7],[-9,7],[15,5]])
+            transform=cv.getPerspectiveTransform(src,dst)
+            photo=cv.warpPerspective(im,transform,(omr.WIDTH,omr.HEIGHT),borderValue=(250,250,250))
+            corrected=omr.align_grid(photo,slot,dst)
+            self.assertEqual(omr.identify(corrected),slot)
+            answers=[omr.proposed(x) for x in omr.scan(corrected,slot)]
+            self.assertEqual(answers[qidx],'C'); self.assertEqual(answers.count('-'),len(answers)-1)
+    def test_manual_grid_invalid_order(self):
+        with self.assertRaises(ValueError): omr.align_grid(sheet(),0,omr.grid_anchors(0)[[0,2,1,3]])

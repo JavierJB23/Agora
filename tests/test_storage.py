@@ -45,7 +45,7 @@ class ManualStorageTests(unittest.TestCase):
                     db.execute('INSERT INTO settings VALUES (?,?)',('student_name','Perfil anterior'))
                     db.execute('PRAGMA user_version=1')
             s=Storage(d); self.assertEqual(s.get('student_name'),'Perfil anterior')
-            with s.connection() as db: self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],4)
+            with s.connection() as db: self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],5)
     def test_draft_roundtrip(self):
         with tempfile.TemporaryDirectory() as d:
             s=Storage(d); self.assertIsNone(s.load_draft()); s.save_draft({'key':['A','X'],'answers':['','-']}); self.assertEqual(Storage(d).load_draft()['key'],['A','X']); s.clear_draft(); self.assertIsNone(s.load_draft())
@@ -83,3 +83,33 @@ class ManualStorageTests(unittest.TestCase):
             s.clear_draft('automatic'); self.assertEqual(s.load_draft()['attempt_id'],m); self.assertEqual(s.load_attempt(a)['answers'],['B'])
             s.save_draft({'attempt_id':a,'answers':['C']},'automatic'); s.delete_attempt(a)
             self.assertIsNone(s.load_draft('automatic')); self.assertEqual(s.load_draft()['attempt_id'],m); self.assertEqual(s.load_attempt(m)['answers'],['A'])
+
+    def test_optical_snapshots_exact_and_shared(self):
+        from agora import omr
+        from agora.optical_archive import record,unpack
+        from test_omr import sheet,mark
+        import numpy as np
+        with tempfile.TemporaryDirectory() as d:
+            s=Storage(d); im=sheet(); mark(im,0,0,1,(20,40,120)); a=omr.align(im); marks=omr.scan(a,0); rec=record(im,a,marks)
+            p={'mode':'automatic','answers':['B'],'optical_pages':{'0':rec[0]}}
+            aid=s.save_attempt(p,pages=[rec]); s.clear_draft('automatic'); s=Storage(d)
+            saved=s.load_attempt(aid); original,aligned,restored=unpack(s.load_optical_page(saved['optical_pages']['0']),0)
+            self.assertTrue(np.array_equal(original,im)); self.assertTrue(np.array_equal(aligned,a)); self.assertEqual(restored,marks)
+            second=s.save_attempt(p,pages=[rec]); s.delete_attempt(aid)
+            self.assertEqual(s.load_optical_page(rec[0]),rec)
+            s.delete_attempt(second)
+            with self.assertRaises(ValueError): s.load_optical_page(rec[0])
+    def test_optical_draft_replacement_does_not_change_saved(self):
+        from agora import omr
+        from agora.optical_archive import record
+        from test_omr import sheet,mark
+        with tempfile.TemporaryDirectory() as d:
+            s=Storage(d); im=sheet(1); a=omr.align(im); r1=record(im,a,omr.scan(a,1)); mark(im,1,0,2,(20,40,120)); a=omr.align(im); r2=record(im,a,omr.scan(a,1))
+            p={'mode':'automatic','optical_pages':{'1':r1[0]},'answers':['-']}; aid=s.save_attempt(p,pages=[r1]); p2=dict(p,attempt_id=aid,answers=['C'],optical_pages={'1':r2[0]}); s.save_draft(p2,'automatic',[r2]); s.clear_draft('automatic')
+            self.assertEqual(s.load_attempt(aid)['optical_pages'],{'1':r1[0]}); self.assertEqual(s.load_optical_page(r1[0]),r1)
+            with self.assertRaises(ValueError): s.load_optical_page(r2[0])
+    def test_upgrade_from_schema4_keeps_legacy_attempt(self):
+        with tempfile.TemporaryDirectory() as d:
+            s=Storage(d); aid=s.save_attempt({'mode':'automatic','answers':['B']})
+            with s.connection() as db: db.execute('DROP TABLE optical_pages'); db.execute('PRAGMA user_version=4')
+            s=Storage(d); self.assertEqual(s.load_attempt(aid)['answers'],['B']); self.assertEqual(s.load_draft('automatic')['answers'],['B']); self.assertNotIn('optical_pages',s.load_attempt(aid))

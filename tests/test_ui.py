@@ -211,3 +211,35 @@ class UITests(unittest.TestCase):
             with patch('agora.manual.confirm',return_value=True): m.templates_combo.activated.emit(m.templates_combo.currentIndex())
             self.assertEqual(m.key,['C','B','A']); self.assertEqual(m.answers,['','','']); self.assertEqual(m.name.text(),'Segunda')
             w.close(); w.deleteLater(); self.app.processEvents()
+
+    def test_clear_template_and_pending_number(self):
+        from unittest.mock import patch
+        from dataclasses import asdict
+        from agora.grading import ExamConfig
+        with tempfile.TemporaryDirectory() as d:
+            s=Storage(d); s.save_template('Plantilla',{'config':asdict(ExamConfig(name='Plantilla',questions=3,reserves=0)),'key':['A','B','C']})
+            w=MainWindow(s); w.show(); w.go('manual'); m=w.manual; m.templates_combo.setCurrentIndex(1); m.templates_combo.activated.emit(1)
+            m.apply_config(target=2); m.choose(0,'A'); m.choose(2,'-'); self.assertFalse(m.grid_rows[0][1].property('pending')); self.assertTrue(m.grid_rows[1][1].property('pending')); self.assertFalse(m.grid_rows[2][1].property('pending')); m.save_progress(); aid=m.attempt_id
+            m.move_stage(0); self.assertEqual(m.templates_combo.currentText(),'Plantilla')
+            with patch('agora.manual.confirm',return_value=False): self.assertFalse(m.clear_template())
+            self.assertEqual(m.key,['A','B','C'])
+            with patch('agora.manual.confirm',return_value=True): self.assertTrue(m.clear_template())
+            self.assertEqual(m.templates_combo.currentIndex(),0); self.assertFalse(m.key_source); self.assertFalse(any(m.answers)); self.assertEqual(s.load_attempt(aid)['answers'],['A','','-']); self.assertEqual(len(s.templates()),1)
+            w.close(); w.deleteLater(); self.app.processEvents()
+
+    def test_optical_reopen_images_and_review(self):
+        from unittest.mock import patch
+        import numpy as np
+        from test_omr import sheet,mark
+        from agora import omr
+        with tempfile.TemporaryDirectory() as d:
+            s=Storage(d); w=MainWindow(s); w.show(); w.go('automatic'); m=w.automatic
+            m.install_key(ImportedKey(('B','A'),('C',)),'test.pdf',3); m.next_entry()
+            im=sheet(); mark(im,0,0,1,(20,40,120)); res=sheet(1); mark(res,1,0,2,(20,40,120))
+            m.reader.install(0,im,im,omr.scan(im,0)); m.reader.install(1,res,res,omr.scan(res,1)); m.optical_changed(); m.reader.set_choice(1,'A'); m.save_progress(); aid=m.attempt_id
+            self.assertTrue(m.start_new()); w.close(); w.deleteLater(); self.app.processEvents()
+            w=MainWindow(Storage(d)); w.show(); w.open_history(aid); m=w.automatic; self.assertEqual(m.stage,2); self.assertEqual(m.answers,['B','A','C']); self.assertFalse(m.dirty()); self.assertTrue(np.array_equal(m.reader.images[0],im)); self.assertTrue(np.array_equal(m.reader.images[1],res)); self.assertEqual(m.reader.table.rowCount(),2)
+            with patch('agora.omr_ui.OpticalPage.alignment_dialog',side_effect=ValueError('Fallo simulado')),patch('agora.omr_ui.QMessageBox.warning'):
+                m.reader.adjust()
+            self.assertEqual(m.answers,['B','A','C']); self.assertTrue(np.array_equal(m.reader.images[0],im)); self.assertFalse(m.dirty())
+            w.close(); w.deleteLater(); self.app.processEvents()
