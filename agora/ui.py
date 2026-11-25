@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, Q
 from . import VERSION, BLOCK
 from .modules import MODULES
 from .storage import Storage
-from .manual import ManualPage
+from .manual import ManualPage, confirm
 from .grading import ExamConfig, evaluate, format_number
 
 ASSETS = Path(__file__).resolve().parent.parent / 'assets'
@@ -192,9 +192,21 @@ class MainWindow(QMainWindow):
             if complete:
                 r=evaluate(c,key,answers); summary='Finalizado · Nota '+format_number(r.grade)+' / '+format_number(c.maximum)
             item=frame('tile'); h=QHBoxLayout(item); h.setContentsMargins(12,12,12,12); info=QVBoxLayout(); info.addWidget(label(name,'tileTitle',True)); info.addWidget(label(summary,'muted',True)); info.addWidget(label(datetime.fromisoformat(stamp).astimezone().strftime('%d/%m/%Y · %H:%M'),'muted')); h.addLayout(info,1)
-            op=button('Abrir'); op.clicked.connect(lambda checked=False,aid=i:self.open_history(aid)); h.addWidget(op); l.addWidget(item)
+            op=button('Abrir'); op.clicked.connect(lambda checked=False,aid=i:self.open_history(aid)); h.addWidget(op); delete=button('Eliminar'); delete.clicked.connect(lambda checked=False,aid=i,n=name:self.delete_history(aid,n)); h.addWidget(delete); l.addWidget(item)
     def open_history(self,aid):
         if self.manual.open_saved(aid): self.go('manual',skip_entry=True)
+    def delete_history(self,aid,name):
+        text=f'Se va a borrar el simulacro «{name}». Esta operación no se puede deshacer. ¿Seguro que quieres continuar?'
+        if self.manual.attempt_id==aid:
+            text+='\n\nTambién se eliminará su borrador activo, incluidos los cambios no guardados.'
+        if not confirm(self,'Eliminar simulacro',text): return
+        try:
+            if not self.storage.delete_attempt(aid):
+                QMessageBox.information(self,'Eliminar simulacro','El simulacro ya no existe.'); self.refresh_history(); return
+        except Exception as e:
+            QMessageBox.warning(self,'No se pudo eliminar',str(e)); return
+        if self.manual.attempt_id==aid: self.manual.reset_state()
+        self.refresh_history()
     def make_home(self):
         l=self.page('home'); top=QHBoxLayout(); top.addWidget(label('Inicio','heading')); top.addStretch(); top.addWidget(label(f'Versión v{VERSION} · BLOCK {BLOCK}','tag')); l.addLayout(top)
         hero=frame('hero'); hl=QHBoxLayout(hero); hl.setContentsMargins(25,22,25,22)

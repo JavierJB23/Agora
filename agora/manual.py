@@ -54,12 +54,15 @@ class ManualPage(QWidget):
         self.config=c; self.key=k; self.answers=a; self.key_source=d.get('key_source') or ('Plantilla anterior' if all(k) else ''); self.stage=stage if stage in (0,1,2,3) else 0; self.cursor=max(0,min(int(cursor),c.size-1)); self.result=None
         self.attempt_id=d.get('attempt_id'); self.saved_snapshot=self.storage.load_attempt(self.attempt_id) if self.attempt_id is not None else None
         self.form_override=d.get('form') if self.stage==0 else None
+        if self.form_override is not None:
+            self.form_override=dict(self.form_override,questions=c.questions,reserves=c.reserves,options=c.options)
+            if self.form_override==asdict(c): self.form_override=None
         if self.stage>=2 and (not self.key_source or '' in self.key): self.stage=1
         if self.stage==3 and '' in self.answers: self.stage=2
         if (self.stage==3 or d.get('corrected')) and self.key_source and all(k) and all(a): self.result=evaluate(c,k,a)
 
     def form_data(self):
-        return {'name':self.name.text(),'questions':self.n.value(),'reserves':self.r.value(),'options':self.o.value(),'penalty':self.penalty.currentText(),'maximum':self.maximum.text(),'floor_zero':self.floor.isChecked()}
+        return {'name':self.name.text(),'questions':self.config.questions,'reserves':self.config.reserves,'options':self.config.options,'penalty':self.penalty.currentText(),'maximum':self.maximum.text(),'floor_zero':self.floor.isChecked()}
 
     def payload(self,read_form=False):
         d={'config':asdict(self.config),'key':list(self.key),'answers':list(self.answers),'stage':self.stage,'cursor':self.cursor,'key_source':self.key_source,'attempt_id':self.attempt_id,'corrected':self.result is not None}
@@ -114,7 +117,11 @@ class ManualPage(QWidget):
     def start_new(self):
         try: self.storage.clear_draft()
         except Exception as e: QMessageBox.warning(self,'No se pudo iniciar',str(e)); return False
-        self.config=ExamConfig(); self.key=['']*self.config.size; self.answers=['']*self.config.size; self.key_source=''; self.result=None; self.stage=0; self.cursor=0; self.attempt_id=None; self.saved_snapshot=None; self.form_override=None; self.notice.setText(''); self.render(); return True
+        self.reset_state(); return True
+
+    def reset_state(self):
+        # In-memory reset only: caller handles database changes atomically.
+        self.config=ExamConfig(); self.key=['']*self.config.size; self.answers=['']*self.config.size; self.key_source=''; self.result=None; self.stage=0; self.cursor=0; self.attempt_id=None; self.saved_snapshot=None; self.form_override=None; self.persist_failed=False; self.notice.setText(''); self.render()
 
     def open_saved(self,attempt_id):
         if self.active() and not confirm(self,'Abrir simulacro','Se sustituirá el borrador actual. El progreso no guardado en Mis simulacros se perderá. ¿Continuar?'): return False
@@ -160,24 +167,22 @@ class ManualPage(QWidget):
                 QMessageBox.warning(self,'No se pudo corregir',str(e)); return
         self.move_stage(target)
 
-    def spin(self,min_,max_,value):
-        w=SafeSpinBox(); w.setRange(min_,max_); w.setValue(value); return w
-
     def show_config(self):
         p=panel(self.body); p.addWidget(label('Datos del examen','tileTitle'))
         p.addWidget(label('Nombre del simulacro')); self.name=QLineEdit(self.config.name); self.name.setMaxLength(120); p.addWidget(self.name)
         grid=QGridLayout(); grid.setHorizontalSpacing(18); grid.setVerticalSpacing(7)
-        self.n=self.spin(1,500,self.config.questions); self.r=self.spin(0,100,self.config.reserves); self.o=self.spin(2,5,self.config.options)
         self.penalty=SafeComboBox(); self.penalty.setEditable(True)
         self.penalty.addItems(['0','1/4','1/3','1/2','1']); self.penalty.setCurrentText(self.config.penalty)
         self.maximum=QLineEdit(self.config.maximum); self.maximum.setMaxLength(24)
-        for i,(title,widget) in enumerate((('Preguntas ordinarias',self.n),('Preguntas de reserva',self.r),('Opciones (A–E)',self.o),('Penalización por error',self.penalty),('Nota máxima',self.maximum))):
+        for i,(title,widget) in enumerate((('Penalización por error',self.penalty),('Nota máxima',self.maximum))):
             col=i%2; row=(i//2)*2; grid.addWidget(label(title),row,col); grid.addWidget(widget,row+1,col)
         grid.setColumnStretch(0,1); grid.setColumnStretch(1,1); p.addLayout(grid)
         self.floor=QCheckBox('Limitar la nota mínima a 0'); self.floor.setChecked(self.config.floor_zero); p.addWidget(self.floor)
         if self.form_override:
-            f=self.form_override; self.name.setText(f['name']); self.n.setValue(f['questions']); self.r.setValue(f['reserves']); self.o.setValue(f['options']); self.penalty.setCurrentText(f['penalty']); self.maximum.setText(f['maximum']); self.floor.setChecked(f['floor_zero'])
-        p.addWidget(label('El número de preguntas y reservas se ajustará automáticamente al importar las soluciones; podrás revisar los datos antes de aceptar.','muted',True))
+            f=self.form_override; self.name.setText(f['name']); self.penalty.setCurrentText(f['penalty']); self.maximum.setText(f['maximum']); self.floor.setChecked(f['floor_zero'])
+        if self.key_source:
+            p.addWidget(label(f'Solucionario importado: {self.config.questions} preguntas · {self.config.reserves} reservas · {self.config.options} opciones por pregunta.','tileTitle',True))
+        p.addWidget(label('Ágora detecta las preguntas y reservas al importar las soluciones. Confirma el número de opciones en la revisión del documento.','muted',True))
         p.addWidget(label('Cada acierto vale 1; cada error resta la penalización indicada; los blancos valen 0. Puedes usar una fracción (1/3) o un decimal (0,5). La penalización inicial es provisional: comprueba las reglas de tu examen.','muted',True))
         p.addWidget(label('Las anuladas se sustituyen por las reservas válidas en orden. Si no hay suficientes, se excluyen del total evaluable.','muted',True))
         t=panel(self.body); t.addWidget(label('Plantillas guardadas','tileTitle')); self.templates_combo=SafeComboBox(); t.addWidget(self.templates_combo)
@@ -232,12 +237,8 @@ class ManualPage(QWidget):
         self.start_new()
 
     def apply_config(self,checked=False,*,target=1):
-        try: c=ExamConfig(self.name.text().strip(),self.n.value(),self.r.value(),self.o.value(),self.penalty.currentText().strip().replace(',','.'),self.maximum.text().strip().replace(',','.'),self.floor.isChecked())
+        try: c=replace(self.config,name=self.name.text().strip(),penalty=self.penalty.currentText().strip().replace(',','.'),maximum=self.maximum.text().strip().replace(',','.'),floor_zero=self.floor.isChecked())
         except ValueError as e: QMessageBox.warning(self,'Revisa la configuración',str(e)); return
-        changed=(c.questions,c.reserves,c.options)!=(self.config.questions,self.config.reserves,self.config.options)
-        if changed:
-            if (any(self.key) or any(self.answers)) and not confirm(self,'Cambiar estructura','Cambiar el número de preguntas, reservas u opciones borrará las soluciones y respuestas actuales. ¿Continuar?'): return
-            self.key=['']*c.size; self.key_source=''; self.answers=['']*c.size
         if c!=self.config: self.result=None
         self.config=c; self.form_override=None; self.open_stage(target)
 
@@ -263,6 +264,7 @@ class ManualPage(QWidget):
         lay.addWidget(label(name,'heading',True)); lay.addWidget(label(f'{len(imported.ordinary)} preguntas · {len(imported.reserves)} reservas · {len(imported.key)} soluciones detectadas.','tileTitle',True))
         lay.addWidget(label('Comprueba el total y las letras con el documento original. Si el archivo está incompleto al final, Ágora no puede deducir cuántas preguntas faltan.','muted',True))
         options=SafeSpinBox(); options.setRange(imported.options,5); options.setValue(max(self.config.options,imported.options)); row=QHBoxLayout(); row.addWidget(label('Opciones por pregunta')); row.addWidget(options); lay.addLayout(row)
+        lay.addWidget(label('Confirma cuántas opciones tenía el examen. La letra más alta detectada solo indica el mínimo; puede haber opciones que nunca sean correctas.','muted',True))
         table=QTableWidget(len(imported.key),2); table.setHorizontalHeaderLabels(['Pregunta','Solución detectada']); table.verticalHeader().hide(); table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers); table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch); table.setAlternatingRowColors(True)
         for i,v in enumerate(imported.key):
             number=str(i+1) if i<len(imported.ordinary) else 'R'+str(i-len(imported.ordinary)+1)

@@ -99,3 +99,13 @@ class Storage:
         with self.connection() as db:
             row=db.execute('SELECT payload FROM saved_attempts WHERE id=?',(attempt_id,)).fetchone()
         return json.loads(row[0]) if row else None
+
+    def delete_attempt(self, attempt_id):
+        """Delete one archived attempt and its linked recovery draft, never other records."""
+        with self.connection() as db:
+            cur=db.execute('DELETE FROM saved_attempts WHERE id=?',(attempt_id,))
+            if cur.rowcount!=1: return False
+            row=db.execute('SELECT payload FROM manual_draft WHERE id=1').fetchone()
+            if row and json.loads(row[0]).get('attempt_id')==attempt_id:
+                db.execute('DELETE FROM manual_draft WHERE id=1')
+            return True
