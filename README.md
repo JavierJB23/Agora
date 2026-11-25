@@ -1,3 +1,17 @@
+# ÁGORA v0.6.1 — BLOCK 06 — FIX01
+
+Actualización acumulativa sobre v0.6.0 validada por el usuario (nota 5,89; 74 aciertos, 33 errores). Sin cambios en SQLite, dependencias ni windows.yml. Subir agora, assets, tests, scripts y archivos de raíz. No instalar Python en Windows. Nombre de artefacto dinámico.
+
+- Alineación del lector: ajuste proyectivo de la cuadrícula ordinaria y afín de reservas mediante detección de círculos; ajuste local por fila. Si la geometría no es fiable se rechaza. Continúa especializado en la plantilla A/B/C 120+9. Revisión de recortes y confirmación de lectura antes de corregir.
+- Pantalla de respuestas compacta: elimina texto redundante, contador breve, acciones de reinicio y corrección en una sola fila. Se conservan avisos de error, dudas y confirmaciones.
+- Al elegir una plantilla se carga automáticamente sin abandonar configuración. Si hay un intento activo se pide confirmación; No permite consultar o eliminar la plantilla seleccionada sin sustituir el intento. Volver a elegirla permite cargarla. Se elimina el botón Cargar plantilla. Consultar y Eliminar permanecen.
+- Historial: etiqueta Corrección manual/automática en cursiva rosa al lado del nombre.
+- Las fotos no se persisten; igual que en v0.6.0. Las soluciones y respuestas sí.
+
+Pruebas: 49 no gráficas superadas, 13 GUI pendientes (PySide6 no disponible localmente). Con documentos reales, 120 recortes ordinarios y 9 de reserva inspeccionados visualmente; 106 propuestas de 107, pregunta 33 débil (B), 74/33 y 5,89 tras confirmar B. Plantilla vacía 120+9 blancos. No garantiza precisión con otras fotos. Pendiente comprobar visualmente EXE y flujo de plantillas en Windows.
+
+## Historial
+
 # ÁGORA v0.6.0 — BLOCK 06 — RC1 (integra ajustes del BLOCK 05)
 
 Actualizar con el paquete completo: subir agora, tests, assets, scripts y archivos raíz. Mantener el windows.yml del BLOCK05 FIX01 (ya incluye prueba del ejecutable real y nombre dinámico). Sin instalar Python en Windows.

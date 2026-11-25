@@ -31,6 +31,7 @@ test_layout (test_omr.OpticalTests.test_layout) ... ok
 test_proposals_clear_ambiguous_blank (test_omr.OpticalTests.test_proposals_clear_ambiguous_blank) ... ok
 test_reject_empty (test_omr.OpticalTests.test_reject_empty) ... ok
 test_reserves (test_omr.OpticalTests.test_reserves) ... ok
+test_shifted_main_grid_preserves_rows (test_omr.OpticalTests.test_shifted_main_grid_preserves_rows) ... ok
 test_delete_attempt_preserves_unrelated_draft_and_templates (test_storage.ManualStorageTests.test_delete_attempt_preserves_unrelated_draft_and_templates) ... ok
 test_delete_attempt_removes_linked_recovery (test_storage.ManualStorageTests.test_delete_attempt_removes_linked_recovery) ... ok
 test_draft_roundtrip (test_storage.ManualStorageTests.test_draft_roundtrip) ... ok
@@ -58,10 +59,13 @@ test_manual_keyboard (test_ui.UITests.test_manual_keyboard) ... skipped 'PySide6
 test_manual_workflow_and_reopen (test_ui.UITests.test_manual_workflow_and_reopen) ... skipped 'PySide6 no disponible'
 test_navigation_and_settings (test_ui.UITests.test_navigation_and_settings) ... skipped 'PySide6 no disponible'
 test_saved_progress_and_reopen (test_ui.UITests.test_saved_progress_and_reopen) ... skipped 'PySide6 no disponible'
+test_template_auto_load_cancel_preserves_active (test_ui.UITests.test_template_auto_load_cancel_preserves_active) ... skipped 'PySide6 no disponible'
 test_view_template_without_replacing_draft (test_ui.UITests.test_view_template_without_replacing_draft) ... skipped 'PySide6 no disponible'
 test_wheel_does_not_change_form_controls (test_ui.UITests.test_wheel_does_not_change_form_controls) ... skipped 'PySide6 no disponible'
 
 ----------------------------------------------------------------------
-Ran 60 tests in 1.064s
+Ran 62 tests in 1.260s
 
-OK (skipped=12)
+OK (skipped=13)
+
+Prueba real local: 106/107 propuestas, pendiente 33 (B), al confirmar 74 aciertos, 33 errores, 0 blancos, 5,89. 120+9 recortes revisados visualmente. Plantilla vacía: 120+9 blancos. No se incluyen documentos privados.

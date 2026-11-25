@@ -32,3 +32,6 @@ BLOCK 05 FIX01: actualizar empaquetador y prueba de arranque del EXE real obliga
 
 
 BLOCK 06 RC1: integración del lector en el mismo asistente del manual; importador único para hojas, dos archivos/páginas PC o QR por lote, máximo 100 MiB; orden indiferente por geometría de la plantilla (no OCR de números arbitrarios). Ajuste de reservas por círculos, propuestas de azul/blanco, pendientes filtrables, confirmación conjunta y puntuación. Borradores independientes y modo en historial, migración SQLite 4. Recortes no persistidos; solo letras y datos del examen. Mantener BLOCK 05/06 en validación hasta pruebas en Windows, móvil y revisión de muestra real.
+
+
+BLOCK 06 FIX01 (v0.6.1): usuario confirmó nota 5,89, 74/33 y resto de flujo RC1; pendiente perfeccionar recortes. Nueva alineación por círculos de ambas páginas y ajuste por fila. Interfaz compacta, carga automática de plantillas con protección ante sustitución y consulta/eliminación conservadas, modo visible junto al nombre en historial. Pendiente validar FIX01 antes de cerrar 05–06 STABLE.
