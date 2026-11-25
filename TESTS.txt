@@ -1,7 +1,51 @@
-BLOCK 03–04 RC1 — validación manual
-1. Inicio y configuración: aspecto idéntico, salvo flechas/popup renovados. Rueda no cambia controles. Confirmación al cargar plantilla: Sí/No.
-2. Nuevo examen manual > configuración > soluciones. Importar desde ordenador S24 Respuestas correctas.pdf. Debe mostrar 120 ordinarias + 9 reservas; 1 B, 2 A, 120 A, R1 B, R9 C. Confirmar y verificar que no se requiere transcribir soluciones. Guardar plantilla opcionalmente.
-3. Nuevo examen, importar Preguntas_ Temas 56, 57, 58 y 59.pdf: 107 ordinarias, 0 reservas; 1 C, 107 B. Confirmar. El PDF incluye preguntas antes del solucionario; no deben contarse.
-4. Desde móvil: abrir QR, escanear con cámara, misma red privada, seleccionar el PDF y enviar. Debe abrir la misma pantalla de revisión. Si Windows pregunta, permitir redes privadas. Comprobar otra IP en el desplegable si no conecta. Cancelar y comprobar que una sesión nueva genera otro QR. No probar en red pública.
-5. Word .docx con números explícitos 1A, 2B, 3X, 4C, 5A y reservas R1B, R2C. Importar, revisar 5+2. Respuestas personales A C B - A / B A; nota esperada 5,33, 3 aciertos, 1 error, 1 blanco, R1 sustituye a 3. Cerrar/reabrir, consultar plantilla, editar y recalcular. Probar también PDF inválido o con un hueco: no se deben perder datos existentes.
-6. Validación de Windows y móvil pendiente; 31 pruebas no gráficas superadas (6 GUI omitidas localmente). GitHub ejecuta todas.
+test_columns_with_reserves (test_answer_import.ImportTests.test_columns_with_reserves) ... ok
+test_compact (test_answer_import.ImportTests.test_compact) ... ok
+test_docx (test_answer_import.ImportTests.test_docx) ... ok
+test_invalid_file (test_answer_import.ImportTests.test_invalid_file) ... invalid pdf header: b'not a'
+EOF marker not found
+ok
+test_missing_and_duplicate_and_prose (test_answer_import.ImportTests.test_missing_and_duplicate_and_prose) ... ok
+test_questionnaire (test_answer_import.ImportTests.test_questionnaire) ... ok
+test_reserves (test_answer_import.ImportTests.test_reserves) ... ok
+test_all_correct (test_grading.GradingTests.test_all_correct) ... ok
+test_blank (test_grading.GradingTests.test_blank) ... ok
+test_five_options_custom_scoring (test_grading.GradingTests.test_five_options_custom_scoring) ... ok
+test_insufficient_reserves (test_grading.GradingTests.test_insufficient_reserves) ... ok
+test_invalid_config (test_grading.GradingTests.test_invalid_config) ... ok
+test_invalid_entries (test_grading.GradingTests.test_invalid_entries) ... ok
+test_large_exam (test_grading.GradingTests.test_large_exam) ... ok
+test_mixed (test_grading.GradingTests.test_mixed) ... ok
+test_negative_and_floor (test_grading.GradingTests.test_negative_and_floor) ... ok
+test_no_evaluable (test_grading.GradingTests.test_no_evaluable) ... ok
+test_precision_and_rounding (test_grading.GradingTests.test_precision_and_rounding) ... ok
+test_real_size_example (test_grading.GradingTests.test_real_size_example) ... ok
+test_replacement_order (test_grading.GradingTests.test_replacement_order) ... ok
+test_unused_reserves (test_grading.GradingTests.test_unused_reserves) ... ok
+test_zero_penalty (test_grading.GradingTests.test_zero_penalty) ... ok
+test_draft_roundtrip (test_storage.ManualStorageTests.test_draft_roundtrip) ... ok
+test_saved_attempts_are_independent_of_recovery (test_storage.ManualStorageTests.test_saved_attempts_are_independent_of_recovery) ... ok
+test_templates_independent (test_storage.ManualStorageTests.test_templates_independent) ... ok
+test_upgrade_from_block01 (test_storage.ManualStorageTests.test_upgrade_from_block01) ... ok
+test_upgrade_from_schema2_preserves_data (test_storage.ManualStorageTests.test_upgrade_from_schema2_preserves_data) ... ok
+test_future_db_not_downgraded (test_storage.StorageTests.test_future_db_not_downgraded) ... ok
+test_initialization (test_storage.StorageTests.test_initialization) ... ok
+test_module_registry (test_storage.StorageTests.test_module_registry) ... ok
+test_persistence (test_storage.StorageTests.test_persistence) ... ok
+test_reject_unknown (test_storage.StorageTests.test_reject_unknown) ... ok
+test_limit_and_browser_agree (test_transfer.TransferTests.test_limit_and_browser_agree) ... ok
+test_transfer_above_previous_limit (test_transfer.TransferTests.test_transfer_above_previous_limit) ... ok
+test_upload_once_and_token (test_transfer.TransferTests.test_upload_once_and_token) ... ok
+test_direct_steps_and_current_result (test_ui.UITests.test_direct_steps_and_current_result) ... skipped 'PySide6 no disponible'
+test_exit_and_reentry_dialogs (test_ui.UITests.test_exit_and_reentry_dialogs) ... skipped 'PySide6 no disponible'
+test_import_source_tiles_and_mobile_page (test_ui.UITests.test_import_source_tiles_and_mobile_page) ... skipped 'PySide6 no disponible'
+test_manual_keyboard (test_ui.UITests.test_manual_keyboard) ... skipped 'PySide6 no disponible'
+test_manual_workflow_and_reopen (test_ui.UITests.test_manual_workflow_and_reopen) ... skipped 'PySide6 no disponible'
+test_navigation_and_settings (test_ui.UITests.test_navigation_and_settings) ... skipped 'PySide6 no disponible'
+test_saved_progress_and_reopen (test_ui.UITests.test_saved_progress_and_reopen) ... skipped 'PySide6 no disponible'
+test_view_template_without_replacing_draft (test_ui.UITests.test_view_template_without_replacing_draft) ... skipped 'PySide6 no disponible'
+test_wheel_does_not_change_form_controls (test_ui.UITests.test_wheel_does_not_change_form_controls) ... skipped 'PySide6 no disponible'
+
+----------------------------------------------------------------------
+Ran 44 tests in 0.516s
+
+OK (skipped=9)

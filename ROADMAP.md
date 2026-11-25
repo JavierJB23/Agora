@@ -10,7 +10,7 @@ Regla transversal de interfaz: la rueda nunca modifica desplegables cerrados ni 
 4. Extracción de soluciones (RC1 integrado en el corrector manual; automático en BLOCK 06; OCR pendiente): importar obligatoriamente el solucionario PDF/Word (o reutilizar uno ya importado) en ambos correctores; nunca exigir transcribirlo. Leer texto digital, formatos compactos, columnas, documento independiente o soluciones al final del examen, numeración de reserva diferenciada y revisión editable de incidencias; OCR si necesario. Manual = introducir respuestas personales a mano; automático = importar también hoja de respuestas.
 5. OMR: hoja real de 120 ordinarias + 9 reservas y A/B/C, alineación de perspectiva, marcas azules y rojas separadas, ignorar resaltado verde, advertir ambigüedades; prueba con foto original sin correcciones y con correcciones. No inferir automáticamente respuestas dudosas ni asumir que el rojo representa respuesta original.
 6. Revisión visual editable de respuestas y corrección automática. Verificar contra datos manuales antes de aprobar.
-7. Historial y exportación.
+7. Historial y exportación. Adelantado en BLOCK 03–04 FIX01: guardar progreso explícitamente, lista básica de simulacros en curso/finalizados, abrirlos y avisos de salida/reanudación. Pendiente organización avanzada, exportación y compatibilidad con el corrector automático cuando exista.
 8. Estadísticas.
 9. Biblioteca de PDF y Word, indexación de temas.
 10. Extracción de enunciados, opciones y explicaciones existentes.
@@ -21,3 +21,5 @@ Regla transversal de interfaz: la rueda nunca modifica desplegables cerrados ni 
 Materiales de prueba externos: plantilla en blanco y corregida, S24 enunciados, respondido y soluciones, test de temas 56–59 y cuatro DOCX. No distribuirlos con el software. Antes de fijar penalización, confirmar fórmula exacta: no asumir que el ejemplo corregido establece una regla universal.
 
 Norma visual: confirmaciones Sí/No en español; flechas y listas de controles acordes a la estética pastel, sin cambios mediante rueda.
+
+FIX01 de BLOCK 03–04: importación en dos tarjetas con iconos y pantalla QR separada; cancelar centrado, URL oculta, IP solo para diagnóstico, límite 100 MiB por documento. Guardado explícito de simulacros independiente del borrador automático de recuperación; aviso al salir con cambios y al volver a entrar, no borrar intentos archivados al iniciar uno nuevo. Mantener estas reglas en módulos futuros.
