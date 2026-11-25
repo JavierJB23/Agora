@@ -3,7 +3,7 @@ from contextlib import closing
 import tempfile
 import unittest
 from pathlib import Path
-from agora.storage import Storage, DEFAULTS
+from agora.storage import Storage, DEFAULTS, SCHEMA_VERSION
 from agora.modules import MODULES
 
 class StorageTests(unittest.TestCase):
@@ -45,7 +45,7 @@ class ManualStorageTests(unittest.TestCase):
                     db.execute('INSERT INTO settings VALUES (?,?)',('student_name','Perfil anterior'))
                     db.execute('PRAGMA user_version=1')
             s=Storage(d); self.assertEqual(s.get('student_name'),'Perfil anterior')
-            with s.connection() as db: self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],5)
+            with s.connection() as db: self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],SCHEMA_VERSION)
     def test_draft_roundtrip(self):
         with tempfile.TemporaryDirectory() as d:
             s=Storage(d); self.assertIsNone(s.load_draft()); s.save_draft({'key':['A','X'],'answers':['','-']}); self.assertEqual(Storage(d).load_draft()['key'],['A','X']); s.clear_draft(); self.assertIsNone(s.load_draft())
@@ -113,3 +113,18 @@ class ManualStorageTests(unittest.TestCase):
             s=Storage(d); aid=s.save_attempt({'mode':'automatic','answers':['B']})
             with s.connection() as db: db.execute('DROP TABLE optical_pages'); db.execute('PRAGMA user_version=4')
             s=Storage(d); self.assertEqual(s.load_attempt(aid)['answers'],['B']); self.assertEqual(s.load_draft('automatic')['answers'],['B']); self.assertNotIn('optical_pages',s.load_attempt(aid))
+
+    def test_solution_original_archive_independent(self):
+        with tempfile.TemporaryDirectory() as d:
+            s=Storage(d); data=b'%PDF-1.4\noriginal bytes'; ref=s.archive_solution_document('original.pdf',data)
+            self.assertEqual(s.archive_solution_document('another.pdf',data),ref)
+            s.save_template('Plantilla',{'key':['A'],'document_ref':ref}); tid=s.templates()[0][0]
+            aid=s.save_attempt({'document_ref':ref,'answers':['A']}); s.clear_draft(); s.delete_template(tid); s.delete_attempt(aid)
+            s=Storage(d); self.assertEqual(s.solution_documents(),[(ref,'original.pdf',len(data))]); self.assertEqual(s.load_solution_document(ref),('original.pdf',data))
+            with self.assertRaises(ValueError): s.archive_solution_document('original.exe',data)
+
+    def test_upgrade_from_schema5_preserves_documents_and_attempts(self):
+        with tempfile.TemporaryDirectory() as d:
+            s=Storage(d); aid=s.save_attempt({'answers':['A']}); s.save_template('Anterior',{'key':['A']})
+            with s.connection() as db: db.execute('DROP TABLE solution_documents'); db.execute('PRAGMA user_version=5')
+            s=Storage(d); self.assertEqual(s.load_attempt(aid)['answers'],['A']); self.assertEqual(s.templates()[0][1],'Anterior'); self.assertEqual(s.solution_documents(),[])

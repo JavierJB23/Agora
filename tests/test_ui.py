@@ -43,8 +43,9 @@ class UITests(unittest.TestCase):
             m.next_entry(); self.app.processEvents(); self.assertEqual(m.stage,3)
             self.assertEqual((m.result.correct,m.result.blank,m.result.reserve_used),(2,1,1)); self.assertEqual(m.table.rowCount(),4)
             m.filter.setCurrentIndex(3); self.assertEqual(m.table.rowCount(),1)
+            self.assertTrue(m.save_progress()); aid=m.attempt_id
             w.close(); w.deleteLater(); self.app.processEvents()
-            w2=MainWindow(Storage(d)); w2.show(); w2.go('manual'); self.app.processEvents(); self.assertEqual(w2.manual.stage,3); self.assertEqual(w2.manual.result.correct,2)
+            w2=MainWindow(Storage(d)); w2.show(); w2.go('manual'); self.assertEqual(w2.manual.stage,0); w2.open_history(aid); self.app.processEvents(); self.assertEqual(w2.manual.stage,3); self.assertEqual(w2.manual.result.correct,2)
             w2.manual.move_stage(2); self.app.processEvents(); w2.manual.choose(0,'B'); w2.manual.next_entry(); self.app.processEvents(); self.assertEqual(w2.manual.result.wrong,1)
             w2.close(); w2.deleteLater(); self.app.processEvents()
     def test_manual_keyboard(self):
@@ -150,9 +151,10 @@ class UITests(unittest.TestCase):
                         dlg.reject()
                 QTimer.singleShot(0,callback)
             click('Cancelar'); self.assertFalse(ORIGINAL_LEAVE(m))
-            click('Salir sin guardar'); self.assertTrue(ORIGINAL_LEAVE(m)); self.assertEqual(w.storage.load_draft()['form']['name'],'Sin guardar')
-            click('Continuar'); self.assertTrue(ORIGINAL_ENTER(m)); self.assertEqual(m.name.text(),'Sin guardar')
-            click('Iniciar uno nuevo'); self.assertTrue(ORIGINAL_ENTER(m)); self.assertFalse(m.active()); self.assertIsNone(w.storage.load_draft())
+            click('Salir sin guardar'); self.assertTrue(ORIGINAL_LEAVE(m)); self.assertIsNone(w.storage.load_draft()); self.assertFalse(m.active())
+            self.assertTrue(ORIGINAL_ENTER(m)); self.assertFalse(m.active()); self.assertIsNone(w.storage.load_draft())
+            m.name.setText('Guardar al salir'); click('Guardar y salir'); self.assertTrue(ORIGINAL_LEAVE(m)); self.assertIsNone(w.storage.load_draft()); aid=w.storage.attempts()[0][0]
+            self.assertTrue(ORIGINAL_ENTER(m)); self.assertFalse(m.active()); self.assertTrue(m.open_saved(aid)); self.assertEqual(m.name.text(),'Guardar al salir')
             w.close(); w.deleteLater(); self.app.processEvents()
 
     def test_config_structure_only_from_import(self):
@@ -205,10 +207,11 @@ class UITests(unittest.TestCase):
             w=MainWindow(s); w.show(); w.go('manual'); m=w.manual
             m.templates_combo.setCurrentIndex(m.templates_combo.findText('Primera')); m.templates_combo.activated.emit(m.templates_combo.currentIndex()); self.assertEqual(m.key,['A','B']); self.assertEqual(m.stage,0)
             m.name.setText('En curso'); before=m.payload(True)
-            with patch('agora.manual.confirm',return_value=False):
-                m.templates_combo.setCurrentIndex(m.templates_combo.findText('Segunda')); m.templates_combo.activated.emit(m.templates_combo.currentIndex())
+            m.templates_combo.setCurrentIndex(m.templates_combo.findText('Segunda')); m.templates_combo.activated.emit(m.templates_combo.currentIndex())
             self.assertEqual(m.payload(True),before); self.assertEqual(m.templates_combo.currentText(),'Segunda')
-            with patch('agora.manual.confirm',return_value=True): m.templates_combo.activated.emit(m.templates_combo.currentIndex())
+            with patch('agora.manual.confirm',return_value=False): self.assertFalse(m.load_template())
+            self.assertEqual(m.payload(True),before)
+            with patch('agora.manual.confirm',return_value=True): self.assertTrue(m.load_template())
             self.assertEqual(m.key,['C','B','A']); self.assertEqual(m.answers,['','','']); self.assertEqual(m.name.text(),'Segunda')
             w.close(); w.deleteLater(); self.app.processEvents()
 
@@ -243,3 +246,25 @@ class UITests(unittest.TestCase):
                 m.reader.adjust()
             self.assertEqual(m.answers,['B','A','C']); self.assertTrue(np.array_equal(m.reader.images[0],im)); self.assertFalse(m.dirty())
             w.close(); w.deleteLater(); self.app.processEvents()
+
+    def test_same_template_consult_does_not_change_name_or_answers(self):
+        from unittest.mock import patch
+        from dataclasses import asdict
+        from agora.grading import ExamConfig
+        with tempfile.TemporaryDirectory() as d:
+            s=Storage(d); s.save_template('Plantilla',{'config':asdict(ExamConfig(name='Plantilla',questions=2,reserves=0)),'key':['A','B']})
+            w=MainWindow(s); w.show(); w.go('manual'); m=w.manual; m.templates_combo.setCurrentIndex(1); m.templates_combo.activated.emit(1); m.apply_config(target=2); m.choose(0,'A'); m.move_stage(0); m.name.setText('Nombre propio'); before=m.payload(True)
+            m.templates_combo.activated.emit(1)
+            with patch('agora.library_ui.consult_template') as view: m.view_template(); view.assert_called_once()
+            self.assertEqual(m.payload(True),before); self.assertEqual(m.name.text(),'Nombre propio'); self.assertEqual(m.answers,['A',''])
+            w.close(); w.deleteLater(); self.app.processEvents()
+
+    def test_library_documents_and_fresh_entry_from_history(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as d:
+            s=Storage(d); ref=s.archive_solution_document('soluciones.pdf',b'%PDF-1.4\noriginal'); w=MainWindow(s); w.show(); w.go('manual'); m=w.manual
+            m.install_key(ImportedKey(('A','B'),()),'soluciones.pdf',3,document_ref=ref); m.next_entry(); m.choose(0,'A'); m.save_progress(); aid=m.attempt_id
+            self.assertTrue(ORIGINAL_LEAVE(m)); w.go('library'); self.assertEqual(w.library_tabs.tabText(1),'Mis plantillas'); self.assertEqual(len(s.solution_documents()),1)
+            w.go('manual'); self.assertTrue(ORIGINAL_ENTER(m)); self.assertFalse(m.active()); self.assertEqual(m.stage,0); self.assertEqual(len(s.attempts()),1)
+            w.go('history'); w.open_history(aid); self.assertEqual(m.answers,['A','']); self.assertEqual(m.document_ref,ref)
+            self.assertTrue(ORIGINAL_LEAVE(m)); w.go('home'); w.close(); w.deleteLater(); self.app.processEvents()
