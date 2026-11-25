@@ -268,3 +268,22 @@ class UITests(unittest.TestCase):
             w.go('manual'); self.assertTrue(ORIGINAL_ENTER(m)); self.assertFalse(m.active()); self.assertEqual(m.stage,0); self.assertEqual(len(s.attempts()),1)
             w.go('history'); w.open_history(aid); self.assertEqual(m.answers,['A','']); self.assertEqual(m.document_ref,ref)
             self.assertTrue(ORIGINAL_LEAVE(m)); w.go('home'); w.close(); w.deleteLater(); self.app.processEvents()
+
+    def test_shared_library_from_both_directions(self):
+        from unittest.mock import patch
+        from dataclasses import asdict
+        from agora.grading import ExamConfig
+        from agora.answer_import import ImportedKey
+        from PySide6.QtWidgets import QPushButton
+        with tempfile.TemporaryDirectory() as d:
+            s=Storage(d); w=MainWindow(s); w.show(); w.go('library')
+            with patch('agora.answer_import.extract_key',return_value=ImportedKey(('A','B'),())), patch('agora.template_ui.review_key',return_value=3):
+                w.register_library_document('Biblioteca.pdf',b'original')
+            w.refresh_library(); self.assertEqual(len(s.library_entries()),1)
+            self.assertEqual(w.library_tabs.tabText(1),'Mis plantillas')
+            w.go('manual'); m=w.manual; m.refresh_templates(); self.assertGreaterEqual(m.templates_combo.findText('Biblioteca'),1)
+            m.move_stage(1)
+            with patch('agora.template_ui.review_key',return_value=3): m.review_import(ImportedKey(('C','B'),()),'Corrector.pdf',b'original2')
+            self.assertEqual(len(s.library_entries()),2); self.assertTrue(any(b.text()=='Guardar plantilla' for b in m.findChildren(QPushButton)))
+            w.go('automatic'); w.automatic.refresh_templates(); self.assertGreaterEqual(w.automatic.templates_combo.findText('Corrector'),1)
+            w.close()
