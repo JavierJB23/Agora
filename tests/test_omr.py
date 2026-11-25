@@ -29,3 +29,15 @@ class OpticalTests(unittest.TestCase):
     def test_decode_and_alignment(self):
         im=sheet(); b=BytesIO(); Image.fromarray(im).save(b,format='PNG'); pages=omr.decode('test.png',b.getvalue()); self.assertEqual(len(pages),1); self.assertEqual(omr.align(pages[0]).shape,im.shape)
         with self.assertRaises(ValueError): omr.align(im,[(0,0)]*4)
+
+    def test_identify_reversed_and_shifted_reserve(self):
+        reserve=sheet(1); shifted=cv.warpAffine(reserve,np.float32([[1,0,-5],[0,1,-14]]),(omr.WIDTH,omr.HEIGHT),borderValue=(250,250,250))
+        self.assertEqual(omr.identify(shifted),1); self.assertEqual(omr.identify(sheet(0)),0)
+        pts=omr.reserve_positions(shifted)
+        for (_,xy),(_,xs,y) in zip(pts,omr.locations(1)):
+            for (x2,y2),x in zip(xy,xs): self.assertLessEqual(abs(x2-(x-5)),3); self.assertLessEqual(abs(y2-(y-14)),3)
+        self.assertEqual([omr.proposed(m) for m in omr.scan(shifted,1)],['-']*9)
+
+    def test_proposals_clear_ambiguous_blank(self):
+        im=sheet(); mark(im,0,0,1,(20,40,120)); mark(im,0,1,0,(20,40,120)); mark(im,0,1,1,(20,40,120)); mark(im,0,3,1,(160,20,30))
+        m=omr.scan(im,0); self.assertEqual([omr.proposed(x) for x in m[:4]],['B','','-',''])

@@ -37,3 +37,18 @@ class TransferTests(unittest.TestCase):
             with urlopen(req,timeout=10) as r: self.assertEqual(r.status,200)
             name,received=s.items.get(timeout=1); self.assertEqual(name,'grande.pdf'); self.assertEqual(received,data)
         finally: s.close()
+
+    def test_batch_two_images_atomic(self):
+        import json
+        from urllib.parse import quote
+        s=UploadSession(host='127.0.0.1',extensions=('.png','.pdf'),multiple=True); url=s.url('127.0.0.1')
+        try:
+            with urlopen(url,timeout=3) as r: self.assertIn('multiple',r.read().decode())
+            def req(files,data): return Request(url+'batch',data=data,headers={'X-Files':quote(json.dumps(files))})
+            with self.assertRaises(HTTPError): urlopen(req([['a.png',3],['b.pdf',4]],b'ab'),timeout=3)
+            self.assertTrue(s.items.empty())
+            with urlopen(req([['reserva.png',3],['principal.pdf',4]],b'abcdefg'),timeout=3) as r: self.assertEqual(r.status,200)
+            self.assertEqual(s.items.get(timeout=1),[('reserva.png',b'abc'),('principal.pdf',b'defg')])
+            with self.assertRaises(HTTPError) as e: urlopen(req([['a.png',1]],b'x'),timeout=3)
+            self.assertEqual(e.exception.code,409)
+        finally: s.close()

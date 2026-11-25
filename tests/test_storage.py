@@ -45,7 +45,7 @@ class ManualStorageTests(unittest.TestCase):
                     db.execute('INSERT INTO settings VALUES (?,?)',('student_name','Perfil anterior'))
                     db.execute('PRAGMA user_version=1')
             s=Storage(d); self.assertEqual(s.get('student_name'),'Perfil anterior')
-            with s.connection() as db: self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],3)
+            with s.connection() as db: self.assertEqual(db.execute('PRAGMA user_version').fetchone()[0],4)
     def test_draft_roundtrip(self):
         with tempfile.TemporaryDirectory() as d:
             s=Storage(d); self.assertIsNone(s.load_draft()); s.save_draft({'key':['A','X'],'answers':['','-']}); self.assertEqual(Storage(d).load_draft()['key'],['A','X']); s.clear_draft(); self.assertIsNone(s.load_draft())
@@ -75,3 +75,11 @@ class ManualStorageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             s=Storage(d); a=s.save_attempt({'answers':['A']}); s.save_draft({'attempt_id':a,'answers':['C']})
             self.assertTrue(s.delete_attempt(a)); self.assertEqual(s.attempts(),[]); self.assertIsNone(s.load_draft())
+
+    def test_separate_automatic_draft_and_history(self):
+        with tempfile.TemporaryDirectory() as d:
+            s=Storage(d); m=s.save_attempt({'answers':['A']}); a=s.save_attempt({'mode':'automatic','answers':['B']})
+            self.assertEqual(s.load_draft()['attempt_id'],m); self.assertEqual(s.load_draft('automatic')['attempt_id'],a)
+            s.clear_draft('automatic'); self.assertEqual(s.load_draft()['attempt_id'],m); self.assertEqual(s.load_attempt(a)['answers'],['B'])
+            s.save_draft({'attempt_id':a,'answers':['C']},'automatic'); s.delete_attempt(a)
+            self.assertIsNone(s.load_draft('automatic')); self.assertEqual(s.load_draft()['attempt_id'],m); self.assertEqual(s.load_attempt(m)['answers'],['A'])

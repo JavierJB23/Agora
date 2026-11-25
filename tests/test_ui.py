@@ -178,3 +178,19 @@ class UITests(unittest.TestCase):
             self.assertEqual([x[0] for x in s.attempts()],[keep]); self.assertIsNone(s.load_draft()); self.assertFalse(m.active())
             self.assertTrue(m.open_saved(keep)); self.assertEqual(m.answers,['A',''])
             w.close(); w.deleteLater(); self.app.processEvents()
+
+    def test_automatic_workflow_history_and_excluded_cells(self):
+        from unittest.mock import patch
+        from test_omr import sheet, mark
+        from agora import omr
+        with tempfile.TemporaryDirectory() as d:
+            s=Storage(d); w=MainWindow(s); w.show(); w.go('automatic'); m=w.automatic
+            m.name.setText('Automático'); m.apply_config(); m.install_key(ImportedKey(('A','B'),('C',)),'soluciones.pdf',3); m.next_entry()
+            self.assertEqual(m.stage,2)
+            im=sheet(); mark(im,0,0,0,(20,40,120)); mark(im,0,1,1,(20,40,120)); mark(im,0,2,2,(20,40,120)); res=sheet(1); mark(res,1,0,2,(20,40,120))
+            m.reader.install(1,res,res,omr.scan(res,1)); m.reader.install(0,im,im,omr.scan(im,0)); m.optical_changed()
+            self.assertEqual(m.answers,['A','B','C']); self.assertIsNone(s.load_draft()); self.assertEqual(s.load_draft('automatic')['answers'],['A','B','C'])
+            with patch('agora.manual.confirm',return_value=True): m.correct_optical()
+            self.assertEqual(m.stage,3); self.assertEqual(m.result.correct,2); self.assertEqual(m.result.reserve_used,0); self.assertTrue(m.save_progress()); aid=m.attempt_id
+            w.go('history'); m.start_new(); w.open_history(aid); self.assertIs(w.stack.currentWidget(),w.pages['automatic']); self.assertEqual(m.result.correct,2)
+            w.close(); w.deleteLater(); self.app.processEvents()
