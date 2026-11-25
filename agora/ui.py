@@ -148,8 +148,7 @@ class MainWindow(QMainWindow):
                 l=self.page('manual'); self.manual=ManualPage(self.storage,lambda:self.go('home')); l.addWidget(self.manual)
             elif m.key=='history': self.make_history()
             elif m.key=='automatic':
-                from .omr_ui import OpticalPage
-                l=self.page('automatic'); self.optical=OpticalPage(lambda:self.go('home')); l.addWidget(self.optical); l.addStretch()
+                l=self.page('automatic'); self.automatic=ManualPage(self.storage,lambda:self.go('home'),mode='automatic'); l.addWidget(self.automatic)
             else: self.make_module(m)
         self.make_settings(); self.go('home')
     def add_nav(self, layout, key, name, symbol):
@@ -161,23 +160,25 @@ class MainWindow(QMainWindow):
         return vertical(canvas,(30,25,30,25),16)
     def go(self,key,skip_entry=False):
         current=self.stack.currentWidget()
-        if current is self.pages.get('manual') and key!='manual' and not self.manual.allow_leave():
-            self.sync_nav('manual'); return
-        if key=='manual' and current is not self.pages.get('manual') and not skip_entry and not self.manual.allow_enter():
+        for mode in ('manual','automatic'):
+            if current is self.pages.get(mode) and key!=mode and not getattr(self,mode).allow_leave():
+                self.sync_nav(mode); return
+        if key in ('manual','automatic') and current is not self.pages.get(key) and not skip_entry and not getattr(self,key).allow_enter():
             self.sync_nav(next(k for k,p in self.pages.items() if p is current)); return
         if key=='home': self.refresh_home()
         if key=='settings': self.load_settings()
         if key=='history': self.refresh_history()
         self.sync_nav(key); self.stack.setCurrentWidget(self.pages[key])
-        if key=='manual': self.manual.focus_entry()
+        if key in ('manual','automatic'): getattr(self,key).focus_entry()
     def sync_nav(self,key):
         for k,b in self.nav.items(): b.setChecked(k==key)
     def closeEvent(self,event):
-        if self.stack.currentWidget() is self.pages.get('manual') and not self.manual.allow_leave(): event.ignore(); return
+        for mode in ('manual','automatic'):
+            if self.stack.currentWidget() is self.pages.get(mode) and not getattr(self,mode).allow_leave(): event.ignore(); return
         super().closeEvent(event)
     def make_history(self):
         l=self.page('history'); back=button('Volver al inicio','home'); back.clicked.connect(lambda:self.go('home')); l.addWidget(back,0,Qt.AlignmentFlag.AlignLeft)
-        l.addWidget(label('Mis simulacros','heading')); l.addWidget(label('Simulacros guardados manualmente, tanto en curso como finalizados.','muted',True))
+        l.addWidget(label('Mis simulacros','heading')); l.addWidget(label('Simulacros manuales y automáticos, tanto en curso como finalizados.','muted',True))
         self.history_panel=frame(); self.history_layout=vertical(self.history_panel,(20,20,20,20),12); l.addWidget(self.history_panel); l.addStretch()
     def refresh_history(self):
         from datetime import datetime
@@ -187,20 +188,24 @@ class MainWindow(QMainWindow):
             if w: w.hide(); w.deleteLater()
         try: rows=self.storage.attempts()
         except Exception as e: l.addWidget(label('No se pudieron leer los simulacros: '+str(e),wrap=True)); return
-        if not rows: l.addWidget(label('Todavía no hay simulacros guardados. Pulsa Guardar progreso en el corrector manual.','muted',True)); return
+        if not rows: l.addWidget(label('Todavía no hay simulacros guardados. Pulsa Guardar progreso en cualquiera de los correctores.','muted',True)); return
         for i,stamp,d in rows:
             c=ExamConfig(**d['config']); answers=d['answers']; key=d['key']; count=sum(bool(v) for v in answers); complete=bool(d.get('key_source')) and all(key) and all(answers) and not d.get('form') and d.get('corrected',d.get('stage')==3)
             name=d.get('form',{}).get('name',c.name) or c.name
             summary=f'En curso · {count}/{c.size} respuestas registradas'
             if complete:
                 r=evaluate(c,key,answers); summary='Finalizado · Nota '+format_number(r.grade)+' / '+format_number(c.maximum)
+            summary=('Automático' if d.get('mode')=='automatic' else 'Manual')+' · '+summary
             item=frame('tile'); h=QHBoxLayout(item); h.setContentsMargins(12,12,12,12); info=QVBoxLayout(); info.addWidget(label(name,'tileTitle',True)); info.addWidget(label(summary,'muted',True)); info.addWidget(label(datetime.fromisoformat(stamp).astimezone().strftime('%d/%m/%Y · %H:%M'),'muted')); h.addLayout(info,1)
             op=button('Abrir'); op.clicked.connect(lambda checked=False,aid=i:self.open_history(aid)); h.addWidget(op); delete=button('Eliminar'); delete.clicked.connect(lambda checked=False,aid=i,n=name:self.delete_history(aid,n)); h.addWidget(delete); l.addWidget(item)
     def open_history(self,aid):
-        if self.manual.open_saved(aid): self.go('manual',skip_entry=True)
+        d=self.storage.load_attempt(aid)
+        if not d: return
+        mode=d.get('mode','manual')
+        if getattr(self,mode).open_saved(aid): self.go(mode,skip_entry=True)
     def delete_history(self,aid,name):
         text=f'Se va a borrar el simulacro «{name}». Esta operación no se puede deshacer. ¿Seguro que quieres continuar?'
-        if self.manual.attempt_id==aid:
+        if any(getattr(self,m).attempt_id==aid for m in ('manual','automatic')):
             text+='\n\nTambién se eliminará su borrador activo, incluidos los cambios no guardados.'
         if not confirm(self,'Eliminar simulacro',text): return
         try:
@@ -208,7 +213,8 @@ class MainWindow(QMainWindow):
                 QMessageBox.information(self,'Eliminar simulacro','El simulacro ya no existe.'); self.refresh_history(); return
         except Exception as e:
             QMessageBox.warning(self,'No se pudo eliminar',str(e)); return
-        if self.manual.attempt_id==aid: self.manual.reset_state()
+        for mode in ('manual','automatic'):
+            if getattr(self,mode).attempt_id==aid: getattr(self,mode).reset_state()
         self.refresh_history()
     def make_home(self):
         l=self.page('home'); top=QHBoxLayout(); top.addWidget(label('Inicio','heading')); top.addStretch(); top.addWidget(label(f'Versión v{VERSION} · BLOCK {BLOCK}','tag')); l.addLayout(top)
@@ -248,7 +254,7 @@ class MainWindow(QMainWindow):
         self.status=label('','muted',True); p.addWidget(self.status); l.addWidget(panel)
         panel2=frame(); p2=vertical(panel2,(22,22,22,22),10); p2.addWidget(label('Almacenamiento local','tileTitle'))
         p2.addWidget(label(str(self.storage.directory),'muted',True)); op=button('Abrir carpeta de datos','folder'); op.clicked.connect(self.open_data); p2.addWidget(op,0,Qt.AlignmentFlag.AlignLeft); l.addWidget(panel2)
-        panel3=frame(); p3=vertical(panel3,(22,22,22,22),10); p3.addWidget(label('Acerca de Ágora','tileTitle')); p3.addWidget(label(f'Versión {VERSION} · BLOCK {BLOCK}\nCorrector manual con importación PDF/Word y QR. OCR y OMR en futuros bloques.',wrap=True)); l.addWidget(panel3); l.addStretch()
+        panel3=frame(); p3=vertical(panel3,(22,22,22,22),10); p3.addWidget(label('Acerca de Ágora','tileTitle')); p3.addWidget(label(f'Versión {VERSION} · BLOCK {BLOCK}\nCorrector manual y automático con importación PDF/Word, QR y lector óptico de plantilla A/B/C.',wrap=True)); l.addWidget(panel3); l.addStretch()
     def load_settings(self):
         self.name.setText(self.storage.get('student_name')); self.message.setText(self.storage.get('welcome_message')); self.status.setText('')
     def save_settings(self):

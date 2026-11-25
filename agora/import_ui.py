@@ -19,8 +19,8 @@ def centered_button(s,fn):
     b=QPushButton(s); b.setObjectName('importCancel'); b.setFixedWidth(136); b.setCursor(Qt.CursorShape.PointingHandCursor); b.clicked.connect(fn); return b
 
 class ImportDialog(QDialog):
-    def __init__(self,parent,extensions=('.pdf','.docx')):
-        super().__init__(parent); self.setWindowTitle('Importar documento'); self.setAcceptDrops(True); self.extensions=extensions; self.item=None; self.session=None
+    def __init__(self,parent,extensions=('.pdf','.docx'),multiple=False):
+        super().__init__(parent); self.setWindowTitle('Importar documento'); self.setAcceptDrops(True); self.extensions=extensions; self.item=None; self.items=[]; self.multiple=multiple; self.session=None
         root=QVBoxLayout(self); root.setContentsMargins(18,18,18,18); root.setSpacing(12)
         self.stack=QStackedWidget(); root.addWidget(self.stack)
         self.source=QWidget(); source=QVBoxLayout(self.source); source.setContentsMargins(0,0,0,0); source.setSpacing(14)
@@ -28,7 +28,7 @@ class ImportDialog(QDialog):
         row=QHBoxLayout(); row.setSpacing(14)
         for name,asset,fn in [('Desde PC','monitor',self.pc),('Desde móvil','qr-code',self.mobile)]:
             b=QToolButton(); b.setObjectName('homeTile'); b.setText(name); b.setIcon(QIcon(str(ASSETS/(asset+'.svg')))); b.setIconSize(QSize(64,64)); b.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon); b.setFixedSize(170,170); b.setCursor(Qt.CursorShape.PointingHandCursor); b.clicked.connect(fn); row.addWidget(b)
-        source.addLayout(row); note=text('También puedes arrastrar un documento aquí.\nFormatos: '+', '.join(extensions)+f' · Hasta {MAX_BYTES//(1024**2)} MB.'); note.setObjectName('muted'); note.setAlignment(ALIGN.AlignCenter); source.addWidget(note)
+        source.addLayout(row); note=text(('Selecciona o arrastra una o dos hojas (100 MB en total).\nFormatos: ' if multiple else 'También puedes arrastrar un documento aquí.\nFormatos: ')+', '.join(extensions)+f' · Hasta {MAX_BYTES//(1024**2)} MB.'); note.setObjectName('muted'); note.setAlignment(ALIGN.AlignCenter); source.addWidget(note)
         self.source_error=text(''); self.source_error.hide(); source.addWidget(self.source_error); self.stack.addWidget(self.source)
         self.mobile_page=QWidget(); mob=QVBoxLayout(self.mobile_page); mob.setContentsMargins(0,0,0,0); mob.setSpacing(12)
         title=text('Escanea el código QR'); title.setObjectName('heading'); title.setAlignment(ALIGN.AlignCenter); mob.addWidget(title)
@@ -44,22 +44,33 @@ class ImportDialog(QDialog):
         self.expiry=QTimer(self); self.expiry.setSingleShot(True); self.expiry.timeout.connect(self.expire); self.finished.connect(self.cleanup)
     def error(self,s): self.source_error.setText(s); self.source_error.show(); self.adjustSize()
     def pc(self):
-        path,_=QFileDialog.getOpenFileName(self,'Seleccionar documento','','Documentos ('+' '.join('*'+s for s in self.extensions)+')')
-        if path: self.load(path)
-    def load(self,path):
+        pattern='Documentos ('+' '.join('*'+s for s in self.extensions)+')'
+        if self.multiple:
+            paths,_=QFileDialog.getOpenFileNames(self,'Seleccionar hojas','',pattern)
+            if paths: self.load_many(paths)
+        else:
+            path,_=QFileDialog.getOpenFileName(self,'Seleccionar documento','',pattern)
+            if path: self.load(path)
+    def load(self,path): self.load_many([path])
+    def load_many(self,paths):
         try:
-            p=Path(path)
-            if p.suffix.lower() not in self.extensions: raise ValueError('Formato no admitido.')
-            if not 0<p.stat().st_size<=MAX_BYTES: raise ValueError(f'Documento vacío o superior a {MAX_BYTES//(1024**2)} MB.')
-            with p.open('rb') as f: data=f.read(MAX_BYTES+1)
-            if not 0<len(data)<=MAX_BYTES: raise ValueError('Tamaño no válido.')
-            self.item=(p.name,data); self.accept()
+            if not 1<=len(paths)<=(2 if self.multiple else 1): raise ValueError('Selecciona como máximo dos archivos.' if self.multiple else 'Selecciona un documento.')
+            files=[Path(x) for x in paths]
+            if any(p.suffix.lower() not in self.extensions for p in files): raise ValueError('Formato no admitido.')
+            if any(p.stat().st_size<=0 for p in files) or sum(p.stat().st_size for p in files)>MAX_BYTES: raise ValueError('Archivos vacíos o superiores a 100 MB en total.')
+            items=[]; remaining=MAX_BYTES
+            for p in files:
+                with p.open('rb') as f: data=f.read(remaining+1)
+                if not 0<len(data)<=remaining: raise ValueError('Tamaño no válido.')
+                items.append((p.name,data)); remaining-=len(data)
+            self.items=items; self.item=items[0]; self.accept()
         except Exception as e: self.error(str(e))
     def dragEnterEvent(self,e):
-        if self.stack.currentWidget() is self.source and e.mimeData().hasUrls() and len(e.mimeData().urls())==1 and e.mimeData().urls()[0].isLocalFile(): e.acceptProposedAction()
+        urls=e.mimeData().urls()
+        if self.stack.currentWidget() is self.source and 1<=len(urls)<=(2 if self.multiple else 1) and all(u.isLocalFile() for u in urls): e.acceptProposedAction()
     def dropEvent(self,e):
         urls=e.mimeData().urls()
-        if self.stack.currentWidget() is self.source and len(urls)==1 and urls[0].isLocalFile(): e.acceptProposedAction(); self.load(urls[0].toLocalFile())
+        if self.stack.currentWidget() is self.source and urls and all(u.isLocalFile() for u in urls): e.acceptProposedAction(); self.load_many([u.toLocalFile() for u in urls])
     def mobile(self):
         if self.session: return
         ips=local_addresses()
@@ -67,7 +78,7 @@ class ImportDialog(QDialog):
             if self.stack.currentWidget() is self.source: self.error('No se ha encontrado una red local.')
             else: self.info.setText('No se ha encontrado una red local. Inténtalo de nuevo.')
             return
-        try: self.session=UploadSession(extensions=self.extensions)
+        try: self.session=UploadSession(extensions=self.extensions,multiple=self.multiple)
         except OSError as e:
             if self.stack.currentWidget() is self.source: self.error('No se pudo iniciar la conexión local: '+str(e))
             else: self.info.setText('No se pudo iniciar la conexión local: '+str(e))
@@ -82,9 +93,9 @@ class ImportDialog(QDialog):
         renderer=QSvgRenderer(QByteArray(stream.getvalue())); image=QImage(288,288,QImage.Format.Format_ARGB32); image.fill(Qt.GlobalColor.white); painter=QPainter(image); renderer.render(painter); painter.end(); self.qr.setPixmap(QPixmap.fromImage(image))
     def poll(self):
         if not self.session: return
-        try: self.item=self.session.items.get_nowait()
+        try: received=self.session.items.get_nowait()
         except queue.Empty: return
-        self.accept()
+        self.items=received if self.multiple else [received]; self.item=self.items[0]; self.accept()
     def expire(self):
         self.cleanup(); self.qr.clear(); self.network.hide(); self.address.hide(); self.info.setText('El QR ha caducado. Genera otro para continuar.'); self.retry.show()
     def cleanup(self,*_):

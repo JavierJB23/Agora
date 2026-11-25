@@ -33,72 +33,75 @@ class CornerImage(QLabel):
         h,w=self.im.shape[:2]; return [(x*w/self.base.width(),y*h/self.base.height()) for x,y in self.points]
 
 class OpticalPage(QWidget):
-    def __init__(self,back):
-        super().__init__(); self.images={}; self.aligned={}; self.marks={}; self.choices={}
-        l=QVBoxLayout(self); l.setContentsMargins(0,0,0,0); l.setSpacing(12)
-        l.addWidget(btn('‹ Volver al inicio',back),0,A.AlignLeft); l.addWidget(text('Corrector automático · Lector óptico','heading'))
-        l.addWidget(text('BLOCK 05 · Prueba de lectura. Importa la hoja, revisa las marcas azules y comprueba las casillas. Todavía no calcula la nota ni guarda un simulacro.'))
-        row=QHBoxLayout(); row.addWidget(btn('Importar hoja principal (PDF o foto)',lambda:self.load(0),True)); row.addWidget(btn('Importar página de reservas',lambda:self.load(1))); l.addLayout(row)
-        self.note=text('Plantilla compatible: 120 preguntas, A/B/C y 9 reservas. Las marcas rojas no se usan como respuesta original.'); l.addWidget(self.note)
-        row=QHBoxLayout(); self.page=SafeComboBox(); self.page.addItems(['Hoja principal','Reservas']); self.page.currentIndexChanged.connect(self.refresh); row.addWidget(self.page); row.addWidget(btn('Ver hoja y casillas',self.preview)); row.addWidget(btn('Ajustar esquinas',self.adjust)); l.addLayout(row)
-        l.addWidget(text('Revisa los recortes. Una sugerencia no es una respuesta confirmada. Sin azul puede significar blanco, tinta negra o mala iluminación.'))
-        self.table=QTableWidget(0,5); self.table.setHorizontalHeaderLabels(['Pregunta','Recorte','Lectura azul','Estado','Tu revisión']); self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch); self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers); self.table.setAlternatingRowColors(True); self.table.verticalHeader().hide(); self.table.setMinimumHeight(440); l.addWidget(self.table)
-        row=QHBoxLayout(); row.addWidget(btn('Aceptar sugerencias azules revisadas',self.accept_suggestions)); row.addWidget(btn('Marcar sin azul como blanco',self.blanks)); row.addWidget(btn('Reiniciar lectura',self.reset)); l.addLayout(row)
-        self.count=text('Sin hoja cargada.'); l.addWidget(self.count)
-    def load(self,slot):
-        d=ImportDialog(self,omr.EXTENSIONS)
-        if d.exec()!=QDialog.DialogCode.Accepted or not d.item: return
+    def __init__(self,config,answers,cache,changed):
+        super().__init__(); self.config=config; self.answers=answers; self.changed=changed
+        self.images=cache.setdefault('images',{}); self.aligned=cache.setdefault('aligned',{}); self.marks=cache.setdefault('marks',{})
+        l=QVBoxLayout(self); l.setContentsMargins(0,0,0,0); l.setSpacing(10)
+        l.addWidget(btn('Importar hojas de respuestas (PDF o fotos)',self.load,True))
+        self.note=text('Importa las páginas en cualquier orden, juntas o por separado. Plantilla compatible: hasta 120 preguntas y 9 reservas, A/B/C.' + (' Se han recuperado respuestas guardadas; los recortes originales solo se mantienen mientras Ágora está abierto. Puedes volver a importar las hojas.' if any(answers) and not self.marks else '')); l.addWidget(self.note)
+        row=QHBoxLayout(); self.page=SafeComboBox(); self.page.addItems(['Preguntas ordinarias','Reservas']); self.page.currentIndexChanged.connect(self.refresh); row.addWidget(self.page); self.filter=SafeComboBox(); self.filter.addItems(['Solo pendientes','Todas las preguntas']); self.filter.currentIndexChanged.connect(self.refresh); row.addWidget(self.filter); row.addWidget(btn('Ver hoja y casillas',self.preview)); row.addWidget(btn('Ajustar esquinas',self.adjust)); l.addLayout(row)
+        l.addWidget(text('Las lecturas claras se rellenan automáticamente. Revisa las dudosas y confirma que has usado tinta azul. El rojo es informativo. Puedes modificar cualquier respuesta desde Todas las preguntas.'))
+        self.count=text(''); l.addWidget(self.count)
+        self.table=QTableWidget(0,4); self.table.setHorizontalHeaderLabels(['Pregunta','Recorte original','Estado de lectura','Respuesta']); self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch); self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers); self.table.setAlternatingRowColors(True); self.table.verticalHeader().hide(); self.table.setMinimumHeight(300); l.addWidget(self.table)
+        l.addWidget(btn('Reiniciar lectura',self.reset),0,A.AlignLeft)
+        self.refresh()
+    def indices(self,slot):
+        return range(0,self.config.questions) if slot==0 else range(self.config.questions,self.config.size)
+    def compatible(self):
+        if self.config.questions>120 or self.config.reserves>9 or self.config.options!=3: raise ValueError('Este lector solo es compatible con la plantilla A/B/C de hasta 120 preguntas y 9 reservas. Para otro modelo utiliza el corrector manual.')
+    def load(self):
+        try: self.compatible()
+        except ValueError as e: QMessageBox.warning(self,'Plantilla no compatible',str(e)); return
+        d=ImportDialog(self,omr.EXTENSIONS,multiple=True)
+        if d.exec()!=QDialog.DialogCode.Accepted or not d.items: return
         try:
-            name,data=d.item; images=omr.decode(name,data)
-            if slot==1 and len(images)!=1: raise ValueError('Para reservas selecciona solo la segunda página; un PDF de dos páginas se importa desde Hoja principal.')
-            if slot==0 and self.images and not confirm(self,'Nueva hoja','Se sustituirá la lectura anterior, incluidas sus revisiones. ¿Continuar?'): return
-            if slot==1 and slot in self.images and not confirm(self,'Sustituir reservas','Se perderá la revisión de reservas actual. ¿Continuar?'): return
-            if slot==0: self.images.clear(); self.aligned.clear(); self.marks.clear(); self.choices.clear()
-            for j,im in enumerate(images):
-                i=slot+j; self.images[i]=im; self.process(i)
-            self.page.setCurrentIndex(slot); self.refresh()
+            pending={}; count=0
+            for name,data in d.items:
+                for im in omr.decode(name,data):
+                    count+=1
+                    if count>2: raise ValueError('Selecciona un máximo de dos páginas en total.')
+                    aligned=omr.align(im); slot=omr.identify(aligned)
+                    if slot in pending: raise ValueError('Hay dos páginas del mismo tipo. Selecciona una de cada tipo.')
+                    pending[slot]=(im,aligned,omr.scan(aligned,slot))
+            if any(any(self.answers[i] for i in self.indices(slot)) for slot in pending) and not confirm(self,'Sustituir lectura','Se sustituirán las respuestas de las páginas importadas. ¿Continuar?'): return
+            for slot,(im,aligned,marks) in pending.items(): self.install(slot,im,aligned,marks)
+            self.page.setCurrentIndex(0 if 0 in pending else 1); self.filter.setCurrentIndex(0); self.note.setText('Páginas reconocidas automáticamente. Comprueba la alineación y resuelve las dudas antes de corregir.'); self.changed(); self.refresh()
         except Exception as e: QMessageBox.warning(self,'No se pudo leer',str(e))
-    def process(self,i,corners=None):
-        self.marks.pop(i,None); self.aligned.pop(i,None); self.choices.pop(i,None)
-        try:
-            im=omr.align(self.images[i],corners); self.aligned[i]=im; self.marks[i]=omr.scan(im,i); self.choices[i]=['']*len(self.marks[i]); self.note.setText('Hoja procesada. Revisa la correspondencia de las casillas y todas las respuestas.')
-        except Exception as e: self.note.setText(str(e))
+    def install(self,slot,im,aligned,marks):
+        self.images[slot]=im; self.aligned[slot]=aligned; self.marks[slot]=marks
+        for i,m in zip(self.indices(slot),marks): self.answers[i]=omr.proposed(m)
     def preview(self):
         i=self.page.currentIndex()
-        if i not in self.aligned: return
+        if i not in self.aligned: QMessageBox.information(self,'Ver hoja','Importa esta página para verla.'); return
         d=QDialog(self); d.setWindowTitle('Comprobar alineación'); l=QVBoxLayout(d); l.addWidget(text('Los recuadros verdes deben coincidir con cada círculo. Si no coinciden, ajusta las esquinas.')); im=QLabel(); im.setPixmap(pix(omr.overlay(self.aligned[i],i)).scaled(580,720,Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation)); l.addWidget(im,0,A.AlignCenter); l.addWidget(btn('Cerrar',d.accept),0,A.AlignCenter); d.exec()
     def adjust(self):
         i=self.page.currentIndex()
-        if i not in self.images: return
-        if any(self.choices.get(i,[])) and not confirm(self,'Ajustar esquinas','Se reiniciará la revisión de esta página. ¿Continuar?'): return
+        if i not in self.images: QMessageBox.information(self,'Ajustar esquinas','Importa esta página primero.'); return
+        if not confirm(self,'Ajustar esquinas','Se volverán a interpretar todas las respuestas de esta página. ¿Continuar?'): return
         d=QDialog(self); d.setWindowTitle('Ajustar esquinas'); l=QVBoxLayout(d); l.addWidget(text('Pulsa las cuatro esquinas del papel: superior izquierda, superior derecha, inferior derecha e inferior izquierda. Otro clic reinicia.')); im=CornerImage(self.images[i]); l.addWidget(im,0,A.AlignCenter); row=QHBoxLayout(); row.addWidget(btn('Cancelar',d.reject)); row.addWidget(btn('Aplicar',d.accept,True)); l.addLayout(row)
         if d.exec()==QDialog.DialogCode.Accepted:
             if len(im.points)!=4: QMessageBox.warning(self,'Esquinas','Selecciona cuatro puntos.'); return
-            self.process(i,im.corners()); self.refresh()
+            try:
+                aligned=omr.align(self.images[i],im.corners()); marks=omr.scan(aligned,i); self.install(i,self.images[i],aligned,marks); self.changed(); self.refresh()
+            except Exception as e: QMessageBox.warning(self,'No se pudo alinear',str(e))
     def refresh(self,*_):
-        i=self.page.currentIndex(); marks=self.marks.get(i,[]); self.table.setRowCount(0); self.table.setRowCount(len(marks))
-        for j,m in enumerate(marks):
-            self.table.setRowHeight(j,57)
-            for col,s in [(0,m.number),(2,m.suggestion or '—'),(3,m.status)]:
-                t=QTableWidgetItem(s); t.setTextAlignment(A.AlignCenter); self.table.setItem(j,col,t)
-            x,y,x2,y2=m.crop; crop=QLabel(); crop.setAlignment(A.AlignCenter); crop.setPixmap(pix(self.aligned[i][y:y2,x:x2]).scaled(150,50,Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation)); self.table.setCellWidget(j,1,crop)
-            combo=SafeComboBox(); combo.addItems(['Pendiente','A','B','C','En blanco']); combo.setCurrentIndex(['','A','B','C','-'].index(self.choices[i][j])); combo.currentIndexChanged.connect(lambda k,p=i,r=j:self.set_choice(p,r,k)); self.table.setCellWidget(j,4,combo)
+        slot=self.page.currentIndex(); marks=self.marks.get(slot,[]); indices=list(self.indices(slot)); shown=[(j,i) for j,i in enumerate(indices) if self.filter.currentIndex()==1 or not self.answers[i]]
+        self.table.setRowCount(0); self.table.setRowCount(len(shown))
+        for row,(j,i) in enumerate(shown):
+            self.table.setRowHeight(row,57); m=marks[j] if j<len(marks) else None
+            status=m.status if m else ('Respuesta conservada · sin recorte' if self.answers[i] else 'Hoja no cargada')
+            if m and omr.proposed(m)=='-': status='Sin azul · blanco propuesto'
+            elif m and m.suggestion and not omr.proposed(m): status+=f' · posible {m.suggestion}'
+            for col,s in [(0,self.config.number(i)),(2,status)]:
+                t=QTableWidgetItem(s); t.setTextAlignment(A.AlignCenter); self.table.setItem(row,col,t)
+            if m:
+                x,y,x2,y2=m.crop; crop=QLabel(); crop.setAlignment(A.AlignCenter); crop.setPixmap(pix(self.aligned[slot][y:y2,x:x2]).scaled(165,52,Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation)); self.table.setCellWidget(row,1,crop)
+            combo=SafeComboBox(); vals=['',*self.config.letters,'-']; combo.addItems(['Pendiente',*self.config.letters,'En blanco']); combo.setCurrentIndex(vals.index(self.answers[i])); combo.currentIndexChanged.connect(lambda k,n=i,v=vals:self.set_choice(n,v[k])); self.table.setCellWidget(row,3,combo)
         self.update_count()
-    def set_choice(self,i,j,k): self.choices[i][j]=['','A','B','C','-'][k]; self.update_count()
+    def set_choice(self,i,value):
+        self.answers[i]=value; self.changed(); self.update_count()
     def update_count(self):
-        total=sum(len(x) for x in self.marks.values()); reviewed=sum(bool(x) for choices in self.choices.values() for x in choices); self.count.setText(f'{reviewed} de {total} casillas revisadas. Las casillas sobrantes aún no se excluyen hasta importar el solucionario en BLOCK 06.' if total else 'Sin lectura válida.')
-    def accept_suggestions(self):
-        i=self.page.currentIndex()
-        if not self.marks.get(i) or not confirm(self,'Confirmar lectura','¿Has comprobado la alineación y las sugerencias azules de esta página? Solo se completarán las pendientes con una sugerencia única.'): return
-        for j,m in enumerate(self.marks[i]):
-            if not self.choices[i][j] and m.suggestion and 'débil' not in m.status: self.choices[i][j]=m.suggestion
-        self.refresh()
-    def blanks(self):
-        i=self.page.currentIndex()
-        if not self.marks.get(i) or not confirm(self,'Confirmar blancos','¿Has verificado que todas las casillas pendientes sin marca azul están realmente en blanco? No se resolverán las marcas dobles.'): return
-        for j,m in enumerate(self.marks[i]):
-            if not self.choices[i][j] and max(m.scores)<15: self.choices[i][j]='-'
-        self.refresh()
+        n=self.answers.count(''); self.count.setText(f'{len(self.answers)-n} de {len(self.answers)} respuestas propuestas o revisadas · {n} pendientes. Las casillas fuera del solucionario no cuentan.')
     def reset(self):
-        if self.images and not confirm(self,'Reiniciar lectura','Se descartarán las hojas y revisiones de esta prueba. ¿Continuar?'): return
-        self.images.clear(); self.aligned.clear(); self.marks.clear(); self.choices.clear(); self.note.setText('Importa una nueva hoja.'); self.refresh()
+        if any(self.answers) and not confirm(self,'Reiniciar lectura','Se descartarán las respuestas y revisiones actuales. ¿Continuar?'): return
+        self.images.clear(); self.aligned.clear(); self.marks.clear(); self.answers[:]=['']*len(self.answers); self.changed(); self.refresh()

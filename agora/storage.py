@@ -6,7 +6,7 @@ import json
 from contextlib import contextmanager
 
 DEFAULTS = {'student_name': '', 'welcome_message': 'Aprende. Comprende. Avanza.'}
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 def default_data_dir():
     override = os.environ.get('AGORA_DATA_DIR')
@@ -28,6 +28,7 @@ class Storage:
             db.execute('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)')
             db.executemany('INSERT OR IGNORE INTO settings VALUES (?, ?)', DEFAULTS.items())
             db.execute('CREATE TABLE IF NOT EXISTS manual_draft (id INTEGER PRIMARY KEY CHECK(id=1), payload TEXT NOT NULL)')
+            db.execute('CREATE TABLE IF NOT EXISTS automatic_draft (id INTEGER PRIMARY KEY CHECK(id=1), payload TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS manual_templates (id INTEGER PRIMARY KEY, name TEXT NOT NULL, payload TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS saved_attempts (id INTEGER PRIMARY KEY, updated TEXT NOT NULL, payload TEXT NOT NULL)')
             db.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
@@ -53,17 +54,26 @@ class Storage:
         with self.connection() as db:
             db.executemany('INSERT INTO settings VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', values.items())
 
-    def load_draft(self):
+    def load_draft(self, mode="manual"):
+        table = self.draft_table(mode)
         with self.connection() as db:
-            row=db.execute('SELECT payload FROM manual_draft WHERE id=1').fetchone()
+            row=db.execute(f'SELECT payload FROM {table} WHERE id=1').fetchone()
         return json.loads(row[0]) if row else None
 
-    def save_draft(self, payload):
+    def save_draft(self, payload, mode="manual"):
+        table = self.draft_table(mode)
         with self.connection() as db:
-            db.execute('INSERT INTO manual_draft VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload', (json.dumps(payload,ensure_ascii=False),))
+            db.execute(f'INSERT INTO {table} VALUES (1, ?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload', (json.dumps(payload,ensure_ascii=False),))
 
-    def clear_draft(self):
-        with self.connection() as db: db.execute('DELETE FROM manual_draft WHERE id=1')
+    def clear_draft(self, mode="manual"):
+        table=self.draft_table(mode)
+        with self.connection() as db: db.execute(f'DELETE FROM {table} WHERE id=1')
+
+    @staticmethod
+    def draft_table(mode):
+        if mode not in ('manual','automatic'): raise ValueError('Modo no válido')
+        return mode+'_draft'
+
 
     def save_template(self, name, payload):
         with self.connection() as db:
@@ -84,10 +94,11 @@ class Storage:
             if attempt_id is None:
                 attempt_id=db.execute('INSERT INTO saved_attempts(updated,payload) VALUES (?,?)',(stamp,'{}')).lastrowid
             record=dict(payload, attempt_id=attempt_id)
+            table=self.draft_table(record.get("mode","manual"))
             encoded=json.dumps(record,ensure_ascii=False)
             cur=db.execute('UPDATE saved_attempts SET updated=?,payload=? WHERE id=?',(stamp,encoded,attempt_id))
             if cur.rowcount!=1: raise ValueError('El simulacro guardado ya no existe.')
-            db.execute('INSERT INTO manual_draft VALUES (1,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload',(encoded,))
+            db.execute(f'INSERT INTO {table} VALUES (1,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload',(encoded,))
         return attempt_id
 
     def attempts(self):
@@ -105,7 +116,8 @@ class Storage:
         with self.connection() as db:
             cur=db.execute('DELETE FROM saved_attempts WHERE id=?',(attempt_id,))
             if cur.rowcount!=1: return False
-            row=db.execute('SELECT payload FROM manual_draft WHERE id=1').fetchone()
-            if row and json.loads(row[0]).get('attempt_id')==attempt_id:
-                db.execute('DELETE FROM manual_draft WHERE id=1')
+            for table in ('manual_draft','automatic_draft'):
+                row=db.execute(f'SELECT payload FROM {table} WHERE id=1').fetchone()
+                if row and json.loads(row[0]).get('attempt_id')==attempt_id:
+                    db.execute(f'DELETE FROM {table} WHERE id=1')
             return True

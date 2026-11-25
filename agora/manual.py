@@ -29,12 +29,12 @@ def confirm(parent,title,text):
     yes=box.addButton('Sí',QMessageBox.ButtonRole.YesRole); no=box.addButton('No',QMessageBox.ButtonRole.NoRole); box.setDefaultButton(no); box.setEscapeButton(no); box.exec(); return box.clickedButton() is yes
 
 class ManualPage(QWidget):
-    def __init__(self, storage, go_home):
-        super().__init__(); self.storage=storage; self.config=ExamConfig(); self.key=['']*self.config.size; self.answers=['']*self.config.size
+    def __init__(self, storage, go_home, mode="manual"):
+        super().__init__(); self.mode=mode; self.storage=storage; self.optical_cache={}; self.config=ExamConfig(); self.key=['']*self.config.size; self.answers=['']*self.config.size
         self.key_source=''; self.stage=0; self.cursor=0; self.result=None; self._template_items=[]; self.persist_failed=False; self.attempt_id=None; self.saved_snapshot=None; self.form_override=None
         self.root=QVBoxLayout(self); self.root.setContentsMargins(0,0,0,0); self.root.setSpacing(14)
         top=QHBoxLayout(); top.addWidget(btn('‹  Volver al inicio',go_home)); top.addWidget(btn('Guardar progreso',self.save_progress,'primary')); top.addStretch(); self.root.addLayout(top)
-        self.root.addWidget(label('Corrector manual','heading')); self.root.addWidget(label('Importa las soluciones correctas e introduce tus respuestas. Ágora calcula el resultado.','muted',True))
+        self.root.addWidget(label('Corrector automático' if mode=='automatic' else 'Corrector manual','heading')); self.root.addWidget(label('Importa el solucionario y las hojas de respuestas. Ágora interpreta las marcas azules.' if mode=='automatic' else 'Importa las soluciones correctas e introduce tus respuestas. Ágora calcula el resultado.','muted',True))
         self.steps=QHBoxLayout(); self.step_labels=[]
         for i,s in enumerate(('1 · Configuración','2 · Soluciones','3 · Respuestas','4 · Resultado')):
             x=btn(s,lambda checked=False,j=i:self.navigate(j),'manualStep'); x.setAccessibleName(s); self.steps.addWidget(x,1); self.step_labels.append(x)
@@ -42,13 +42,14 @@ class ManualPage(QWidget):
         self.notice=label('','muted',True); self.root.addWidget(self.notice)
         self.content=QWidget(); self.body=QVBoxLayout(self.content); self.body.setContentsMargins(0,0,0,0); self.body.setSpacing(10); self.root.addWidget(self.content); self.root.addStretch()
         try:
-            d=storage.load_draft()
+            d=storage.load_draft(self.mode)
             if d: self.restore(d)
         except Exception as e:
             self.notice.setText('No se pudo recuperar el borrador: '+str(e))
         self.render()
 
     def restore(self,d):
+        self.optical_cache.clear()
         c=ExamConfig(**d['config']); k=list(d['key']); a=list(d['answers']); stage=d.get('stage',0); cursor=d.get('cursor',0)
         if len(k)!=c.size or len(a)!=c.size or any(v not in (*c.letters,'X','') for v in k) or any(v not in (*c.letters,'-','') for v in a): raise ValueError('Borrador no válido')
         self.config=c; self.key=k; self.answers=a; self.key_source=d.get('key_source') or ('Plantilla anterior' if all(k) else ''); self.stage=stage if stage in (0,1,2,3) else 0; self.cursor=max(0,min(int(cursor),c.size-1)); self.result=None
@@ -65,7 +66,7 @@ class ManualPage(QWidget):
         return {'name':self.name.text(),'questions':self.config.questions,'reserves':self.config.reserves,'options':self.config.options,'penalty':self.penalty.currentText(),'maximum':self.maximum.text(),'floor_zero':self.floor.isChecked()}
 
     def payload(self,read_form=False):
-        d={'config':asdict(self.config),'key':list(self.key),'answers':list(self.answers),'stage':self.stage,'cursor':self.cursor,'key_source':self.key_source,'attempt_id':self.attempt_id,'corrected':self.result is not None}
+        d={'mode':self.mode,'config':asdict(self.config),'key':list(self.key),'answers':list(self.answers),'stage':self.stage,'cursor':self.cursor,'key_source':self.key_source,'attempt_id':self.attempt_id,'corrected':self.result is not None}
         form=self.form_data() if read_form and self.stage==0 and hasattr(self,'name') else self.form_override if self.stage==0 else None
         if form is not None and form!=d['config']: d['form']=dict(form)
         return d
@@ -84,7 +85,7 @@ class ManualPage(QWidget):
 
     def persist(self,read_form=False):
         try:
-            self.storage.save_draft(self.payload(read_form)); self.persist_failed=False
+            self.storage.save_draft(self.payload(read_form),self.mode); self.persist_failed=False
             self.notice.setText('Borrador de recuperación automático · '+('Cambios sin guardar en Mis simulacros.' if self.dirty() else 'Sin cambios pendientes.'))
             return True
         except Exception as e:
@@ -115,20 +116,20 @@ class ManualPage(QWidget):
         return box.clickedButton() is resume
 
     def start_new(self):
-        try: self.storage.clear_draft()
+        try: self.storage.clear_draft(self.mode)
         except Exception as e: QMessageBox.warning(self,'No se pudo iniciar',str(e)); return False
         self.reset_state(); return True
 
     def reset_state(self):
         # In-memory reset only: caller handles database changes atomically.
-        self.config=ExamConfig(); self.key=['']*self.config.size; self.answers=['']*self.config.size; self.key_source=''; self.result=None; self.stage=0; self.cursor=0; self.attempt_id=None; self.saved_snapshot=None; self.form_override=None; self.persist_failed=False; self.notice.setText(''); self.render()
+        self.optical_cache.clear(); self.config=ExamConfig(); self.key=['']*self.config.size; self.answers=['']*self.config.size; self.key_source=''; self.result=None; self.stage=0; self.cursor=0; self.attempt_id=None; self.saved_snapshot=None; self.form_override=None; self.persist_failed=False; self.notice.setText(''); self.render()
 
     def open_saved(self,attempt_id):
         if self.active() and not confirm(self,'Abrir simulacro','Se sustituirá el borrador actual. El progreso no guardado en Mis simulacros se perderá. ¿Continuar?'): return False
         try:
             d=self.storage.load_attempt(attempt_id)
             if not d: raise ValueError('Simulacro no encontrado.')
-            self.restore(d); self.storage.save_draft(d); self.render(); self.notice.setText('Simulacro guardado recuperado.'); return True
+            self.restore(d); self.storage.save_draft(d,self.mode); self.render(); self.notice.setText('Simulacro guardado recuperado.'); return True
         except Exception as e: QMessageBox.warning(self,'No se pudo abrir',str(e)); return False
 
     def render(self):
@@ -160,8 +161,9 @@ class ManualPage(QWidget):
         if target==3:
             if '' in self.answers:
                 self.move_stage(2)
-                self.notice.setText('Completa las respuestas o pulsa Corregir examen para confirmar las pendientes como blancas.')
+                self.notice.setText('Resuelve las lecturas pendientes y carga las hojas que falten.' if self.mode=='automatic' else 'Completa las respuestas o pulsa Corregir examen para confirmar las pendientes como blancas.')
                 return
+            if self.mode=='automatic' and self.result is None and not confirm(self,'Confirmar lectura','Comprueba que la hoja estaba marcada en azul y que la alineación y las respuestas propuestas son correctas. ¿Calcular la nota?'): return
             try: self.result=evaluate(self.config,self.key,self.answers)
             except ValueError as e:
                 QMessageBox.warning(self,'No se pudo corregir',str(e)); return
@@ -224,7 +226,7 @@ class ManualPage(QWidget):
             d=next(p for i,n,p in self._template_items if i==tid); c=ExamConfig(**d['config']); k=list(d['key'])
             evaluate(c,k,['-']*c.size)
         except Exception as e: QMessageBox.warning(self,'Plantilla no válida',str(e)); return
-        self.attempt_id=None; self.saved_snapshot=None; self.config=c; self.key=k; self.key_source=d.get('key_source') or 'Plantilla guardada'; self.answers=['']*c.size; self.result=None; self.move_stage(1)
+        self.optical_cache.clear(); self.attempt_id=None; self.saved_snapshot=None; self.config=c; self.key=k; self.key_source=d.get('key_source') or 'Plantilla guardada'; self.answers=['']*c.size; self.result=None; self.move_stage(1)
 
     def remove_template(self):
         tid=self.templates_combo.currentData()
@@ -283,8 +285,17 @@ class ManualPage(QWidget):
         # Internal operation, after preview/confirmation.
         c=replace(self.config,questions=len(imported.ordinary),reserves=len(imported.reserves),options=options)
         if c.size!=len(self.answers): self.answers=['']*c.size
-        self.config=c; self.key=imported.key; self.key_source=name; self.result=None; self.move_stage(1)
-    def show_answers(self): self.show_entry(False)
+        self.optical_cache.clear(); self.config=c; self.key=imported.key; self.key_source=name; self.result=None; self.move_stage(1)
+    def show_answers(self):
+        if self.mode=='manual': self.show_entry(False); return
+        from .omr_ui import OpticalPage
+        self.reader=OpticalPage(self.config,self.answers,self.optical_cache,self.optical_changed)
+        self.body.addWidget(self.reader)
+        self.body.addWidget(btn('Corregir examen',self.correct_optical,'primary'))
+    def correct_optical(self): self.open_stage(3)
+    def optical_changed(self):
+        self.result=None; self.persist()
+
     def show_entry(self,is_key):
         self.is_key=is_key; self.values=self.key if is_key else self.answers
         p=panel(self.body); p.addWidget(label(self.config.name,'tileTitle',True)); p.addWidget(label(('Revisa las soluciones detectadas; puedes corregir una incidencia puntual.' if is_key else 'Marca tu respuesta original o «—» si la dejaste en blanco.')+' Puedes escribir con el teclado; Ágora avanza a la siguiente pregunta.','muted',True))
@@ -328,7 +339,7 @@ class ManualPage(QWidget):
         if focused is None or not self.isAncestorOf(focused) or not focused.isVisible(): self.focus_entry()
 
     def focus_entry(self):
-        if self.stage in (1,2) and (self.stage==2 or self.key_source) and self.isVisible(): self.grid_rows[self.cursor%16][1].setFocus()
+        if self.stage in (1,2) and not (self.stage==2 and self.mode=='automatic') and (self.stage==2 or self.key_source) and self.isVisible(): self.grid_rows[self.cursor%16][1].setFocus()
 
     def select(self,i): self.cursor=max(0,min(i,self.config.size-1)); self.refresh_entries()
     def select_slot(self,j): self.select((self.cursor//16)*16+j)

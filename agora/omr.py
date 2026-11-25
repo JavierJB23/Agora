@@ -1,5 +1,5 @@
 """Block 05: optical mark proposals for the supplied 120+9 A/B/C layout.
-Only blue ink is interpreted; no answer is accepted without human review.
+Blue ink is interpreted; clear results are proposed and the set is confirmed before scoring.
 """
 from dataclasses import dataclass
 from io import BytesIO
@@ -75,16 +75,63 @@ def locations(page):
         for row in range(n):
             yield (str(col*n+row+1) if page==0 else 'R'+str(col*n+row+1),[round(2*(x+16.75*j)) for j in range(3)],round(2*(start+19.618*row)))
 
+def reserve_positions(im):
+    """Find the 27 printed circles near the reserve grid, then refine each center."""
+    g=cv.cvtColor(im,cv.COLOR_RGB2GRAY)
+    c=cv.HoughCircles(g[:260],cv.HOUGH_GRADIENT,1,22,param1=80,param2=15,minRadius=7,maxRadius=15)
+    if c is None: raise ValueError('No se encuentran los círculos de reserva.')
+    found=np.round(c[0,:,:2]).astype(int)
+    nominal=np.array([(x,y) for _,xs,y in locations(1) for x in xs],dtype=np.float32)
+    # A modest translation from perspective detection is expected. Find consistent unique matches.
+    pairs=[]; used=set()
+    for i,(x,y) in enumerate(nominal):
+        dist=np.linalg.norm(found-[x,y],axis=1)
+        j=int(np.argmin(dist))
+        if dist[j]<=24 and j not in used: pairs.append((i,j)); used.add(j)
+    if len(pairs)<22: raise ValueError('No se reconoce la cuadrícula de reservas.')
+    src=np.array([nominal[i] for i,j in pairs]); dst=np.array([found[j] for i,j in pairs],np.float32)
+    transform,inliers=cv.estimateAffine2D(src,dst,method=cv.RANSAC,ransacReprojThreshold=5)
+    if transform is None or int(inliers.sum())<20: raise ValueError('No se pudo alinear la cuadrícula de reservas.')
+    pred=cv.transform(nominal.reshape(-1,1,2),transform).reshape(-1,2)
+    if np.max(np.linalg.norm(pred-nominal,axis=1))>30: raise ValueError('Desplazamiento excesivo de las reservas.')
+    for i,(x,y) in enumerate(pred):
+        dist=np.linalg.norm(found-[x,y],axis=1); j=int(np.argmin(dist))
+        if dist[j]<6: pred[i]=found[j]
+    return [(n,[tuple(map(int,xy)) for xy in np.round(pred[j*3:j*3+3])]) for j,(n,_,_) in enumerate(locations(1))]
+
+def centers(im,page):
+    if page==1: return reserve_positions(im)
+    return [(n,[(x,y) for x in xs]) for n,xs,y in locations(0)]
+
+def identify(im):
+    """Recognize the supplied template geometry, not arbitrary handwritten numbering."""
+    g=cv.cvtColor(im,cv.COLOR_RGB2GRAY)
+    c=cv.HoughCircles(g[330:1550],cv.HOUGH_GRADIENT,1.3,22,param1=80,param2=17,minRadius=7,maxRadius=15)
+    main=False
+    if c is not None:
+        found=c[0,:,:2].copy(); found[:,1]+=330
+        nominal=np.array([(x,y) for _,xs,y in locations(0) for x in xs])
+        main=int(np.sum(np.min(np.linalg.norm(nominal[:,None,:]-found[None,:,:],axis=2),axis=1)<20))>=270
+    try: reserve_positions(im); reserve=True
+    except ValueError: reserve=False
+    if main==reserve: raise ValueError('No se distingue con seguridad la hoja ordinaria de la de reservas. Fotografía la plantilla completa y nítida.')
+    return 0 if main else 1
+
+def proposed(mark):
+    if mark.suggestion and 'débil' not in mark.status: return mark.suggestion
+    if not mark.suggestion and max(mark.scores)<5 and max(mark.red)<=20: return '-'
+    return ''
+
 def scan(im,page):
     if page not in (0,1) or im.shape[:2]!=(HEIGHT,WIDTH): raise ValueError('Página no válida.')
     a=im.astype(np.int16); R,G,B=a.transpose(2,0,1)
     blue=(B-R>5)&(B-G>7)&(B<220)&(R<180)
-    red=(R-B>18)&(R-G>18)&(G<180)
+    red=(R-B>18)&(R-G>18)&(G<180)&(B-G<35)&(R<205)
     gray=cv.cvtColor(im,cv.COLOR_RGB2GRAY)
     out=[]; present=0
-    for number,xs,y in locations(page):
+    for number,points in centers(im,page):
         scores=[]; reds=[]; dark=[]
-        for x in xs:
+        for x,y in points:
             r=14; sl=np.s_[y-r:y+r+1,x-r:x+r+1]; scores.append(int(blue[sl].sum())); reds.append(int(red[sl].sum())); g=gray[sl]; dark.append(int((g<min(190,int(np.median(g))-22)).sum()))
         present+=sum(d>12 for d in dark)
         order=sorted(range(3),key=lambda j:scores[j],reverse=True); high,second=order[:2]; s=scores[high]; other=scores[second]
@@ -92,12 +139,12 @@ def scan(im,page):
         status='Azul detectado' if suggestion else 'Doble o dudosa' if s>=15 else 'Sin azul: revisar blanco u otra tinta'
         if suggestion and s<40: status='Azul débil: revisar'
         if suggestion and max(reds)>20: status+=' · posible rojo'
-        out.append(Mark(number,suggestion,status,tuple(scores),tuple(reds),(xs[0]-19,y-17,xs[-1]+19,y+18)))
+        out.append(Mark(number,suggestion,status,tuple(scores),tuple(reds),(min(x for x,y in points)-19,min(y for x,y in points)-17,max(x for x,y in points)+19,max(y for x,y in points)+18)))
     if present < len(out)*3*.45: raise ValueError('No se reconoce la distribución de casillas. Comprueba la página y ajusta las cuatro esquinas.')
     return out
 
 def overlay(im,page):
     result=im.copy()
-    for _,xs,y in locations(page):
-        for x in xs: cv.rectangle(result,(x-14,y-14),(x+14,y+14),(28,167,112),1)
+    for _,points in centers(im,page):
+        for x,y in points: cv.rectangle(result,(x-14,y-14),(x+14,y+14),(28,167,112),1)
     return result
