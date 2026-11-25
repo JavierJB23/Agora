@@ -147,6 +147,9 @@ class MainWindow(QMainWindow):
             if m.key=='manual':
                 l=self.page('manual'); self.manual=ManualPage(self.storage,lambda:self.go('home')); l.addWidget(self.manual)
             elif m.key=='history': self.make_history()
+            elif m.key=='automatic':
+                from .omr_ui import OpticalPage
+                l=self.page('automatic'); self.optical=OpticalPage(lambda:self.go('home')); l.addWidget(self.optical); l.addStretch()
             else: self.make_module(m)
         self.make_settings(); self.go('home')
     def add_nav(self, layout, key, name, symbol):
