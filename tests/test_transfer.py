@@ -18,3 +18,22 @@ class TransferTests(unittest.TestCase):
             with self.assertRaises(HTTPError) as e: urlopen(req,timeout=3)
             self.assertEqual(e.exception.code,409)
         finally: s.close()
+
+    def test_limit_and_browser_agree(self):
+        from agora.answer_import import MAX_BYTES
+        self.assertEqual(MAX_BYTES,100*1024*1024)
+        s=UploadSession(host='127.0.0.1'); url=s.url('127.0.0.1')
+        try:
+            with urlopen(url,timeout=3) as r: self.assertIn(str(MAX_BYTES),r.read().decode())
+            req=Request(url+'upload',data=b'x',headers={'X-File-Name':'test.pdf','Content-Length':str(MAX_BYTES+1)})
+            with self.assertRaises(HTTPError) as e: urlopen(req,timeout=3)
+            self.assertEqual(e.exception.code,413)
+        finally: s.close()
+
+    def test_transfer_above_previous_limit(self):
+        s=UploadSession(host='127.0.0.1'); url=s.url('127.0.0.1'); data=b'x'*(26*1024*1024)
+        try:
+            req=Request(url+'upload',data=data,headers={'X-File-Name':'grande.pdf'})
+            with urlopen(req,timeout=10) as r: self.assertEqual(r.status,200)
+            name,received=s.items.get(timeout=1); self.assertEqual(name,'grande.pdf'); self.assertEqual(received,data)
+        finally: s.close()

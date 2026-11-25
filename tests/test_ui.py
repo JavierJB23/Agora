@@ -7,6 +7,9 @@ except ImportError:
     HAS_QT=False
 if HAS_QT:
     from agora.ui import MainWindow
+    from agora.manual import ManualPage
+    ORIGINAL_LEAVE=ManualPage.allow_leave
+    ORIGINAL_ENTER=ManualPage.allow_enter
 from agora.storage import Storage
 from agora.answer_import import ImportedKey
 from agora.modules import MODULES
@@ -15,6 +18,12 @@ from agora.modules import MODULES
 class UITests(unittest.TestCase):
     @classmethod
     def setUpClass(cls): cls.app=QApplication.instance() or QApplication([])
+    def setUp(self):
+        # Older tests exercise grading, not modal leave/enter prompts.
+        from unittest.mock import patch
+        from agora.manual import ManualPage
+        for method in ('allow_leave','allow_enter'):
+            p=patch.object(ManualPage,method,return_value=True); p.start(); self.addCleanup(p.stop)
     def test_navigation_and_settings(self):
         with tempfile.TemporaryDirectory() as d:
             w=MainWindow(Storage(d)); w.show(); self.app.processEvents()
@@ -102,4 +111,46 @@ class UITests(unittest.TestCase):
                     dlg.accept()
             QTimer.singleShot(0,inspect); m.view_template()
             self.assertEqual(seen,[3,'Anulada','R1']); self.assertEqual(m.name.text(),'Borrador sin confirmar'); self.assertIsNone(storage.load_draft()); self.assertEqual(len(storage.templates()),1)
+            w.close(); w.deleteLater(); self.app.processEvents()
+
+    def test_saved_progress_and_reopen(self):
+        with tempfile.TemporaryDirectory() as d:
+            s=Storage(d); w=MainWindow(s); w.show(); w.go('manual'); m=w.manual
+            m.name.setText('Parcial'); m.n.setValue(2); m.r.setValue(0); m.apply_config(); m.install_key(ImportedKey(('A','B'),()),'prueba.pdf',3); m.next_entry(); m.choose(0,'A')
+            self.assertTrue(m.dirty()); self.assertTrue(m.save_progress()); self.assertFalse(m.dirty()); aid=m.attempt_id
+            m.choose(1,'C'); self.assertTrue(m.dirty()); self.assertTrue(m.start_new()); self.assertFalse(m.active()); self.assertEqual(len(s.attempts()),1)
+            self.assertTrue(m.open_saved(aid)); self.assertEqual(m.answers,['A','']); self.assertFalse(m.dirty())
+            m.choose(1,'B'); m.next_entry(); self.assertTrue(m.save_progress()); self.assertEqual(len(s.attempts()),1); self.assertEqual(s.load_attempt(aid)['stage'],3)
+            w.go('history'); self.assertGreater(w.history_layout.count(),0); w.close(); w.deleteLater(); self.app.processEvents()
+    def test_import_source_tiles_and_mobile_page(self):
+        from unittest.mock import patch
+        from PySide6.QtWidgets import QToolButton
+        from agora.import_ui import ImportDialog
+        with tempfile.TemporaryDirectory() as d:
+            w=MainWindow(Storage(d)); dlg=ImportDialog(w); dlg.show(); self.app.processEvents()
+            self.assertEqual([b.text() for b in dlg.source.findChildren(QToolButton)],['Desde PC','Desde móvil']); self.assertEqual(dlg.cancel.width(),136)
+            with patch('agora.import_ui.local_addresses',return_value=['127.0.0.1']): dlg.mobile()
+            try:
+                self.assertIs(dlg.stack.currentWidget(),dlg.mobile_page); self.assertFalse(dlg.qr.pixmap().isNull()); self.assertTrue(dlg.address.isHidden()); self.assertFalse(dlg.source.isVisible())
+            finally: dlg.cleanup(); dlg.deleteLater(); w.close(); w.deleteLater(); self.app.processEvents()
+
+    def test_exit_and_reentry_dialogs(self):
+        from PySide6.QtCore import QTimer
+        from PySide6.QtWidgets import QMessageBox
+        # Exercise original dialogs, not the bypass used by the older tests.
+        with tempfile.TemporaryDirectory() as d:
+            w=MainWindow(Storage(d)); w.show(); w.go('manual'); m=w.manual
+            m.name.setText('Sin guardar')
+            def click(text):
+                def callback():
+                    dlg=self.app.activeModalWidget()
+                    if isinstance(dlg,QMessageBox):
+                        for b in dlg.buttons():
+                            if b.text()==text: b.click(); return
+                        dlg.reject()
+                QTimer.singleShot(0,callback)
+            click('Cancelar'); self.assertFalse(ORIGINAL_LEAVE(m))
+            click('Salir sin guardar'); self.assertTrue(ORIGINAL_LEAVE(m)); self.assertEqual(w.storage.load_draft()['form']['name'],'Sin guardar')
+            click('Continuar'); self.assertTrue(ORIGINAL_ENTER(m)); self.assertEqual(m.name.text(),'Sin guardar')
+            click('Iniciar uno nuevo'); self.assertTrue(ORIGINAL_ENTER(m)); self.assertFalse(m.active()); self.assertIsNone(w.storage.load_draft())
             w.close(); w.deleteLater(); self.app.processEvents()
