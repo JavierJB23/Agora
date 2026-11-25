@@ -1,3 +1,13 @@
+# ÁGORA v0.6.5 — BLOCK 06 — FIX05
+
+- Mi temario es una raíz con dos tarjetas cuadradas. Cada tarjeta abre su propia pantalla, con botón de vuelta a Mi temario. Nuevo icono de libros. Mis temas continúa pendiente del BLOCK 09.
+- Importar soluciones en un corrector solo carga el solucionario del examen. Los bytes originales se conservan localmente para consultar y guardar el examen; no crean una entrada en la biblioteca ni cuentan como coincidencia. Guardar plantilla es una acción explícita. Desde Mis plantillas, Confirmar la lectura lleva al aviso de coincidencias (si procede), seguido del diálogo de nombre con el nombre del archivo sugerido. Desde los correctores Guardar plantilla sigue el mismo proceso. Cancelar no registra una plantilla. Biblioteca única para ambos correctores.
+- Eliminar plantilla desde biblioteca o correctores: confirmación con cantidad y nombres de los simulacros asociados; si se acepta, elimina en una transacción la plantilla y los intentos asociados, así como sus borradores. Los intentos sin vínculo explícito no se eliminan por tener el mismo patrón. Los originales pueden conservarse internamente para intentos independientes. Identificadores de plantilla no reutilizables. Migración conserva las plantillas existentes, incluidas las que versiones anteriores registraron automáticamente; no registra nuevos documentos huérfanos y desvincula referencias antiguas inexistentes o claramente incompatibles en lugar de borrar intentos.
+- Si se guarda una plantilla durante un examen, guardar progreso conserva su vínculo. Los intentos guardados antes de crear la plantilla que no se vuelvan a guardar permanecen independientes. No cambia OMR ni puntuación. SQLite esquema 8: hacer copia de datos con Ágora cerrado antes de actualizar; no abrir BD migrada con EXE anterior.
+- Subir paquete completo a GitHub, conservar windows.yml. No instalar Python. Pruebas locales y pendientes en TESTS.txt.
+
+## Registro histórico (las reglas anteriores quedan sustituidas por FIX05)
+
 # ÁGORA v0.6.4 — BLOCK 06 — FIX04
 
 - Biblioteca compartida entre correctores y Mi temario > Mis plantillas. Importación confirmada registra automáticamente una plantilla con el nombre de archivo; Guardar plantilla permite nombrarla o guardar otra copia. Coincidencia de patrón exacto (ordinarias, reservas y letras, incluidas anuladas) avisa y permite sustituir o guardar otro nombre. No altera intentos archivados.

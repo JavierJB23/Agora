@@ -44,3 +44,5 @@ BLOCK 06 FIX03 (v0.6.3): FIX02 validado por usuario (incluido ajuste de alineaci
 
 
 BLOCK 06 FIX04 (v0.6.4): FIX03 validado. Biblioteca recíproca única; importación múltiple de solucionarios PC/QR, registro automático con nombre del archivo, guardado con nombre elegido y aviso de patrones exactos. Fichas con original y plantilla, orden alfabético/cronológico y metadatos, botones grandes Mis temas/Mis plantillas, eliminar textos redundantes. SQLite 7 conserva datos y fechas desconocidas sin inventarlas. Imágenes y PDF escaneados como solucionarios pendientes de OCR específico. Temarios BLOCK 09. Pendiente validación Windows.
+
+BLOCK 06 FIX05 (v0.6.5): raíz Mi temario con dos pantallas independientes; importación de soluciones en correctores no registra plantillas hasta guardar explícitamente; importación biblioteca confirma lectura y solicita nombre, aviso de coincidencia previo. Eliminación explícita y transaccional de plantilla y simulacros vinculados tras aviso, sin inferir vínculos por coincidencias. SQLite 8 preserva datos antiguos y evita reutilizar IDs. Pendiente validación Windows. OMR y puntuación intactos.

@@ -1,5 +1,5 @@
-FIX04 — v0.6.4
-61 pruebas no gráficas superadas, 18 GUI omitidas (PySide6 no disponible).
+ÁGORA v0.6.5 — BLOCK 06 — FIX05
+Pruebas ejecutadas: python -m unittest discover -s tests -v
 test_columns_with_reserves (test_answer_import.ImportTests.test_columns_with_reserves) ... ok
 test_compact (test_answer_import.ImportTests.test_compact) ... ok
 test_docx (test_answer_import.ImportTests.test_docx) ... ok
@@ -25,9 +25,12 @@ test_replacement_order (test_grading.GradingTests.test_replacement_order) ... ok
 test_unused_reserves (test_grading.GradingTests.test_unused_reserves) ... ok
 test_zero_penalty (test_grading.GradingTests.test_zero_penalty) ... ok
 test_batch_library_limit (test_library.LibraryTests.test_batch_library_limit) ... ok
+test_delete_clears_only_linked_drafts (test_library.LibraryTests.test_delete_clears_only_linked_drafts) ... ok
 test_deleted_template_original_preserved_not_relisted (test_library.LibraryTests.test_deleted_template_original_preserved_not_relisted) ... ok
 test_duplicate_pattern_and_overwrite (test_library.LibraryTests.test_duplicate_pattern_and_overwrite) ... ok
+test_import_does_not_register_and_cascade_is_explicit (test_library.LibraryTests.test_import_does_not_register_and_cascade_is_explicit) ... ok
 test_linked_and_legacy_entries (test_library.LibraryTests.test_linked_and_legacy_entries) ... ok
+test_migration_does_not_delete_attempts_with_recycled_old_ids (test_library.LibraryTests.test_migration_does_not_delete_attempts_with_recycled_old_ids) ... ok
 test_migration_keeps_unknown_dates (test_library.LibraryTests.test_migration_keeps_unknown_dates) ... invalid pdf header: b'old'
 EOF marker not found
 EOF marker not found
@@ -74,6 +77,7 @@ test_exit_and_reentry_dialogs (test_ui.UITests.test_exit_and_reentry_dialogs) ..
 test_history_delete_confirmation_and_active_draft (test_ui.UITests.test_history_delete_confirmation_and_active_draft) ... skipped 'PySide6 no disponible'
 test_import_source_tiles_and_mobile_page (test_ui.UITests.test_import_source_tiles_and_mobile_page) ... skipped 'PySide6 no disponible'
 test_library_documents_and_fresh_entry_from_history (test_ui.UITests.test_library_documents_and_fresh_entry_from_history) ... skipped 'PySide6 no disponible'
+test_library_root_and_deletion_confirmation (test_ui.UITests.test_library_root_and_deletion_confirmation) ... skipped 'PySide6 no disponible'
 test_manual_keyboard (test_ui.UITests.test_manual_keyboard) ... skipped 'PySide6 no disponible'
 test_manual_workflow_and_reopen (test_ui.UITests.test_manual_workflow_and_reopen) ... skipped 'PySide6 no disponible'
 test_navigation_and_settings (test_ui.UITests.test_navigation_and_settings) ... skipped 'PySide6 no disponible'
@@ -86,6 +90,6 @@ test_view_template_without_replacing_draft (test_ui.UITests.test_view_template_w
 test_wheel_does_not_change_form_controls (test_ui.UITests.test_wheel_does_not_change_form_controls) ... skipped 'PySide6 no disponible'
 
 ----------------------------------------------------------------------
-Ran 79 tests in 2.643s
+Ran 83 tests in 3.110s
 
-OK (skipped=18)
+OK (skipped=19)
