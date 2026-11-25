@@ -7,6 +7,7 @@ from . import VERSION, BLOCK
 from .modules import MODULES
 from .storage import Storage
 from .manual import ManualPage, confirm
+from .controls import SafeComboBox
 from .grading import ExamConfig, evaluate, format_number
 
 ASSETS = Path(__file__).resolve().parent.parent / 'assets'
@@ -34,6 +35,9 @@ QPushButton#nav:checked {background: #F6DCE8; color: #803D5E; border: 1px solid 
 QPushButton#nav:hover {background: #FBEDF3;}
 QPushButton#primary {background: #A55379; color: white; border: 1px solid #A55379; text-align:center;}
 QPushButton#primary:hover {background: #904268;}
+QPushButton#softAction {background:#F4D6E3; color:#75405B; border:1px solid #E8CEDB; text-align:center;}
+QPushButton#softAction:hover {background:#EBC1D4;}
+QToolButton#homeTile:checked {background:#F4D6E3; border:1px solid #C987A6;}
 QToolButton#homeTile {background: #FFFFFF; border: 1px solid #EEDDE5; border-radius: 16px; padding: 10px 8px; color: #73425A; font-size: 17px; font-weight: 600;}
 QToolButton#homeTile:hover {background: #FAEAF1; border-color: #DDAEC4;}
 QToolButton#homeTile:pressed {background: #F1D0DF; border-color: #C987A6;}
@@ -186,28 +190,71 @@ class MainWindow(QMainWindow):
         super().closeEvent(event)
     def make_library(self):
         l=self.page('library'); back=button('Volver al inicio','home'); back.clicked.connect(lambda:self.go('home')); l.addWidget(back,0,Qt.AlignmentFlag.AlignLeft)
-        l.addWidget(label('Mi temario','heading')); tabs=QTabWidget(); tabs.setObjectName('libraryTabs'); l.addWidget(tabs)
-        themes=QWidget(); tl=vertical(themes,(18,18,18,18),10); tl.addWidget(label('Temario de estudio','tileTitle')); tl.addWidget(label('Disponible en el BLOCK 09.','muted')); tl.addStretch(); tabs.addTab(themes,'Mis temas')
-        archive=QWidget(); self.library_layout=vertical(archive,(18,18,18,18),12); tabs.addTab(archive,'Mis plantillas'); self.library_tabs=tabs; tabs.setCurrentIndex(1)
-        l.addStretch()
+        l.addWidget(label('Mi temario','heading')); tabs=QTabWidget(); tabs.setObjectName('libraryTabs'); tabs.tabBar().hide()
+        tiles=QHBoxLayout(); self.library_buttons=[]
+        for i,(name,symbol) in enumerate((('Mis temas','books'),('Mis plantillas','template'))):
+            b=QToolButton(); b.setObjectName('homeTile'); b.setText(name); b.setIcon(icon(symbol)); b.setIconSize(QSize(48,48)); b.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon); b.setFixedSize(150,132); b.setCheckable(True); b.setCursor(Qt.CursorShape.PointingHandCursor); b.clicked.connect(lambda checked=False,j=i:tabs.setCurrentIndex(j)); tiles.addWidget(b); self.library_buttons.append(b)
+        tiles.addStretch(); l.addLayout(tiles); l.addWidget(tabs)
+        themes=QWidget(); tl=vertical(themes,(18,18,18,18),10); tl.addWidget(label('Temario de estudio','tileTitle')); tl.addStretch(); tabs.addTab(themes,'Mis temas')
+        archive=QWidget(); al=vertical(archive,(18,18,18,18),12); tabs.addTab(archive,'Mis plantillas'); self.library_tabs=tabs
+        toolbar=QHBoxLayout(); imp=button('Importar plantillas','template','primary'); imp.clicked.connect(self.import_library); toolbar.addWidget(imp); toolbar.addStretch(); toolbar.addWidget(label('Ordenar por')); self.library_sort=SafeComboBox()
+        for title,value in [('Más recientes','new'),('Más antiguas','old'),('Nombre A–Z','az'),('Nombre Z–A','za')]: self.library_sort.addItem(title,value)
+        toolbar.addWidget(self.library_sort); al.addLayout(toolbar)
+        items=QWidget(); self.library_layout=vertical(items,spacing=10); al.addWidget(items); al.addStretch()
+        self.library_sort.currentIndexChanged.connect(lambda *_:self.refresh_library()); tabs.currentChanged.connect(self.select_library_tab); tabs.setCurrentIndex(1); self.select_library_tab(1); l.addStretch()
+
+    def select_library_tab(self,index):
+        for i,b in enumerate(self.library_buttons): b.setChecked(i==index)
+
+    def import_library(self):
+        from .import_ui import ImportDialog
+        from PySide6.QtWidgets import QDialog
+        dialog=ImportDialog(self,multiple=True,max_files=20)
+        if dialog.exec()!=QDialog.DialogCode.Accepted: return
+        for name,data in dialog.items:
+            self.register_library_document(name,data)
+        self.refresh_library()
+
+    def register_library_document(self,name,data,ref=None):
+        from dataclasses import asdict
+        from .answer_import import extract_key
+        from .template_ui import review_key,named_save
+        try:
+            imported=extract_key(data,name); options=review_key(self,imported,name)
+            if options is None: return
+            c=ExamConfig(name=Path(name).stem[:120] or 'Plantilla',questions=len(imported.ordinary),reserves=len(imported.reserves),options=options)
+            ref=ref or self.storage.archive_solution_document(name,data)
+            payload={'config':asdict(c),'key':imported.key,'key_source':name,'document_ref':ref}
+            named_save(self,self.storage,payload,c.name,automatic=True)
+        except Exception as e: QMessageBox.warning(self,'No se pudo importar '+name,str(e))
+
+    def register_existing_document(self,ref):
+        try: name,data=self.storage.load_solution_document(ref); self.register_library_document(name,data,ref)
+        except Exception as e: QMessageBox.warning(self,'No se pudo abrir',str(e))
+        self.refresh_library()
+
     def refresh_library(self):
+        from datetime import datetime
         from .library_ui import consult_document,consult_template
         l=self.library_layout
         while l.count():
             it=l.takeAt(0); w=it.widget()
             if w: w.hide(); w.deleteLater()
-        try: documents=self.storage.solution_documents(); templates=self.storage.templates()
+        try: entries=self.storage.library_entries(self.library_sort.currentData() or 'new')
         except Exception as e: l.addWidget(label('No se pudo consultar la biblioteca: '+str(e),wrap=True)); return
-        l.addWidget(label('Documentos originales','tileTitle'))
-        if not documents: l.addWidget(label('Los solucionarios PDF y Word que importes y confirmes aparecerán aquí.','muted',True))
-        for ref,name,size in documents:
-            item=frame('tile'); h=QHBoxLayout(item); h.setContentsMargins(12,12,12,12); info=QVBoxLayout(); info.addWidget(label(name,'tileTitle',True)); info.addWidget(label(f'{size/1024/1024:.2f} MB','muted')); h.addLayout(info,1)
-            b=button('Consultar PDF' if name.lower().endswith('.pdf') else 'Consultar Word'); b.clicked.connect(lambda checked=False,r=ref:consult_document(self,self.storage,r)); h.addWidget(b); l.addWidget(item)
-        l.addWidget(label('Plantillas de respuestas guardadas','tileTitle'))
-        if not templates: l.addWidget(label('Todavía no has guardado ninguna plantilla reutilizable.','muted',True))
-        for tid,name,d in templates:
-            item=frame('tile'); h=QHBoxLayout(item); h.setContentsMargins(12,12,12,12); h.addWidget(label(name,'tileTitle',True),1)
-            b=button('Consultar plantilla'); b.clicked.connect(lambda checked=False,n=name,p=d:consult_template(self,self.storage,n,p)); h.addWidget(b); l.addWidget(item)
+        if not entries: l.addWidget(label('Todavía no hay plantillas.','muted'))
+        for e in entries:
+            item=frame('tile'); h=QHBoxLayout(item); h.setContentsMargins(12,12,12,12); info=QVBoxLayout(); info.addWidget(label(e['name'],'tileTitle',True))
+            size=f"{e['size']/1024/1024:.2f} MB" if e['size'] is not None else 'Sin archivo original'
+            stamp=datetime.fromisoformat(e['created']).astimezone().strftime('%d/%m/%Y · %H:%M') if e['created'] else 'Fecha no disponible'
+            info.addWidget(label(size+' · '+stamp,'muted',True)); h.addLayout(info,1)
+            if e['ref']:
+                b=button('Consultar PDF' if e['filename'].lower().endswith('.pdf') else 'Consultar Word',role='softAction'); b.clicked.connect(lambda checked=False,r=e['ref']:consult_document(self,self.storage,r)); h.addWidget(b)
+            if e['payload']:
+                b=button('Consultar plantilla',role='softAction'); b.clicked.connect(lambda checked=False,n=e['name'],p=e['payload']:consult_template(self,self.storage,n,p)); h.addWidget(b)
+            elif e['ref']:
+                b=button('Crear plantilla',role='softAction'); b.clicked.connect(lambda checked=False,r=e['ref']:self.register_existing_document(r)); h.addWidget(b)
+            l.addWidget(item)
         l.addStretch()
 
     def make_history(self):

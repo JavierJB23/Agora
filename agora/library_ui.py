@@ -3,7 +3,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import (QDialog,QVBoxLayout,QHBoxLayout,QTableWidget,QTableWidgetItem,QHeaderView,
-    QAbstractItemView,QLabel,QScrollArea,QFileDialog,QMessageBox)
+    QAbstractItemView,QLabel,QScrollArea,QFileDialog,QMessageBox,QPlainTextEdit)
 from .manual import label,btn
 from .grading import ExamConfig,evaluate
 
@@ -21,7 +21,11 @@ def consult_document(parent,storage,ref):
     dlg=QDialog(parent); dlg.setWindowTitle('Consultar documento original'); dlg.resize(800,720); lay=QVBoxLayout(dlg)
     lay.addWidget(label(name,'heading',True))
     if not name.lower().endswith('.pdf'):
-        lay.addWidget(label('Documento Word conservado sin modificaciones. Guarda una copia para abrirla en tu lector habitual.',wrap=True)); lay.addStretch()
+        from .answer_import import read_docx
+        preview=QPlainTextEdit(); preview.setReadOnly(True)
+        try: preview.setPlainText('\n'.join(read_docx(data)))
+        except Exception: preview.setPlainText('No se pudo mostrar el texto. Puedes guardar el original.')
+        lay.addWidget(label('Vista de texto · Para ver la maquetación original, guarda una copia.','muted',True)); lay.addWidget(preview,1)
         lay.addWidget(btn('Guardar copia',lambda:export_document(dlg,name,data),'primary')); lay.addWidget(btn('Cerrar',dlg.accept)); dlg.exec(); return
     import pypdfium2 as pdfium
     try: doc=pdfium.PdfDocument(data)

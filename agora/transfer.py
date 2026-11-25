@@ -22,9 +22,9 @@ def local_addresses():
 MULTI_JS="""const f=document.querySelector('#file'),b=document.querySelector('#send'),s=document.querySelector('#status'),p=document.querySelector('#progress');b.onclick=()=>{const files=Array.from(f.files);if(!files.length||files.length>2){s.textContent='Selecciona una o dos hojas.';return}const total=files.reduce((n,v)=>n+v.size,0);if(total>104857600||files.some(v=>!v.size)){s.textContent='Máximo 100 MB en total.';return}b.disabled=true;s.textContent='Enviando…';const x=new XMLHttpRequest();x.open('POST',location.pathname+'batch');x.setRequestHeader('X-Files',encodeURIComponent(JSON.stringify(files.map(v=>[v.name,v.size]))));x.upload.onprogress=e=>{if(e.lengthComputable)p.value=e.loaded/e.total*100};x.onload=()=>{s.textContent=x.status===200?'Hojas recibidas. Vuelve al ordenador.':'No se pudo enviar ('+x.status+').';b.disabled=x.status===200};x.onerror=()=>{s.textContent='Conexión interrumpida.';b.disabled=false};x.send(new Blob(files));};"""
 
 class UploadSession:
-    def __init__(self, host='0.0.0.0', extensions=('.pdf','.docx'), multiple=False):
+    def __init__(self, host='0.0.0.0', extensions=('.pdf','.docx'), multiple=False, max_files=2):
         self.token=secrets.token_urlsafe(24); self.items=queue.Queue(maxsize=1); self.lock=threading.Lock(); self.accepted=False
-        self.extensions=tuple(extensions); self.multiple=multiple; owner=self
+        self.extensions=tuple(extensions); self.multiple=multiple; self.max_files=max(2,min(20,int(max_files))); owner=self
         class Handler(BaseHTTPRequestHandler):
             def setup(self): super().setup(); self.connection.settimeout(30)
             def log_message(self,*args): pass
@@ -33,7 +33,7 @@ class UploadSession:
             def do_GET(self):
                 if self.path!=f'/{owner.token}/': self.reply(404,'No disponible'); return
                 page=PAGE.replace('accept=".pdf,.docx"','accept="'+html.escape(','.join(owner.extensions))+'"')
-                if owner.multiple: page=page.split('<script>')[0].replace('type="file"','type="file" multiple').replace('Enviar documento','Enviar hojas')+'<script>'+MULTI_JS+'</script></html>'
+                if owner.multiple: page=page.split('<script>')[0].replace('type="file"','type="file" multiple').replace('Enviar documento','Enviar hojas')+'<script>'+MULTI_JS.replace('files.length>2',f'files.length>{owner.max_files}').replace('Selecciona una o dos hojas.',f'Selecciona hasta {owner.max_files} archivos.')+'</script></html>'
                 self.reply(200,page,'text/html; charset=utf-8')
             def do_POST(self):
                 if owner.multiple and self.path==f'/{owner.token}/batch': return self.batch()
@@ -52,7 +52,7 @@ class UploadSession:
             def batch(self):
                 try:
                     size=int(self.headers.get('Content-Length','0')); files=json.loads(unquote(self.headers.get('X-Files','')))
-                    if not isinstance(files,list) or not 1<=len(files)<=2 or not 0<size<=MAX_BYTES: raise ValueError()
+                    if not isinstance(files,list) or not 1<=len(files)<=owner.max_files or not 0<size<=MAX_BYTES: raise ValueError()
                     clean=[]
                     for name,n in files:
                         name=name.replace(chr(92),'/').split('/')[-1]

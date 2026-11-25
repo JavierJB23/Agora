@@ -19,8 +19,8 @@ def centered_button(s,fn):
     b=QPushButton(s); b.setObjectName('importCancel'); b.setFixedWidth(136); b.setCursor(Qt.CursorShape.PointingHandCursor); b.clicked.connect(fn); return b
 
 class ImportDialog(QDialog):
-    def __init__(self,parent,extensions=('.pdf','.docx'),multiple=False):
-        super().__init__(parent); self.setWindowTitle('Importar documento'); self.setAcceptDrops(True); self.extensions=extensions; self.item=None; self.items=[]; self.multiple=multiple; self.session=None
+    def __init__(self,parent,extensions=('.pdf','.docx'),multiple=False,max_files=2):
+        super().__init__(parent); self.setWindowTitle('Importar documento'); self.setAcceptDrops(True); self.extensions=extensions; self.item=None; self.items=[]; self.multiple=multiple; self.max_files=max(2,min(20,int(max_files))) if multiple else 1; self.session=None
         root=QVBoxLayout(self); root.setContentsMargins(18,18,18,18); root.setSpacing(12)
         self.stack=QStackedWidget(); root.addWidget(self.stack)
         self.source=QWidget(); source=QVBoxLayout(self.source); source.setContentsMargins(0,0,0,0); source.setSpacing(14)
@@ -28,7 +28,7 @@ class ImportDialog(QDialog):
         row=QHBoxLayout(); row.setSpacing(14)
         for name,asset,fn in [('Desde PC','monitor',self.pc),('Desde móvil','qr-code',self.mobile)]:
             b=QToolButton(); b.setObjectName('homeTile'); b.setText(name); b.setIcon(QIcon(str(ASSETS/(asset+'.svg')))); b.setIconSize(QSize(64,64)); b.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon); b.setFixedSize(170,170); b.setCursor(Qt.CursorShape.PointingHandCursor); b.clicked.connect(fn); row.addWidget(b)
-        source.addLayout(row); note=text(('Selecciona o arrastra una o dos hojas (100 MB en total).\nFormatos: ' if multiple else 'También puedes arrastrar un documento aquí.\nFormatos: ')+', '.join(extensions)+f' · Hasta {MAX_BYTES//(1024**2)} MB.'); note.setObjectName('muted'); note.setAlignment(ALIGN.AlignCenter); source.addWidget(note)
+        source.addLayout(row); note=text((f'Selecciona o arrastra hasta {self.max_files} archivos (100 MB en total).\nFormatos: ' if multiple else 'También puedes arrastrar un documento aquí.\nFormatos: ')+', '.join(extensions)+f' · Hasta {MAX_BYTES//(1024**2)} MB.'); note.setObjectName('muted'); note.setAlignment(ALIGN.AlignCenter); source.addWidget(note)
         self.source_error=text(''); self.source_error.hide(); source.addWidget(self.source_error); self.stack.addWidget(self.source)
         self.mobile_page=QWidget(); mob=QVBoxLayout(self.mobile_page); mob.setContentsMargins(0,0,0,0); mob.setSpacing(12)
         title=text('Escanea el código QR'); title.setObjectName('heading'); title.setAlignment(ALIGN.AlignCenter); mob.addWidget(title)
@@ -54,7 +54,7 @@ class ImportDialog(QDialog):
     def load(self,path): self.load_many([path])
     def load_many(self,paths):
         try:
-            if not 1<=len(paths)<=(2 if self.multiple else 1): raise ValueError('Selecciona como máximo dos archivos.' if self.multiple else 'Selecciona un documento.')
+            if not 1<=len(paths)<=self.max_files: raise ValueError(f'Selecciona como máximo {self.max_files} archivos.')
             files=[Path(x) for x in paths]
             if any(p.suffix.lower() not in self.extensions for p in files): raise ValueError('Formato no admitido.')
             if any(p.stat().st_size<=0 for p in files) or sum(p.stat().st_size for p in files)>MAX_BYTES: raise ValueError('Archivos vacíos o superiores a 100 MB en total.')
@@ -67,7 +67,7 @@ class ImportDialog(QDialog):
         except Exception as e: self.error(str(e))
     def dragEnterEvent(self,e):
         urls=e.mimeData().urls()
-        if self.stack.currentWidget() is self.source and 1<=len(urls)<=(2 if self.multiple else 1) and all(u.isLocalFile() for u in urls): e.acceptProposedAction()
+        if self.stack.currentWidget() is self.source and 1<=len(urls)<=self.max_files and all(u.isLocalFile() for u in urls): e.acceptProposedAction()
     def dropEvent(self,e):
         urls=e.mimeData().urls()
         if self.stack.currentWidget() is self.source and urls and all(u.isLocalFile() for u in urls): e.acceptProposedAction(); self.load_many([u.toLocalFile() for u in urls])
@@ -78,7 +78,7 @@ class ImportDialog(QDialog):
             if self.stack.currentWidget() is self.source: self.error('No se ha encontrado una red local.')
             else: self.info.setText('No se ha encontrado una red local. Inténtalo de nuevo.')
             return
-        try: self.session=UploadSession(extensions=self.extensions,multiple=self.multiple)
+        try: self.session=UploadSession(extensions=self.extensions,multiple=self.multiple,max_files=self.max_files)
         except OSError as e:
             if self.stack.currentWidget() is self.source: self.error('No se pudo iniciar la conexión local: '+str(e))
             else: self.info.setText('No se pudo iniciar la conexión local: '+str(e))

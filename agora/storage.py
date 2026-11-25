@@ -6,7 +6,7 @@ import json
 from contextlib import contextmanager
 
 DEFAULTS = {'student_name': '', 'welcome_message': 'Aprende. Comprende. Avanza.'}
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 
 def default_data_dir():
     override = os.environ.get('AGORA_DATA_DIR')
@@ -33,7 +33,41 @@ class Storage:
             db.execute('CREATE TABLE IF NOT EXISTS saved_attempts (id INTEGER PRIMARY KEY, updated TEXT NOT NULL, payload TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS optical_pages (id TEXT PRIMARY KEY, original BLOB NOT NULL, aligned BLOB NOT NULL, marks TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS solution_documents (id TEXT PRIMARY KEY, name TEXT NOT NULL, data BLOB NOT NULL)')
+            for table in ('manual_templates','solution_documents'):
+                if 'created' not in {r[1] for r in db.execute(f'PRAGMA table_info({table})')}:
+                    db.execute(f'ALTER TABLE {table} ADD COLUMN created TEXT')
+            if 'listed' not in {r[1] for r in db.execute('PRAGMA table_info(solution_documents)')}:
+                db.execute('ALTER TABLE solution_documents ADD COLUMN listed INTEGER NOT NULL DEFAULT 1')
+            if v==6: self._migrate_library(db)
             db.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
+    @staticmethod
+    def _migrate_library(db):
+        # v6 stored originals and named keys separately. Recover usable old originals
+        # without assuming that two different exams with the same letters are identical.
+        from dataclasses import asdict
+        from .answer_import import extract_key
+        from .grading import ExamConfig
+        rows=[(tid,name,json.loads(p)) for tid,name,p in db.execute('SELECT id,name,payload FROM manual_templates')]
+        linked={p.get('document_ref') for _,_,p in rows}
+        names={name.casefold() for _,name,_ in rows}
+        for ref,name,data in db.execute('SELECT id,name,data FROM solution_documents').fetchall():
+            if ref in linked: continue
+            try:
+                k=extract_key(data,name)
+                c=ExamConfig(name=Path(name).stem[:120] or 'Plantilla',questions=len(k.ordinary),reserves=len(k.reserves),options=max(3,k.options))
+                p={'config':asdict(c),'key':k.key,'key_source':name,'document_ref':ref}
+            except Exception:
+                continue  # keep the original available for consultation / later registration
+            matching=[(tid,d) for tid,_,d in rows if not d.get('document_ref') and d.get('key_source')==name and Storage.template_pattern(d)==Storage.template_pattern(p)]
+            if len(matching)==1:
+                tid,d=matching[0]; d['document_ref']=ref
+                db.execute('UPDATE manual_templates SET payload=? WHERE id=?',(json.dumps(d,ensure_ascii=False),tid)); continue
+            base=c.name; n=base; i=2
+            while n.casefold() in names:
+                suffix=f' ({i})'; n=base[:120-len(suffix)]+suffix; i+=1
+            names.add(n.casefold()); p['config']['name']=n
+            db.execute('INSERT INTO manual_templates(name,payload,created) VALUES (?,?,NULL)',(n,json.dumps(p,ensure_ascii=False)))
+
     @contextmanager
     def connection(self):
         db = sqlite3.connect(self.path, timeout=5)
@@ -90,7 +124,8 @@ class Storage:
             raise ValueError('Documento de soluciones no válido.')
         ref=sha256(suffix.encode()+b'\0'+data).hexdigest()
         with self.connection() as db:
-            db.execute('INSERT OR IGNORE INTO solution_documents VALUES (?,?,?)',(ref,Path(name).name,data))
+            db.execute('INSERT OR IGNORE INTO solution_documents(id,name,data,created) VALUES (?,?,?,?)',(ref,Path(name).name,data,self.timestamp()))
+            db.execute('UPDATE solution_documents SET listed=1 WHERE id=?',(ref,))
         return ref
 
     def solution_documents(self):
@@ -103,9 +138,52 @@ class Storage:
         if row is None: raise ValueError('No se conserva el documento original de esta plantilla.')
         return row
 
-    def save_template(self, name, payload):
+    @staticmethod
+    def timestamp():
+        from datetime import datetime, timezone
+        return datetime.now(timezone.utc).isoformat(timespec='microseconds')
+
+    def save_template(self, name, payload, replace_id=None):
+        name=name.strip()
+        if not name or len(name)>120: raise ValueError('Introduce un nombre de hasta 120 caracteres.')
         with self.connection() as db:
-            db.execute('INSERT INTO manual_templates(name,payload) VALUES (?,?)',(name,json.dumps(payload,ensure_ascii=False)))
+            if replace_id is None:
+                return db.execute('INSERT INTO manual_templates(name,payload,created) VALUES (?,?,?)',(name,json.dumps(payload,ensure_ascii=False),self.timestamp())).lastrowid
+            previous=db.execute('SELECT payload FROM manual_templates WHERE id=?',(replace_id,)).fetchone()
+            cur=db.execute('UPDATE manual_templates SET name=?,payload=? WHERE id=?',(name,json.dumps(payload,ensure_ascii=False),replace_id))
+            if cur.rowcount!=1: raise ValueError('Plantilla no encontrada.')
+            oldref=json.loads(previous[0]).get('document_ref') if previous else None
+            if oldref and oldref!=payload.get('document_ref'): db.execute('UPDATE solution_documents SET listed=0 WHERE id=?',(oldref,))
+            return replace_id
+
+    @staticmethod
+    def template_pattern(payload):
+        c=payload.get('config',{}); k=tuple(payload.get('key',()))
+        if not k or not all(k) or c.get('questions',0)+c.get('reserves',0)!=len(k): return None
+        return (c['questions'],c.get('reserves',0),k)
+
+    def matching_templates(self,payload):
+        signature=self.template_pattern(payload)
+        return [r for r in self.templates() if signature is not None and self.template_pattern(r[2])==signature]
+
+    def library_entries(self,order='new'):
+        with self.connection() as db:
+            docs={r[0]:r[1:] for r in db.execute('SELECT id,name,length(data),created,listed FROM solution_documents')}
+            templates=db.execute('SELECT id,name,payload,created FROM manual_templates').fetchall()
+        entries=[]; linked=set()
+        for tid,name,raw,stamp in templates:
+            payload=json.loads(raw); ref=payload.get('document_ref'); doc=docs.get(ref)
+            if doc: linked.add(ref)
+            entries.append(dict(id=tid,name=name,payload=payload,ref=ref if doc else None,filename=doc[0] if doc else None,size=doc[1] if doc else None,created=stamp or (doc[2] if doc else None)))
+        for ref,(name,size,stamp,listed) in docs.items():
+            if ref not in linked and listed: entries.append(dict(id=None,name=name,payload=None,ref=ref,filename=name,size=size,created=stamp))
+        if order in ('az','za'):
+            entries.sort(key=lambda x:x['name'].casefold(),reverse=order=='za')
+        else:
+            # Unknown legacy dates remain last for either chronology.
+            known=[x for x in entries if x['created']]; unknown=[x for x in entries if not x['created']]
+            known.sort(key=lambda x:x['created'],reverse=order!='old'); entries=known+unknown
+        return entries
 
     def templates(self):
         with self.connection() as db:
@@ -113,7 +191,12 @@ class Storage:
         return [(i,n,json.loads(p)) for i,n,p in rows]
 
     def delete_template(self, template_id):
-        with self.connection() as db: db.execute('DELETE FROM manual_templates WHERE id=?',(template_id,))
+        with self.connection() as db:
+            row=db.execute('SELECT payload FROM manual_templates WHERE id=?',(template_id,)).fetchone()
+            db.execute('DELETE FROM manual_templates WHERE id=?',(template_id,))
+            if row:
+                ref=json.loads(row[0]).get('document_ref')
+                if ref: db.execute('UPDATE solution_documents SET listed=0 WHERE id=?',(ref,))
 
     def save_attempt(self, payload, attempt_id=None, pages=()):
         from datetime import datetime, timezone
