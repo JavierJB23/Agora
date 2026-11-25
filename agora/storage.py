@@ -6,7 +6,7 @@ import json
 from contextlib import contextmanager
 
 DEFAULTS = {'student_name': '', 'welcome_message': 'Aprende. Comprende. Avanza.'}
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 def default_data_dir():
     override = os.environ.get('AGORA_DATA_DIR')
@@ -29,6 +29,7 @@ class Storage:
             db.executemany('INSERT OR IGNORE INTO settings VALUES (?, ?)', DEFAULTS.items())
             db.execute('CREATE TABLE IF NOT EXISTS manual_draft (id INTEGER PRIMARY KEY CHECK(id=1), payload TEXT NOT NULL)')
             db.execute('CREATE TABLE IF NOT EXISTS manual_templates (id INTEGER PRIMARY KEY, name TEXT NOT NULL, payload TEXT NOT NULL)')
+            db.execute('CREATE TABLE IF NOT EXISTS saved_attempts (id INTEGER PRIMARY KEY, updated TEXT NOT NULL, payload TEXT NOT NULL)')
             db.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
     @contextmanager
     def connection(self):
@@ -75,3 +76,26 @@ class Storage:
 
     def delete_template(self, template_id):
         with self.connection() as db: db.execute('DELETE FROM manual_templates WHERE id=?',(template_id,))
+
+    def save_attempt(self, payload, attempt_id=None):
+        from datetime import datetime, timezone
+        stamp=datetime.now(timezone.utc).isoformat(timespec='seconds')
+        with self.connection() as db:
+            if attempt_id is None:
+                attempt_id=db.execute('INSERT INTO saved_attempts(updated,payload) VALUES (?,?)',(stamp,'{}')).lastrowid
+            record=dict(payload, attempt_id=attempt_id)
+            encoded=json.dumps(record,ensure_ascii=False)
+            cur=db.execute('UPDATE saved_attempts SET updated=?,payload=? WHERE id=?',(stamp,encoded,attempt_id))
+            if cur.rowcount!=1: raise ValueError('El simulacro guardado ya no existe.')
+            db.execute('INSERT INTO manual_draft VALUES (1,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload',(encoded,))
+        return attempt_id
+
+    def attempts(self):
+        with self.connection() as db:
+            rows=db.execute('SELECT id,updated,payload FROM saved_attempts ORDER BY updated DESC,id DESC').fetchall()
+        return [(i,t,json.loads(p)) for i,t,p in rows]
+
+    def load_attempt(self, attempt_id):
+        with self.connection() as db:
+            row=db.execute('SELECT payload FROM saved_attempts WHERE id=?',(attempt_id,)).fetchone()
+        return json.loads(row[0]) if row else None

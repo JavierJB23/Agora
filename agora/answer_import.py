@@ -5,7 +5,7 @@ from io import BytesIO
 import re, unicodedata, zipfile
 from xml.etree import ElementTree as ET
 
-MAX_BYTES=25*1024*1024
+MAX_BYTES=100*1024*1024
 PAIR=re.compile(r'(?<![\w])(?:(R(?:ESERVA)?)[ \t]*)?(\d{1,3})[ \t]*[.):\-]?[ \t]*(ANULAD[AO]|[A-EX])(?=$|[\s,;|])',re.I)
 TITLE=re.compile(r'^\s*(?:respuestas\s+correctas|soluciones(?:\s+correctas)?|solucionario|plantilla\s+de\s+(?:respuestas|soluciones)(?:\s+correctas)?)\b',re.I)
 RES=re.compile(r'(?:preguntas\s+de\s+reserva|preguntas\s+reserva|reservas?|respuestas\s+de\s+reserva)\s*:',re.I)
@@ -72,7 +72,7 @@ def read_docx(data):
     return ['\n'.join(lines)]
 
 def extract_key(data, filename):
-    if not data or len(data)>MAX_BYTES: raise ValueError('El documento está vacío o supera 25 MB.')
+    if not data or len(data)>MAX_BYTES: raise ValueError('El documento está vacío o supera 100 MB.')
     ext=Path(filename).suffix.lower()
     if ext=='.pdf':
         from pypdf import PdfReader

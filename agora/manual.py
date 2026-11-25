@@ -31,9 +31,9 @@ def confirm(parent,title,text):
 class ManualPage(QWidget):
     def __init__(self, storage, go_home):
         super().__init__(); self.storage=storage; self.config=ExamConfig(); self.key=['']*self.config.size; self.answers=['']*self.config.size
-        self.key_source=''; self.stage=0; self.cursor=0; self.result=None; self._template_items=[]; self.persist_failed=False
+        self.key_source=''; self.stage=0; self.cursor=0; self.result=None; self._template_items=[]; self.persist_failed=False; self.attempt_id=None; self.saved_snapshot=None; self.form_override=None
         self.root=QVBoxLayout(self); self.root.setContentsMargins(0,0,0,0); self.root.setSpacing(14)
-        self.root.addWidget(btn('‹  Volver al inicio',go_home),0,ALIGN.AlignLeft)
+        top=QHBoxLayout(); top.addWidget(btn('‹  Volver al inicio',go_home)); top.addWidget(btn('Guardar progreso',self.save_progress,'primary')); top.addStretch(); self.root.addLayout(top)
         self.root.addWidget(label('Corrector manual','heading')); self.root.addWidget(label('Importa las soluciones correctas e introduce tus respuestas. Ágora calcula el resultado.','muted',True))
         self.steps=QHBoxLayout(); self.step_labels=[]
         for i,s in enumerate(('1 · Configuración','2 · Soluciones','3 · Respuestas','4 · Resultado')):
@@ -43,24 +43,86 @@ class ManualPage(QWidget):
         self.content=QWidget(); self.body=QVBoxLayout(self.content); self.body.setContentsMargins(0,0,0,0); self.body.setSpacing(10); self.root.addWidget(self.content); self.root.addStretch()
         try:
             d=storage.load_draft()
-            if d:
-                c=ExamConfig(**d['config']); k=d['key']; a=d['answers']; stage=d.get('stage',0); cursor=d.get('cursor',0)
-                if len(k)!=c.size or len(a)!=c.size or any(v not in (*c.letters,'X','') for v in k) or any(v not in (*c.letters,'-','') for v in a): raise ValueError('Borrador no válido')
-                self.config=c; self.key=k; self.answers=a; self.key_source=d.get('key_source') or ('Plantilla anterior' if all(k) else ''); self.stage=stage if stage in (0,1,2,3) else 0; self.cursor=max(0,min(int(cursor),c.size-1))
-                if self.stage>=2 and (not self.key_source or '' in self.key): self.stage=1
-                if self.stage==3:
-                    if '' in self.answers: self.stage=2
-                    else: self.result=evaluate(c,k,a)
+            if d: self.restore(d)
         except Exception as e:
             self.notice.setText('No se pudo recuperar el borrador: '+str(e))
         self.render()
 
-    def persist(self):
+    def restore(self,d):
+        c=ExamConfig(**d['config']); k=list(d['key']); a=list(d['answers']); stage=d.get('stage',0); cursor=d.get('cursor',0)
+        if len(k)!=c.size or len(a)!=c.size or any(v not in (*c.letters,'X','') for v in k) or any(v not in (*c.letters,'-','') for v in a): raise ValueError('Borrador no válido')
+        self.config=c; self.key=k; self.answers=a; self.key_source=d.get('key_source') or ('Plantilla anterior' if all(k) else ''); self.stage=stage if stage in (0,1,2,3) else 0; self.cursor=max(0,min(int(cursor),c.size-1)); self.result=None
+        self.attempt_id=d.get('attempt_id'); self.saved_snapshot=self.storage.load_attempt(self.attempt_id) if self.attempt_id is not None else None
+        self.form_override=d.get('form') if self.stage==0 else None
+        if self.stage>=2 and (not self.key_source or '' in self.key): self.stage=1
+        if self.stage==3 and '' in self.answers: self.stage=2
+        if (self.stage==3 or d.get('corrected')) and self.key_source and all(k) and all(a): self.result=evaluate(c,k,a)
+
+    def form_data(self):
+        return {'name':self.name.text(),'questions':self.n.value(),'reserves':self.r.value(),'options':self.o.value(),'penalty':self.penalty.currentText(),'maximum':self.maximum.text(),'floor_zero':self.floor.isChecked()}
+
+    def payload(self,read_form=False):
+        d={'config':asdict(self.config),'key':list(self.key),'answers':list(self.answers),'stage':self.stage,'cursor':self.cursor,'key_source':self.key_source,'attempt_id':self.attempt_id,'corrected':self.result is not None}
+        form=self.form_data() if read_form and self.stage==0 and hasattr(self,'name') else self.form_override if self.stage==0 else None
+        if form is not None and form!=d['config']: d['form']=dict(form)
+        return d
+
+    @staticmethod
+    def comparable(d):
+        if not d: return None
+        return {**{k:d.get(k) for k in ('config','key','answers','key_source','form')},'corrected':bool(d.get('corrected',d.get('stage')==3))}
+
+    def active(self):
+        d=self.payload(True)
+        return self.attempt_id is not None or any(self.key) or any(self.answers) or self.config!=ExamConfig() or bool(d.get('form'))
+
+    def dirty(self):
+        return self.active() and self.comparable(self.payload(True))!=self.comparable(self.saved_snapshot)
+
+    def persist(self,read_form=False):
         try:
-            self.storage.save_draft({'config':asdict(self.config),'key':self.key,'answers':self.answers,'stage':self.stage,'cursor':self.cursor,'key_source':self.key_source})
-            self.persist_failed=False; self.notice.setText('Borrador guardado en este equipo.')
+            self.storage.save_draft(self.payload(read_form)); self.persist_failed=False
+            self.notice.setText('Borrador de recuperación automático · '+('Cambios sin guardar en Mis simulacros.' if self.dirty() else 'Sin cambios pendientes.'))
+            return True
         except Exception as e:
-            self.persist_failed=True; self.notice.setText('No se pudo guardar el borrador: '+str(e))
+            self.persist_failed=True; self.notice.setText('No se pudo guardar el borrador: '+str(e)); return False
+
+    def save_progress(self, *_):
+        if not self.active():
+            QMessageBox.information(self,'Guardar progreso','Configura un simulacro antes de guardarlo.'); return False
+        try:
+            d=self.payload(True); self.attempt_id=self.storage.save_attempt(d,self.attempt_id); self.saved_snapshot=dict(d,attempt_id=self.attempt_id)
+            self.persist_failed=False; self.notice.setText('Progreso guardado en Mis simulacros.'); return True
+        except Exception as e:
+            QMessageBox.warning(self,'No se pudo guardar',str(e)); return False
+
+    def allow_leave(self):
+        if not self.dirty(): return not self.active() or self.persist(True)
+        box=QMessageBox(self); box.setWindowTitle('Cambios sin guardar'); box.setText('No has guardado el progreso en Mis simulacros. ¿Qué quieres hacer?'); box.setInformativeText('Si sales sin guardar, se conserva solo el borrador de recuperación automático.'); box.setIcon(QMessageBox.Icon.Question)
+        save=box.addButton('Guardar y salir',QMessageBox.ButtonRole.AcceptRole); leave=box.addButton('Salir sin guardar',QMessageBox.ButtonRole.DestructiveRole); cancel=box.addButton('Cancelar',QMessageBox.ButtonRole.RejectRole); box.setDefaultButton(save); box.setEscapeButton(cancel); box.exec()
+        if box.clickedButton() is save: return self.save_progress()
+        if box.clickedButton() is leave: return self.persist(True)
+        return False
+
+    def allow_enter(self):
+        if not self.active(): return True
+        box=QMessageBox(self); box.setWindowTitle('Simulacro en curso'); box.setText('Hay un simulacro abierto. ¿Quieres continuar o iniciar uno nuevo?' if self.result is not None else 'Hay un test en curso. ¿Quieres continuar o iniciar uno nuevo?'); box.setInformativeText('Si inicias uno nuevo, el progreso no guardado en Mis simulacros se perderá.'); box.setIcon(QMessageBox.Icon.Question)
+        resume=box.addButton('Continuar',QMessageBox.ButtonRole.AcceptRole); new=box.addButton('Iniciar uno nuevo',QMessageBox.ButtonRole.DestructiveRole); cancel=box.addButton('Cancelar',QMessageBox.ButtonRole.RejectRole); box.setDefaultButton(resume); box.setEscapeButton(cancel); box.exec()
+        if box.clickedButton() is new: return self.start_new()
+        return box.clickedButton() is resume
+
+    def start_new(self):
+        try: self.storage.clear_draft()
+        except Exception as e: QMessageBox.warning(self,'No se pudo iniciar',str(e)); return False
+        self.config=ExamConfig(); self.key=['']*self.config.size; self.answers=['']*self.config.size; self.key_source=''; self.result=None; self.stage=0; self.cursor=0; self.attempt_id=None; self.saved_snapshot=None; self.form_override=None; self.notice.setText(''); self.render(); return True
+
+    def open_saved(self,attempt_id):
+        if self.active() and not confirm(self,'Abrir simulacro','Se sustituirá el borrador actual. El progreso no guardado en Mis simulacros se perderá. ¿Continuar?'): return False
+        try:
+            d=self.storage.load_attempt(attempt_id)
+            if not d: raise ValueError('Simulacro no encontrado.')
+            self.restore(d); self.storage.save_draft(d); self.render(); self.notice.setText('Simulacro guardado recuperado.'); return True
+        except Exception as e: QMessageBox.warning(self,'No se pudo abrir',str(e)); return False
 
     def render(self):
         # Disable shortcuts immediately, including until deleteLater is processed.
@@ -74,7 +136,7 @@ class ManualPage(QWidget):
         (self.show_config,self.show_key,self.show_answers,self.show_result)[self.stage]()
 
     def move_stage(self,stage):
-        self.stage=stage; self.cursor=0; self.persist(); self.render()
+        self.stage=stage; self.cursor=0; self.form_override=None; self.render(); self.persist()
 
     def navigate(self,target):
         if target==self.stage: return
@@ -113,6 +175,8 @@ class ManualPage(QWidget):
             col=i%2; row=(i//2)*2; grid.addWidget(label(title),row,col); grid.addWidget(widget,row+1,col)
         grid.setColumnStretch(0,1); grid.setColumnStretch(1,1); p.addLayout(grid)
         self.floor=QCheckBox('Limitar la nota mínima a 0'); self.floor.setChecked(self.config.floor_zero); p.addWidget(self.floor)
+        if self.form_override:
+            f=self.form_override; self.name.setText(f['name']); self.n.setValue(f['questions']); self.r.setValue(f['reserves']); self.o.setValue(f['options']); self.penalty.setCurrentText(f['penalty']); self.maximum.setText(f['maximum']); self.floor.setChecked(f['floor_zero'])
         p.addWidget(label('El número de preguntas y reservas se ajustará automáticamente al importar las soluciones; podrás revisar los datos antes de aceptar.','muted',True))
         p.addWidget(label('Cada acierto vale 1; cada error resta la penalización indicada; los blancos valen 0. Puedes usar una fracción (1/3) o un decimal (0,5). La penalización inicial es provisional: comprueba las reglas de tu examen.','muted',True))
         p.addWidget(label('Las anuladas se sustituyen por las reservas válidas en orden. Si no hay suficientes, se excluyen del total evaluable.','muted',True))
@@ -149,13 +213,13 @@ class ManualPage(QWidget):
     def load_template(self):
         tid=self.templates_combo.currentData()
         if tid is None: return
-        if any(self.key) or any(self.answers):
+        if self.active():
             if not confirm(self,'Cargar plantilla','Se reemplazará el borrador actual, incluidas tus respuestas. ¿Continuar?'): return
         try:
             d=next(p for i,n,p in self._template_items if i==tid); c=ExamConfig(**d['config']); k=list(d['key'])
             evaluate(c,k,['-']*c.size)
         except Exception as e: QMessageBox.warning(self,'Plantilla no válida',str(e)); return
-        self.config=c; self.key=k; self.key_source=d.get('key_source') or 'Plantilla guardada'; self.answers=['']*c.size; self.result=None; self.move_stage(1)
+        self.attempt_id=None; self.saved_snapshot=None; self.config=c; self.key=k; self.key_source=d.get('key_source') or 'Plantilla guardada'; self.answers=['']*c.size; self.result=None; self.move_stage(1)
 
     def remove_template(self):
         tid=self.templates_combo.currentData()
@@ -164,8 +228,8 @@ class ManualPage(QWidget):
             except Exception as e: QMessageBox.warning(self,'No se pudo eliminar',str(e))
 
     def reset(self):
-        if not confirm(self,'Nuevo simulacro','Se borrará el borrador actual, no las plantillas guardadas. ¿Continuar?'): return
-        self.config=ExamConfig(); self.key=['']*self.config.size; self.key_source=''; self.answers=['']*self.config.size; self.result=None; self.move_stage(0)
+        if not confirm(self,'Nuevo simulacro','Se borrará el borrador actual y sus cambios no guardados. Las plantillas y los simulacros guardados se conservarán. ¿Continuar?'): return
+        self.start_new()
 
     def apply_config(self,checked=False,*,target=1):
         try: c=ExamConfig(self.name.text().strip(),self.n.value(),self.r.value(),self.o.value(),self.penalty.currentText().strip().replace(',','.'),self.maximum.text().strip().replace(',','.'),self.floor.isChecked())
@@ -174,7 +238,8 @@ class ManualPage(QWidget):
         if changed:
             if (any(self.key) or any(self.answers)) and not confirm(self,'Cambiar estructura','Cambiar el número de preguntas, reservas u opciones borrará las soluciones y respuestas actuales. ¿Continuar?'): return
             self.key=['']*c.size; self.key_source=''; self.answers=['']*c.size
-        self.config=c; self.result=None; self.open_stage(target)
+        if c!=self.config: self.result=None
+        self.config=c; self.form_override=None; self.open_stage(target)
 
     def show_key(self):
         p=panel(self.body); p.addWidget(label('Soluciones correctas','tileTitle'))
@@ -319,7 +384,7 @@ class ManualPage(QWidget):
         t=panel(self.body); t.addWidget(label('Detalle de preguntas','tileTitle')); self.filter=SafeComboBox(); self.filter.addItems(['Todas','Aciertos','Errores','En blanco','Anuladas','Reservas']); t.addWidget(self.filter)
         self.table=QTableWidget(0,5); self.table.setHorizontalHeaderLabels(['Pregunta','Solución','Tu respuesta','Resultado','Sustituye a']); self.table.verticalHeader().hide(); self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers); self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows); self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch); self.table.setMinimumHeight(270); self.table.setAlternatingRowColors(True); t.addWidget(self.table); self.filter.currentIndexChanged.connect(self.populate_table); self.populate_table()
         row=QHBoxLayout(); row.addWidget(btn('‹ Editar respuestas',lambda:self.move_stage(2))); row.addWidget(btn('Editar soluciones',lambda:self.move_stage(1))); row.addStretch(); row.addWidget(btn('Nuevo simulacro',self.reset,'primary')); t.addLayout(row)
-        t.addWidget(label('El último resultado se conserva como borrador. El historial de simulacros llegará en BLOCK 07.','muted',True))
+        t.addWidget(label('Pulsa Guardar progreso para conservar este resultado en Mis simulacros.','muted',True))
 
     def populate_table(self,*_):
         idx=self.filter.currentIndex(); rows=[r for r in self.result.rows if idx==0 or idx==1 and r.status=='Acierto' or idx==2 and r.status=='Error' or idx==3 and r.status=='En blanco' or idx==4 and 'anulada' in r.status.lower() or idx==5 and r.number.startswith('R')]

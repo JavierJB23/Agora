@@ -7,6 +7,7 @@ from . import VERSION, BLOCK
 from .modules import MODULES
 from .storage import Storage
 from .manual import ManualPage
+from .grading import ExamConfig, evaluate, format_number
 
 ASSETS = Path(__file__).resolve().parent.parent / 'assets'
 STYLE = '''
@@ -145,6 +146,7 @@ class MainWindow(QMainWindow):
         for m in MODULES:
             if m.key=='manual':
                 l=self.page('manual'); self.manual=ManualPage(self.storage,lambda:self.go('home')); l.addWidget(self.manual)
+            elif m.key=='history': self.make_history()
             else: self.make_module(m)
         self.make_settings(); self.go('home')
     def add_nav(self, layout, key, name, symbol):
@@ -154,12 +156,45 @@ class MainWindow(QMainWindow):
         canvas=QWidget(); canvas.setObjectName('canvas'); scroll.setWidget(canvas)
         self.pages[key]=scroll; self.stack.addWidget(scroll)
         return vertical(canvas,(30,25,30,25),16)
-    def go(self,key):
+    def go(self,key,skip_entry=False):
+        current=self.stack.currentWidget()
+        if current is self.pages.get('manual') and key!='manual' and not self.manual.allow_leave():
+            self.sync_nav('manual'); return
+        if key=='manual' and current is not self.pages.get('manual') and not skip_entry and not self.manual.allow_enter():
+            self.sync_nav(next(k for k,p in self.pages.items() if p is current)); return
         if key=='home': self.refresh_home()
         if key=='settings': self.load_settings()
-        for k,b in self.nav.items(): b.setChecked(k==key)
-        self.stack.setCurrentWidget(self.pages[key])
+        if key=='history': self.refresh_history()
+        self.sync_nav(key); self.stack.setCurrentWidget(self.pages[key])
         if key=='manual': self.manual.focus_entry()
+    def sync_nav(self,key):
+        for k,b in self.nav.items(): b.setChecked(k==key)
+    def closeEvent(self,event):
+        if self.stack.currentWidget() is self.pages.get('manual') and not self.manual.allow_leave(): event.ignore(); return
+        super().closeEvent(event)
+    def make_history(self):
+        l=self.page('history'); back=button('Volver al inicio','home'); back.clicked.connect(lambda:self.go('home')); l.addWidget(back,0,Qt.AlignmentFlag.AlignLeft)
+        l.addWidget(label('Mis simulacros','heading')); l.addWidget(label('Simulacros guardados manualmente, tanto en curso como finalizados.','muted',True))
+        self.history_panel=frame(); self.history_layout=vertical(self.history_panel,(20,20,20,20),12); l.addWidget(self.history_panel); l.addStretch()
+    def refresh_history(self):
+        from datetime import datetime
+        l=self.history_layout
+        while l.count():
+            item=l.takeAt(0); w=item.widget()
+            if w: w.hide(); w.deleteLater()
+        try: rows=self.storage.attempts()
+        except Exception as e: l.addWidget(label('No se pudieron leer los simulacros: '+str(e),wrap=True)); return
+        if not rows: l.addWidget(label('Todavía no hay simulacros guardados. Pulsa Guardar progreso en el corrector manual.','muted',True)); return
+        for i,stamp,d in rows:
+            c=ExamConfig(**d['config']); answers=d['answers']; key=d['key']; count=sum(bool(v) for v in answers); complete=bool(d.get('key_source')) and all(key) and all(answers) and not d.get('form') and d.get('corrected',d.get('stage')==3)
+            name=d.get('form',{}).get('name',c.name) or c.name
+            summary=f'En curso · {count}/{c.size} respuestas registradas'
+            if complete:
+                r=evaluate(c,key,answers); summary='Finalizado · Nota '+format_number(r.grade)+' / '+format_number(c.maximum)
+            item=frame('tile'); h=QHBoxLayout(item); h.setContentsMargins(12,12,12,12); info=QVBoxLayout(); info.addWidget(label(name,'tileTitle',True)); info.addWidget(label(summary,'muted',True)); info.addWidget(label(datetime.fromisoformat(stamp).astimezone().strftime('%d/%m/%Y · %H:%M'),'muted')); h.addLayout(info,1)
+            op=button('Abrir'); op.clicked.connect(lambda checked=False,aid=i:self.open_history(aid)); h.addWidget(op); l.addWidget(item)
+    def open_history(self,aid):
+        if self.manual.open_saved(aid): self.go('manual',skip_entry=True)
     def make_home(self):
         l=self.page('home'); top=QHBoxLayout(); top.addWidget(label('Inicio','heading')); top.addStretch(); top.addWidget(label(f'Versión v{VERSION} · BLOCK {BLOCK}','tag')); l.addLayout(top)
         hero=frame('hero'); hl=QHBoxLayout(hero); hl.setContentsMargins(25,22,25,22)
