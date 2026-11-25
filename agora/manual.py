@@ -32,9 +32,9 @@ class ManualPage(QWidget):
     def __init__(self, storage, go_home, mode="manual"):
         super().__init__(); self.mode=mode; self.storage=storage; self.optical_cache={}; self.config=ExamConfig(); self.key=['']*self.config.size; self.answers=['']*self.config.size
         self.key_source=''; self.stage=0; self.cursor=0; self.result=None; self._template_items=[]; self.persist_failed=False; self.attempt_id=None; self.saved_snapshot=None; self.form_override=None
-        self.root=QVBoxLayout(self); self.root.setContentsMargins(0,0,0,0); self.root.setSpacing(14)
+        self.root=QVBoxLayout(self); self.root.setContentsMargins(0,0,0,0); self.root.setSpacing(10)
         top=QHBoxLayout(); top.addWidget(btn('‹  Volver al inicio',go_home)); top.addWidget(btn('Guardar progreso',self.save_progress,'primary')); top.addStretch(); self.root.addLayout(top)
-        self.root.addWidget(label('Corrector automático' if mode=='automatic' else 'Corrector manual','heading')); self.root.addWidget(label('Importa el solucionario y las hojas de respuestas. Ágora interpreta las marcas azules.' if mode=='automatic' else 'Importa las soluciones correctas e introduce tus respuestas. Ágora calcula el resultado.','muted',True))
+        self.root.addWidget(label('Corrector automático' if mode=='automatic' else 'Corrector manual','heading'))
         self.steps=QHBoxLayout(); self.step_labels=[]
         for i,s in enumerate(('1 · Configuración','2 · Soluciones','3 · Respuestas','4 · Resultado')):
             x=btn(s,lambda checked=False,j=i:self.navigate(j),'manualStep'); x.setAccessibleName(s); self.steps.addWidget(x,1); self.step_labels.append(x)
@@ -86,7 +86,7 @@ class ManualPage(QWidget):
     def persist(self,read_form=False):
         try:
             self.storage.save_draft(self.payload(read_form),self.mode); self.persist_failed=False
-            self.notice.setText('Borrador de recuperación automático · '+('Cambios sin guardar en Mis simulacros.' if self.dirty() else 'Sin cambios pendientes.'))
+            self.notice.setText('Cambios sin guardar' if self.dirty() else 'Sin cambios pendientes')
             return True
         except Exception as e:
             self.persist_failed=True; self.notice.setText('No se pudo guardar el borrador: '+str(e)); return False
@@ -169,6 +169,9 @@ class ManualPage(QWidget):
                 QMessageBox.warning(self,'No se pudo corregir',str(e)); return
         self.move_stage(target)
 
+    def key_summary_text(self):
+        return f'Solucionario: {self.config.questions} preguntas · {self.config.reserves} reservas · {self.config.options} opciones'
+
     def show_config(self):
         p=panel(self.body); p.addWidget(label('Datos del examen','tileTitle'))
         p.addWidget(label('Nombre del simulacro')); self.name=QLineEdit(self.config.name); self.name.setMaxLength(120); p.addWidget(self.name)
@@ -182,21 +185,28 @@ class ManualPage(QWidget):
         self.floor=QCheckBox('Limitar la nota mínima a 0'); self.floor.setChecked(self.config.floor_zero); p.addWidget(self.floor)
         if self.form_override:
             f=self.form_override; self.name.setText(f['name']); self.penalty.setCurrentText(f['penalty']); self.maximum.setText(f['maximum']); self.floor.setChecked(f['floor_zero'])
-        if self.key_source:
-            p.addWidget(label(f'Solucionario importado: {self.config.questions} preguntas · {self.config.reserves} reservas · {self.config.options} opciones por pregunta.','tileTitle',True))
+        self.key_summary=label(self.key_summary_text(),'tileTitle',True); p.addWidget(self.key_summary); self.key_summary.setVisible(bool(self.key_source))
         p.addWidget(label('Ágora detecta las preguntas y reservas al importar las soluciones. Confirma el número de opciones en la revisión del documento.','muted',True))
         p.addWidget(label('Cada acierto vale 1; cada error resta la penalización indicada; los blancos valen 0. Puedes usar una fracción (1/3) o un decimal (0,5). La penalización inicial es provisional: comprueba las reglas de tu examen.','muted',True))
         p.addWidget(label('Las anuladas se sustituyen por las reservas válidas en orden. Si no hay suficientes, se excluyen del total evaluable.','muted',True))
         t=panel(self.body); t.addWidget(label('Plantillas guardadas','tileTitle')); self.templates_combo=SafeComboBox(); t.addWidget(self.templates_combo)
-        row=QHBoxLayout(); row.addWidget(btn('Consultar plantilla',self.view_template)); row.addWidget(btn('Cargar plantilla',self.load_template)); row.addWidget(btn('Eliminar plantilla',self.remove_template)); row.addStretch(); t.addLayout(row); self.refresh_templates()
+        row=QHBoxLayout(); row.addWidget(btn('Consultar plantilla',self.view_template)); row.addWidget(btn('Eliminar plantilla',self.remove_template)); row.addStretch(); t.addLayout(row); self.refresh_templates(); self.templates_combo.activated.connect(self.template_selected)
         p2=panel(self.body,12); row=QHBoxLayout(); row.addWidget(btn('Nuevo / limpiar borrador',self.reset)); row.addStretch(); p2.addLayout(row); p2.addWidget(btn('Continuar a soluciones  ›',self.apply_config,'primary'))
 
     def refresh_templates(self):
-        self.templates_combo.clear(); self.templates_combo.addItem('Selecciona una plantilla',None)
+        previous=self.templates_combo.blockSignals(True)
         try:
+            self.templates_combo.clear(); self.templates_combo.addItem('Selecciona una plantilla',None)
             self._template_items=self.storage.templates()
             for i,name,d in self._template_items: self.templates_combo.addItem(name,i)
         except Exception as e: self.notice.setText('No se pudieron cargar las plantillas: '+str(e))
+        finally: self.templates_combo.blockSignals(previous)
+
+    def template_selected(self,*_):
+        if self.templates_combo.currentData() is None: return
+        # A declined replacement must not prevent consulting/deleting the selected key.
+        # Selecting it again emits activated even if its index has not changed.
+        self.load_template()
 
     def view_template(self):
         tid=self.templates_combo.currentData()
@@ -219,14 +229,20 @@ class ManualPage(QWidget):
 
     def load_template(self):
         tid=self.templates_combo.currentData()
-        if tid is None: return
-        if self.active():
-            if not confirm(self,'Cargar plantilla','Se reemplazará el borrador actual, incluidas tus respuestas. ¿Continuar?'): return
+        if tid is None: return False
         try:
             d=next(p for i,n,p in self._template_items if i==tid); c=ExamConfig(**d['config']); k=list(d['key'])
             evaluate(c,k,['-']*c.size)
-        except Exception as e: QMessageBox.warning(self,'Plantilla no válida',str(e)); return
-        self.optical_cache.clear(); self.attempt_id=None; self.saved_snapshot=None; self.config=c; self.key=k; self.key_source=d.get('key_source') or 'Plantilla guardada'; self.answers=['']*c.size; self.result=None; self.move_stage(1)
+        except Exception as e: QMessageBox.warning(self,'Plantilla no válida',str(e)); return False
+        if self.active() and not confirm(self,'Cargar plantilla','Se reemplazará el borrador actual, incluidas tus respuestas. ¿Continuar? Si eliges No, podrás consultar o eliminar la plantilla sin cargarla.'):
+            self.notice.setText('Plantilla seleccionada, no cargada'); return False
+        # Stay in configuration so Consultar / Eliminar remain accessible.
+        self.optical_cache.clear(); self.attempt_id=None; self.saved_snapshot=None; self.config=c; self.key=k; self.key_source=d.get('key_source') or 'Plantilla guardada'; self.answers=['']*c.size; self.result=None; self.cursor=0; self.form_override=None
+        self.name.setText(c.name); self.penalty.setCurrentText(c.penalty); self.maximum.setText(c.maximum); self.floor.setChecked(c.floor_zero)
+        self.key_summary.setText(self.key_summary_text()); self.key_summary.show()
+        self.persist(True)
+        if not self.persist_failed: self.notice.setText('Plantilla cargada')
+        return True
 
     def remove_template(self):
         tid=self.templates_combo.currentData()
@@ -291,7 +307,7 @@ class ManualPage(QWidget):
         from .omr_ui import OpticalPage
         self.reader=OpticalPage(self.config,self.answers,self.optical_cache,self.optical_changed)
         self.body.addWidget(self.reader)
-        self.body.addWidget(btn('Corregir examen',self.correct_optical,'primary'))
+        bar=QWidget(); actions=QHBoxLayout(bar); actions.setContentsMargins(0,0,0,0); actions.addWidget(btn('Reiniciar lectura',self.reader.reset)); actions.addStretch(); actions.addWidget(btn('Corregir examen',self.correct_optical,'primary')); self.body.addWidget(bar)
     def correct_optical(self): self.open_stage(3)
     def optical_changed(self):
         self.result=None; self.persist()

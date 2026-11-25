@@ -75,47 +75,65 @@ def locations(page):
         for row in range(n):
             yield (str(col*n+row+1) if page==0 else 'R'+str(col*n+row+1),[round(2*(x+16.75*j)) for j in range(3)],round(2*(start+19.618*row)))
 
-def reserve_positions(im):
-    """Find the 27 printed circles near the reserve grid, then refine each center."""
+def grid_positions(im,page):
+    """Fit the printed lattice, not the paper edges, and refine local row positions.
+    Reject ambiguous geometry instead of silently reading a neighboring row.
+    """
     g=cv.cvtColor(im,cv.COLOR_RGB2GRAY)
-    c=cv.HoughCircles(g[:260],cv.HOUGH_GRADIENT,1,22,param1=80,param2=15,minRadius=7,maxRadius=15)
-    if c is None: raise ValueError('No se encuentran los círculos de reserva.')
-    found=np.round(c[0,:,:2]).astype(int)
-    nominal=np.array([(x,y) for _,xs,y in locations(1) for x in xs],dtype=np.float32)
-    # A modest translation from perspective detection is expected. Find consistent unique matches.
-    pairs=[]; used=set()
-    for i,(x,y) in enumerate(nominal):
-        dist=np.linalg.norm(found-[x,y],axis=1)
-        j=int(np.argmin(dist))
-        if dist[j]<=24 and j not in used: pairs.append((i,j)); used.add(j)
-    if len(pairs)<22: raise ValueError('No se reconoce la cuadrícula de reservas.')
-    src=np.array([nominal[i] for i,j in pairs]); dst=np.array([found[j] for i,j in pairs],np.float32)
-    transform,inliers=cv.estimateAffine2D(src,dst,method=cv.RANSAC,ransacReprojThreshold=5)
-    if transform is None or int(inliers.sum())<20: raise ValueError('No se pudo alinear la cuadrícula de reservas.')
-    pred=cv.transform(nominal.reshape(-1,1,2),transform).reshape(-1,2)
-    if np.max(np.linalg.norm(pred-nominal,axis=1))>30: raise ValueError('Desplazamiento excesivo de las reservas.')
-    for i,(x,y) in enumerate(pred):
-        dist=np.linalg.norm(found-[x,y],axis=1); j=int(np.argmin(dist))
-        if dist[j]<6: pred[i]=found[j]
-    return [(n,[tuple(map(int,xy)) for xy in np.round(pred[j*3:j*3+3])]) for j,(n,_,_) in enumerate(locations(1))]
+    lo,hi=(300,1580) if page==0 else (0,280)
+    c=cv.HoughCircles(g[lo:hi],cv.HOUGH_GRADIENT,1,22,param1=80,param2=15,minRadius=7,maxRadius=16)
+    if c is None: raise ValueError('No se reconocen los círculos de la hoja.')
+    found=c[0,:,:2].astype(np.float32); found[:,1]+=lo
+    nominal=np.array([(x,y) for _,xs,y in locations(page) for x in xs],dtype=np.float32)
+    def nearest(pred):
+        dist=np.linalg.norm(pred[:,None,:]-found[None,:,:],axis=2)
+        j=dist.argmin(1); return j,dist[np.arange(len(pred)),j]
+    j,d=nearest(nominal)
+    close=d<22
+    if close.sum()<len(nominal)*.68: raise ValueError('No se reconoce la cuadrícula de la hoja.')
+    offset=np.median(found[j[close]]-nominal[close],axis=0)
+    pred=nominal+offset
+    # Two passes remove local false positives before refining the projective model.
+    for radius in (13,9):
+        j,d=nearest(pred); pairs=[]; used=set()
+        for i in np.argsort(d):
+            k=int(j[i])
+            if d[i]<=radius and k not in used: pairs.append((i,k)); used.add(k)
+        if len(pairs)<len(nominal)*.70: raise ValueError('No se pudo alinear la cuadrícula. Ajusta las esquinas o repite la foto.')
+        src=np.array([nominal[i] for i,k in pairs]); dst=np.array([found[k] for i,k in pairs])
+        if page==0:
+            mat,inliers=cv.findHomography(src,dst,cv.RANSAC,4.0)
+            if mat is None or inliers.sum()<len(nominal)*.65: raise ValueError('Alineación de la hoja ordinaria insuficiente.')
+            pred=cv.perspectiveTransform(nominal.reshape(-1,1,2),mat).reshape(-1,2)
+        else:
+            mat,inliers=cv.estimateAffine2D(src,dst,method=cv.RANSAC,ransacReprojThreshold=4)
+            if mat is None or inliers.sum()<20: raise ValueError('Alineación de reservas insuficiente.')
+            pred=cv.transform(nominal.reshape(-1,1,2),mat).reshape(-1,2)
+    if not np.isfinite(pred).all() or np.max(np.linalg.norm(pred-nominal,axis=1))>35:
+        raise ValueError('Desplazamiento excesivo. Ajusta las esquinas o repite la foto.')
+    j,d=nearest(pred)
+    groups=[]
+    for row,(n,_,_) in enumerate(locations(page)):
+        sl=slice(row*3,row*3+3); pts=pred[sl].copy(); good=d[sl]<6
+        # Shift the whole triplet consistently; marked circles can be missing from Hough.
+        if good.sum()>=2: pts+=np.median(found[j[sl][good]]-pts[good],axis=0)
+        if np.any(np.diff(pts[:,0])<25) or np.any(np.diff(pts[:,0])>43) or np.ptp(pts[:,1])>9:
+            raise ValueError('Casillas desalineadas. Ajusta las esquinas o repite la foto.')
+        groups.append((n,[tuple(map(int,xy)) for xy in np.round(pts)]))
+    return groups
 
-def centers(im,page):
-    if page==1: return reserve_positions(im)
-    return [(n,[(x,y) for x in xs]) for n,xs,y in locations(0)]
+def reserve_positions(im): return grid_positions(im,1)
+
+def centers(im,page): return grid_positions(im,page)
 
 def identify(im):
-    """Recognize the supplied template geometry, not arbitrary handwritten numbering."""
-    g=cv.cvtColor(im,cv.COLOR_RGB2GRAY)
-    c=cv.HoughCircles(g[330:1550],cv.HOUGH_GRADIENT,1.3,22,param1=80,param2=17,minRadius=7,maxRadius=15)
-    main=False
-    if c is not None:
-        found=c[0,:,:2].copy(); found[:,1]+=330
-        nominal=np.array([(x,y) for _,xs,y in locations(0) for x in xs])
-        main=int(np.sum(np.min(np.linalg.norm(nominal[:,None,:]-found[None,:,:],axis=2),axis=1)<20))>=270
-    try: reserve_positions(im); reserve=True
-    except ValueError: reserve=False
-    if main==reserve: raise ValueError('No se distingue con seguridad la hoja ordinaria de la de reservas. Fotografía la plantilla completa y nítida.')
-    return 0 if main else 1
+    """Recognize the supplied template geometry, not arbitrary numbering."""
+    matched=[]
+    for page in (0,1):
+        try: grid_positions(im,page); matched.append(page)
+        except ValueError: pass
+    if len(matched)!=1: raise ValueError('No se distingue con seguridad la hoja ordinaria de la de reservas. Fotografía la plantilla completa y nítida.')
+    return matched[0]
 
 def proposed(mark):
     if mark.suggestion and 'débil' not in mark.status: return mark.suggestion

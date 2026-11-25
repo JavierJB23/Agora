@@ -36,14 +36,11 @@ class OpticalPage(QWidget):
     def __init__(self,config,answers,cache,changed):
         super().__init__(); self.config=config; self.answers=answers; self.changed=changed
         self.images=cache.setdefault('images',{}); self.aligned=cache.setdefault('aligned',{}); self.marks=cache.setdefault('marks',{})
-        l=QVBoxLayout(self); l.setContentsMargins(0,0,0,0); l.setSpacing(10)
+        l=QVBoxLayout(self); l.setContentsMargins(0,0,0,0); l.setSpacing(7)
         l.addWidget(btn('Importar hojas de respuestas (PDF o fotos)',self.load,True))
-        self.note=text('Importa las páginas en cualquier orden, juntas o por separado. Plantilla compatible: hasta 120 preguntas y 9 reservas, A/B/C.' + (' Se han recuperado respuestas guardadas; los recortes originales solo se mantienen mientras Ágora está abierto. Puedes volver a importar las hojas.' if any(answers) and not self.marks else '')); l.addWidget(self.note)
         row=QHBoxLayout(); self.page=SafeComboBox(); self.page.addItems(['Preguntas ordinarias','Reservas']); self.page.currentIndexChanged.connect(self.refresh); row.addWidget(self.page); self.filter=SafeComboBox(); self.filter.addItems(['Solo pendientes','Todas las preguntas']); self.filter.currentIndexChanged.connect(self.refresh); row.addWidget(self.filter); row.addWidget(btn('Ver hoja y casillas',self.preview)); row.addWidget(btn('Ajustar esquinas',self.adjust)); l.addLayout(row)
-        l.addWidget(text('Las lecturas claras se rellenan automáticamente. Revisa las dudosas y confirma que has usado tinta azul. El rojo es informativo. Puedes modificar cualquier respuesta desde Todas las preguntas.'))
-        self.count=text(''); l.addWidget(self.count)
-        self.table=QTableWidget(0,4); self.table.setHorizontalHeaderLabels(['Pregunta','Recorte original','Estado de lectura','Respuesta']); self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch); self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers); self.table.setAlternatingRowColors(True); self.table.verticalHeader().hide(); self.table.setMinimumHeight(300); l.addWidget(self.table)
-        l.addWidget(btn('Reiniciar lectura',self.reset),0,A.AlignLeft)
+        self.count=text(''); self.count.setToolTip('Las lecturas claras se rellenan automáticamente; revisa las dudosas. La tinta roja solo es informativa.'); l.addWidget(self.count)
+        self.table=QTableWidget(0,4); self.table.setHorizontalHeaderLabels(['Pregunta','Recorte original','Estado de lectura','Respuesta']); self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch); self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers); self.table.setAlternatingRowColors(True); self.table.verticalHeader().hide(); self.table.setMinimumHeight(260); l.addWidget(self.table)
         self.refresh()
     def indices(self,slot):
         return range(0,self.config.questions) if slot==0 else range(self.config.questions,self.config.size)
@@ -65,7 +62,7 @@ class OpticalPage(QWidget):
                     pending[slot]=(im,aligned,omr.scan(aligned,slot))
             if any(any(self.answers[i] for i in self.indices(slot)) for slot in pending) and not confirm(self,'Sustituir lectura','Se sustituirán las respuestas de las páginas importadas. ¿Continuar?'): return
             for slot,(im,aligned,marks) in pending.items(): self.install(slot,im,aligned,marks)
-            self.page.setCurrentIndex(0 if 0 in pending else 1); self.filter.setCurrentIndex(0); self.note.setText('Páginas reconocidas automáticamente. Comprueba la alineación y resuelve las dudas antes de corregir.'); self.changed(); self.refresh()
+            self.page.setCurrentIndex(0 if 0 in pending else 1); self.filter.setCurrentIndex(0); self.changed(); self.refresh()
         except Exception as e: QMessageBox.warning(self,'No se pudo leer',str(e))
     def install(self,slot,im,aligned,marks):
         self.images[slot]=im; self.aligned[slot]=aligned; self.marks[slot]=marks
@@ -88,20 +85,20 @@ class OpticalPage(QWidget):
         slot=self.page.currentIndex(); marks=self.marks.get(slot,[]); indices=list(self.indices(slot)); shown=[(j,i) for j,i in enumerate(indices) if self.filter.currentIndex()==1 or not self.answers[i]]
         self.table.setRowCount(0); self.table.setRowCount(len(shown))
         for row,(j,i) in enumerate(shown):
-            self.table.setRowHeight(row,57); m=marks[j] if j<len(marks) else None
+            self.table.setRowHeight(row,48); m=marks[j] if j<len(marks) else None
             status=m.status if m else ('Respuesta conservada · sin recorte' if self.answers[i] else 'Hoja no cargada')
             if m and omr.proposed(m)=='-': status='Sin azul · blanco propuesto'
             elif m and m.suggestion and not omr.proposed(m): status+=f' · posible {m.suggestion}'
             for col,s in [(0,self.config.number(i)),(2,status)]:
                 t=QTableWidgetItem(s); t.setTextAlignment(A.AlignCenter); self.table.setItem(row,col,t)
             if m:
-                x,y,x2,y2=m.crop; crop=QLabel(); crop.setAlignment(A.AlignCenter); crop.setPixmap(pix(self.aligned[slot][y:y2,x:x2]).scaled(165,52,Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation)); self.table.setCellWidget(row,1,crop)
+                x,y,x2,y2=m.crop; crop=QLabel(); crop.setAlignment(A.AlignCenter); crop.setPixmap(pix(self.aligned[slot][y:y2,x:x2]).scaled(155,43,Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation)); self.table.setCellWidget(row,1,crop)
             combo=SafeComboBox(); vals=['',*self.config.letters,'-']; combo.addItems(['Pendiente',*self.config.letters,'En blanco']); combo.setCurrentIndex(vals.index(self.answers[i])); combo.currentIndexChanged.connect(lambda k,n=i,v=vals:self.set_choice(n,v[k])); self.table.setCellWidget(row,3,combo)
         self.update_count()
     def set_choice(self,i,value):
         self.answers[i]=value; self.changed(); self.update_count()
     def update_count(self):
-        n=self.answers.count(''); self.count.setText(f'{len(self.answers)-n} de {len(self.answers)} respuestas propuestas o revisadas · {n} pendientes. Las casillas fuera del solucionario no cuentan.')
+        n=self.answers.count(''); self.count.setText(f'{len(self.answers)-n}/{len(self.answers)} respuestas · {n} pendientes')
     def reset(self):
         if any(self.answers) and not confirm(self,'Reiniciar lectura','Se descartarán las respuestas y revisiones actuales. ¿Continuar?'): return
         self.images.clear(); self.aligned.clear(); self.marks.clear(); self.answers[:]=['']*len(self.answers); self.changed(); self.refresh()

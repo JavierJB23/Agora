@@ -20,6 +20,7 @@ QLabel#brand {font-family: "Palatino Linotype", "Georgia", serif; font-size: 30p
 QLabel#headline {font-size: 30px; font-weight: 650; color: #75405B;}
 QLabel#heading {font-size: 25px; font-weight: 650; color: #75405B;}
 QLabel#tileTitle {font-size: 17px; font-weight: 600; color: #73425A;}
+QLabel#historyMode {font-size: 14px; font-style: italic; font-weight: 600; color: #A55379;}
 QLabel#muted {color: #795C6B; font-size: 13px;}
 QLabel#tag {background: #FAEDF3; color: #8D5070; border-radius: 8px; padding: 5px 9px; font-size: 12px;}
 QPushButton {border: 1px solid #EBD5E0; border-radius: 9px; padding: 9px 13px; background: #FFFFFF; font-weight: 500; text-align: left;}
@@ -195,8 +196,8 @@ class MainWindow(QMainWindow):
             summary=f'En curso · {count}/{c.size} respuestas registradas'
             if complete:
                 r=evaluate(c,key,answers); summary='Finalizado · Nota '+format_number(r.grade)+' / '+format_number(c.maximum)
-            summary=('Automático' if d.get('mode')=='automatic' else 'Manual')+' · '+summary
-            item=frame('tile'); h=QHBoxLayout(item); h.setContentsMargins(12,12,12,12); info=QVBoxLayout(); info.addWidget(label(name,'tileTitle',True)); info.addWidget(label(summary,'muted',True)); info.addWidget(label(datetime.fromisoformat(stamp).astimezone().strftime('%d/%m/%Y · %H:%M'),'muted')); h.addLayout(info,1)
+            mode='Corrección automática' if d.get('mode')=='automatic' else 'Corrección manual'
+            item=frame('tile'); h=QHBoxLayout(item); h.setContentsMargins(12,12,12,12); info=QVBoxLayout(); heading=QHBoxLayout(); heading.setSpacing(8); heading.addWidget(label(name,'tileTitle',True)); heading.addWidget(label('· '+mode,'historyMode')); heading.addStretch(); info.addLayout(heading); info.addWidget(label(summary,'muted',True)); info.addWidget(label(datetime.fromisoformat(stamp).astimezone().strftime('%d/%m/%Y · %H:%M'),'muted')); h.addLayout(info,1)
             op=button('Abrir'); op.clicked.connect(lambda checked=False,aid=i:self.open_history(aid)); h.addWidget(op); delete=button('Eliminar'); delete.clicked.connect(lambda checked=False,aid=i,n=name:self.delete_history(aid,n)); h.addWidget(delete); l.addWidget(item)
     def open_history(self,aid):
         d=self.storage.load_attempt(aid)
