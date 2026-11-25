@@ -22,6 +22,8 @@ test_real_size_example (test_grading.GradingTests.test_real_size_example) ... ok
 test_replacement_order (test_grading.GradingTests.test_replacement_order) ... ok
 test_unused_reserves (test_grading.GradingTests.test_unused_reserves) ... ok
 test_zero_penalty (test_grading.GradingTests.test_zero_penalty) ... ok
+test_delete_attempt_preserves_unrelated_draft_and_templates (test_storage.ManualStorageTests.test_delete_attempt_preserves_unrelated_draft_and_templates) ... ok
+test_delete_attempt_removes_linked_recovery (test_storage.ManualStorageTests.test_delete_attempt_removes_linked_recovery) ... ok
 test_draft_roundtrip (test_storage.ManualStorageTests.test_draft_roundtrip) ... ok
 test_saved_attempts_are_independent_of_recovery (test_storage.ManualStorageTests.test_saved_attempts_are_independent_of_recovery) ... ok
 test_templates_independent (test_storage.ManualStorageTests.test_templates_independent) ... ok
@@ -35,8 +37,10 @@ test_reject_unknown (test_storage.StorageTests.test_reject_unknown) ... ok
 test_limit_and_browser_agree (test_transfer.TransferTests.test_limit_and_browser_agree) ... ok
 test_transfer_above_previous_limit (test_transfer.TransferTests.test_transfer_above_previous_limit) ... ok
 test_upload_once_and_token (test_transfer.TransferTests.test_upload_once_and_token) ... ok
+test_config_structure_only_from_import (test_ui.UITests.test_config_structure_only_from_import) ... skipped 'PySide6 no disponible'
 test_direct_steps_and_current_result (test_ui.UITests.test_direct_steps_and_current_result) ... skipped 'PySide6 no disponible'
 test_exit_and_reentry_dialogs (test_ui.UITests.test_exit_and_reentry_dialogs) ... skipped 'PySide6 no disponible'
+test_history_delete_confirmation_and_active_draft (test_ui.UITests.test_history_delete_confirmation_and_active_draft) ... skipped 'PySide6 no disponible'
 test_import_source_tiles_and_mobile_page (test_ui.UITests.test_import_source_tiles_and_mobile_page) ... skipped 'PySide6 no disponible'
 test_manual_keyboard (test_ui.UITests.test_manual_keyboard) ... skipped 'PySide6 no disponible'
 test_manual_workflow_and_reopen (test_ui.UITests.test_manual_workflow_and_reopen) ... skipped 'PySide6 no disponible'
@@ -46,6 +50,6 @@ test_view_template_without_replacing_draft (test_ui.UITests.test_view_template_w
 test_wheel_does_not_change_form_controls (test_ui.UITests.test_wheel_does_not_change_form_controls) ... skipped 'PySide6 no disponible'
 
 ----------------------------------------------------------------------
-Ran 44 tests in 0.516s
+Ran 48 tests in 0.607s
 
-OK (skipped=9)
+OK (skipped=11)

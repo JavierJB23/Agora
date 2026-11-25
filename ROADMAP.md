@@ -23,3 +23,5 @@ Materiales de prueba externos: plantilla en blanco y corregida, S24 enunciados, 
 Norma visual: confirmaciones Sí/No en español; flechas y listas de controles acordes a la estética pastel, sin cambios mediante rueda.
 
 FIX01 de BLOCK 03–04: importación en dos tarjetas con iconos y pantalla QR separada; cancelar centrado, URL oculta, IP solo para diagnóstico, límite 100 MiB por documento. Guardado explícito de simulacros independiente del borrador automático de recuperación; aviso al salir con cambios y al volver a entrar, no borrar intentos archivados al iniciar uno nuevo. Mantener estas reglas en módulos futuros.
+
+FIX02 de BLOCK 03–04 (v0.4.2): quitar campos redundantes de configuración; detectar ordinarias y reservas desde solucionario, confirmar opciones únicamente durante importación (la mayor letra es un mínimo). Mis simulacros permite eliminar con confirmación irreversible, incluyendo borrador vinculado si existe, sin afectar a otros intentos ni plantillas. FIX01 validado por usuario; FIX02 pendiente de validación en Windows.
