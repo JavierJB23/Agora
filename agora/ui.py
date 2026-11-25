@@ -22,7 +22,7 @@ QLabel#headline {font-size: 30px; font-weight: 650; color: #75405B;}
 QLabel#heading {font-size: 25px; font-weight: 650; color: #75405B;}
 QLabel#tileTitle {font-size: 17px; font-weight: 600; color: #73425A;}
 QLabel#historyMode {font-size: 14px; font-style: italic; font-weight: 600; color: #A55379;}
-QTabWidget#libraryTabs::pane {border: 1px solid #EEDDE5; background: white; border-radius: 10px;}
+QTabWidget#libraryTabs::pane {border: none; background: transparent;}
 QTabBar::tab {background: #FFFFFF; border: 1px solid #EEDDE5; padding: 10px 22px; border-top-left-radius: 8px; border-top-right-radius: 8px;}
 QTabBar::tab:selected {background: #F4D6E3; color: #75405B; font-weight: 600;}
 QLabel#muted {color: #795C6B; font-size: 13px;}
@@ -108,6 +108,13 @@ def frame(role='panel'):
 def vertical(parent, margins=(0,0,0,0), spacing=12):
     l=QVBoxLayout(parent); l.setContentsMargins(*margins); l.setSpacing(spacing); return l
 
+class CurrentPageStack(QStackedWidget):
+    # The library landing page must not inherit the height of a long hidden list.
+    def sizeHint(self):
+        w=self.currentWidget(); return w.sizeHint() if w is not None else super().sizeHint()
+    def minimumSizeHint(self):
+        w=self.currentWidget(); return w.minimumSizeHint() if w is not None else super().minimumSizeHint()
+
 class HomeTile(QToolButton):
     """Whole tile is a keyboard-accessible button with an icon above its name."""
     def __init__(self, module):
@@ -179,7 +186,7 @@ class MainWindow(QMainWindow):
         if key=='home': self.refresh_home()
         if key=='settings': self.load_settings()
         if key=='history': self.refresh_history()
-        if key=='library': self.refresh_library()
+        if key=='library': self.library_stack.setCurrentIndex(0)
         self.sync_nav(key); self.stack.setCurrentWidget(self.pages[key])
         if key in ('manual','automatic'): getattr(self,key).focus_entry()
     def sync_nav(self,key):
@@ -189,22 +196,27 @@ class MainWindow(QMainWindow):
             if self.stack.currentWidget() is self.pages.get(mode) and not getattr(self,mode).allow_leave(): event.ignore(); return
         super().closeEvent(event)
     def make_library(self):
-        l=self.page('library'); back=button('Volver al inicio','home'); back.clicked.connect(lambda:self.go('home')); l.addWidget(back,0,Qt.AlignmentFlag.AlignLeft)
-        l.addWidget(label('Mi temario','heading')); tabs=QTabWidget(); tabs.setObjectName('libraryTabs'); tabs.tabBar().hide()
-        tiles=QHBoxLayout(); self.library_buttons=[]
+        l=self.page('library'); self.library_stack=CurrentPageStack(); self.library_stack.currentChanged.connect(lambda *_:self.library_stack.updateGeometry()); l.addWidget(self.library_stack); l.addStretch()
+        root=QWidget(); rl=vertical(root,spacing=16); self.library_stack.addWidget(root)
+        back=button('Volver al inicio','home'); back.clicked.connect(lambda:self.go('home')); rl.addWidget(back,0,Qt.AlignmentFlag.AlignLeft)
+        rl.addWidget(label('Mi temario','heading')); tiles=QHBoxLayout(); self.library_buttons=[]
         for i,(name,symbol) in enumerate((('Mis temas','books'),('Mis plantillas','template'))):
-            b=QToolButton(); b.setObjectName('homeTile'); b.setText(name); b.setIcon(icon(symbol)); b.setIconSize(QSize(48,48)); b.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon); b.setFixedSize(150,132); b.setCheckable(True); b.setCursor(Qt.CursorShape.PointingHandCursor); b.clicked.connect(lambda checked=False,j=i:tabs.setCurrentIndex(j)); tiles.addWidget(b); self.library_buttons.append(b)
-        tiles.addStretch(); l.addLayout(tiles); l.addWidget(tabs)
-        themes=QWidget(); tl=vertical(themes,(18,18,18,18),10); tl.addWidget(label('Temario de estudio','tileTitle')); tl.addStretch(); tabs.addTab(themes,'Mis temas')
-        archive=QWidget(); al=vertical(archive,(18,18,18,18),12); tabs.addTab(archive,'Mis plantillas'); self.library_tabs=tabs
+            b=QToolButton(); b.setObjectName('homeTile'); b.setText(name); b.setIcon(icon(symbol)); b.setIconSize(QSize(64,64)); b.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon); b.setFixedSize(220,220); b.setCursor(Qt.CursorShape.PointingHandCursor); b.clicked.connect(lambda checked=False,j=i:self.select_library_tab(j)); tiles.addWidget(b); self.library_buttons.append(b)
+        tiles.addStretch(); rl.addLayout(tiles); rl.addStretch()
+        tabs=QTabWidget(); tabs.setObjectName('libraryTabs'); tabs.tabBar().hide(); self.library_tabs=tabs; self.library_stack.addWidget(tabs)
+        themes=QWidget(); tl=vertical(themes,spacing=16); back=button('Volver a Mi temario','book'); back.clicked.connect(lambda:self.library_stack.setCurrentIndex(0)); tl.addWidget(back,0,Qt.AlignmentFlag.AlignLeft); tl.addWidget(label('Mis temas','heading')); tl.addWidget(label('Temario de estudio','tileTitle')); tl.addStretch(); tabs.addTab(themes,'Mis temas')
+        archive=QWidget(); al=vertical(archive,spacing=16); tabs.addTab(archive,'Mis plantillas')
+        back=button('Volver a Mi temario','book'); back.clicked.connect(lambda:self.library_stack.setCurrentIndex(0)); al.addWidget(back,0,Qt.AlignmentFlag.AlignLeft); al.addWidget(label('Mis plantillas','heading'))
+        pane=frame(); pl=vertical(pane,(18,18,18,18),12); al.addWidget(pane)
         toolbar=QHBoxLayout(); imp=button('Importar plantillas','template','primary'); imp.clicked.connect(self.import_library); toolbar.addWidget(imp); toolbar.addStretch(); toolbar.addWidget(label('Ordenar por')); self.library_sort=SafeComboBox()
         for title,value in [('Más recientes','new'),('Más antiguas','old'),('Nombre A–Z','az'),('Nombre Z–A','za')]: self.library_sort.addItem(title,value)
-        toolbar.addWidget(self.library_sort); al.addLayout(toolbar)
-        items=QWidget(); self.library_layout=vertical(items,spacing=10); al.addWidget(items); al.addStretch()
-        self.library_sort.currentIndexChanged.connect(lambda *_:self.refresh_library()); tabs.currentChanged.connect(self.select_library_tab); tabs.setCurrentIndex(1); self.select_library_tab(1); l.addStretch()
+        toolbar.addWidget(self.library_sort); pl.addLayout(toolbar)
+        items=QWidget(); self.library_layout=vertical(items,spacing=10); pl.addWidget(items); al.addStretch()
+        self.library_sort.currentIndexChanged.connect(lambda *_:self.refresh_library())
 
     def select_library_tab(self,index):
-        for i,b in enumerate(self.library_buttons): b.setChecked(i==index)
+        self.library_tabs.setCurrentIndex(index); self.library_stack.setCurrentIndex(1)
+        if index==1: self.refresh_library()
 
     def import_library(self):
         from .import_ui import ImportDialog
@@ -223,9 +235,8 @@ class MainWindow(QMainWindow):
             imported=extract_key(data,name); options=review_key(self,imported,name)
             if options is None: return
             c=ExamConfig(name=Path(name).stem[:120] or 'Plantilla',questions=len(imported.ordinary),reserves=len(imported.reserves),options=options)
-            ref=ref or self.storage.archive_solution_document(name,data)
             payload={'config':asdict(c),'key':imported.key,'key_source':name,'document_ref':ref}
-            named_save(self,self.storage,payload,c.name,automatic=True)
+            return named_save(self,self.storage,payload,c.name,document=None if ref else (name,data))
         except Exception as e: QMessageBox.warning(self,'No se pudo importar '+name,str(e))
 
     def register_existing_document(self,ref):
@@ -252,10 +263,20 @@ class MainWindow(QMainWindow):
                 b=button('Consultar PDF' if e['filename'].lower().endswith('.pdf') else 'Consultar Word',role='softAction'); b.clicked.connect(lambda checked=False,r=e['ref']:consult_document(self,self.storage,r)); h.addWidget(b)
             if e['payload']:
                 b=button('Consultar plantilla',role='softAction'); b.clicked.connect(lambda checked=False,n=e['name'],p=e['payload']:consult_template(self,self.storage,n,p)); h.addWidget(b)
-            elif e['ref']:
-                b=button('Crear plantilla',role='softAction'); b.clicked.connect(lambda checked=False,r=e['ref']:self.register_existing_document(r)); h.addWidget(b)
+            b=button('Eliminar plantilla',role='softAction'); b.clicked.connect(lambda checked=False,t=e['id']:self.delete_library_template(t)); h.addWidget(b)
             l.addWidget(item)
-        l.addStretch()
+        l.addStretch(); self.library_stack.updateGeometry()
+
+    def delete_library_template(self,tid):
+        from .template_ui import delete_named_template
+        try:
+            affected={i for i,_ in self.storage.template_attempts(tid)}
+            pages=[getattr(self,mode) for mode in ('manual','automatic')]
+            active=[p for p in pages if p.template_id==tid or p.attempt_id in affected]
+            if delete_named_template(self,self.storage,tid,bool(active)):
+                for p in active: p.reset_state()
+                self.refresh_library()
+        except Exception as e: QMessageBox.warning(self,'No se pudo eliminar',str(e))
 
     def make_history(self):
         l=self.page('history'); back=button('Volver al inicio','home'); back.clicked.connect(lambda:self.go('home')); l.addWidget(back,0,Qt.AlignmentFlag.AlignLeft)

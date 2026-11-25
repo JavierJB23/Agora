@@ -6,7 +6,7 @@ import json
 from contextlib import contextmanager
 
 DEFAULTS = {'student_name': '', 'welcome_message': 'Aprende. Comprende. Avanza.'}
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 
 def default_data_dir():
     override = os.environ.get('AGORA_DATA_DIR')
@@ -39,17 +39,39 @@ class Storage:
             if 'listed' not in {r[1] for r in db.execute('PRAGMA table_info(solution_documents)')}:
                 db.execute('ALTER TABLE solution_documents ADD COLUMN listed INTEGER NOT NULL DEFAULT 1')
             if v==6: self._migrate_library(db)
+            # Never recycle template IDs: old snapshots may still reference a deleted ID.
+            db.execute('CREATE TABLE IF NOT EXISTS template_sequence (id INTEGER PRIMARY KEY CHECK(id=1), last_id INTEGER NOT NULL)')
+            high=db.execute('SELECT COALESCE(MAX(id),0) FROM manual_templates').fetchone()[0]
+            for table in ('saved_attempts','manual_draft','automatic_draft'):
+                for (raw,) in db.execute(f'SELECT payload FROM {table}'):
+                    tid=json.loads(raw).get('template_id')
+                    if isinstance(tid,int): high=max(high,tid)
+            db.execute('INSERT INTO template_sequence VALUES (1,?) ON CONFLICT(id) DO UPDATE SET last_id=MAX(last_id,excluded.last_id)',(high,))
+            if v<8: self._detach_stale_template_links(db)
             db.execute(f'PRAGMA user_version = {SCHEMA_VERSION}')
     @staticmethod
+    def _detach_stale_template_links(db):
+        # Older schemas recycled IDs. Preserve attempts, but detach missing or clearly
+        # incompatible links rather than risk deleting unrelated historical records.
+        templates={i:json.loads(raw) for i,raw in db.execute('SELECT id,payload FROM manual_templates')}
+        for table in ('saved_attempts','manual_draft','automatic_draft'):
+            for i,raw in db.execute(f'SELECT id,payload FROM {table}').fetchall():
+                d=json.loads(raw); tid=d.get('template_id')
+                if tid is None: continue
+                p=templates.get(tid)
+                a=Storage.template_pattern(d); b=Storage.template_pattern(p) if p is not None else None
+                same_doc=bool(p and d.get('document_ref') and d['document_ref']==p.get('document_ref'))
+                if p is None or (a is not None and b is not None and a!=b and not same_doc):
+                    d.pop('template_id',None)
+                    db.execute(f'UPDATE {table} SET payload=? WHERE id=?',(json.dumps(d,ensure_ascii=False),i))
+    @staticmethod
     def _migrate_library(db):
-        # v6 stored originals and named keys separately. Recover usable old originals
-        # without assuming that two different exams with the same letters are identical.
+        # v6 stored originals separately. Only reconnect explicitly named templates.
         from dataclasses import asdict
         from .answer_import import extract_key
         from .grading import ExamConfig
         rows=[(tid,name,json.loads(p)) for tid,name,p in db.execute('SELECT id,name,payload FROM manual_templates')]
         linked={p.get('document_ref') for _,_,p in rows}
-        names={name.casefold() for _,name,_ in rows}
         for ref,name,data in db.execute('SELECT id,name,data FROM solution_documents').fetchall():
             if ref in linked: continue
             try:
@@ -62,11 +84,6 @@ class Storage:
             if len(matching)==1:
                 tid,d=matching[0]; d['document_ref']=ref
                 db.execute('UPDATE manual_templates SET payload=? WHERE id=?',(json.dumps(d,ensure_ascii=False),tid)); continue
-            base=c.name; n=base; i=2
-            while n.casefold() in names:
-                suffix=f' ({i})'; n=base[:120-len(suffix)]+suffix; i+=1
-            names.add(n.casefold()); p['config']['name']=n
-            db.execute('INSERT INTO manual_templates(name,payload,created) VALUES (?,?,NULL)',(n,json.dumps(p,ensure_ascii=False)))
 
     @contextmanager
     def connection(self):
@@ -117,7 +134,7 @@ class Storage:
 
 
     def archive_solution_document(self, name, data):
-        """Keep the original bytes independently of attempts and named templates."""
+        """Keep original bytes for an attempt; never register a library template."""
         from hashlib import sha256
         suffix=Path(name).suffix.lower()
         if suffix not in ('.pdf','.docx') or not data or len(data)>100*1024*1024:
@@ -125,7 +142,6 @@ class Storage:
         ref=sha256(suffix.encode()+b'\0'+data).hexdigest()
         with self.connection() as db:
             db.execute('INSERT OR IGNORE INTO solution_documents(id,name,data,created) VALUES (?,?,?,?)',(ref,Path(name).name,data,self.timestamp()))
-            db.execute('UPDATE solution_documents SET listed=1 WHERE id=?',(ref,))
         return ref
 
     def solution_documents(self):
@@ -148,7 +164,10 @@ class Storage:
         if not name or len(name)>120: raise ValueError('Introduce un nombre de hasta 120 caracteres.')
         with self.connection() as db:
             if replace_id is None:
-                return db.execute('INSERT INTO manual_templates(name,payload,created) VALUES (?,?,?)',(name,json.dumps(payload,ensure_ascii=False),self.timestamp())).lastrowid
+                db.execute('UPDATE template_sequence SET last_id=last_id+1 WHERE id=1')
+                tid=db.execute('SELECT last_id FROM template_sequence WHERE id=1').fetchone()[0]
+                db.execute('INSERT INTO manual_templates(id,name,payload,created) VALUES (?,?,?,?)',(tid,name,json.dumps(payload,ensure_ascii=False),self.timestamp()))
+                return tid
             previous=db.execute('SELECT payload FROM manual_templates WHERE id=?',(replace_id,)).fetchone()
             cur=db.execute('UPDATE manual_templates SET name=?,payload=? WHERE id=?',(name,json.dumps(payload,ensure_ascii=False),replace_id))
             if cur.rowcount!=1: raise ValueError('Plantilla no encontrada.')
@@ -175,8 +194,6 @@ class Storage:
             payload=json.loads(raw); ref=payload.get('document_ref'); doc=docs.get(ref)
             if doc: linked.add(ref)
             entries.append(dict(id=tid,name=name,payload=payload,ref=ref if doc else None,filename=doc[0] if doc else None,size=doc[1] if doc else None,created=stamp or (doc[2] if doc else None)))
-        for ref,(name,size,stamp,listed) in docs.items():
-            if ref not in linked and listed: entries.append(dict(id=None,name=name,payload=None,ref=ref,filename=name,size=size,created=stamp))
         if order in ('az','za'):
             entries.sort(key=lambda x:x['name'].casefold(),reverse=order=='za')
         else:
@@ -190,13 +207,34 @@ class Storage:
             rows=db.execute('SELECT id,name,payload FROM manual_templates ORDER BY id DESC').fetchall()
         return [(i,n,json.loads(p)) for i,n,p in rows]
 
-    def delete_template(self, template_id):
+    @staticmethod
+    def _template_attempts(db, template_id):
+        return [(i, (d.get('form') or {}).get('name') or (d.get('config') or {}).get('name') or 'Simulacro sin nombre')
+                for i,raw in db.execute('SELECT id,payload FROM saved_attempts')
+                if (d:=json.loads(raw)).get('template_id')==template_id]
+
+    def template_attempts(self, template_id):
+        with self.connection() as db: return self._template_attempts(db,template_id)
+
+    def delete_template(self, template_id, confirmed_attempts=()):
+        """Atomically remove named template and explicitly confirmed dependent attempts."""
         with self.connection() as db:
+            db.execute('BEGIN IMMEDIATE')
             row=db.execute('SELECT payload FROM manual_templates WHERE id=?',(template_id,)).fetchone()
+            if row is None: return False
+            affected={i for i,_ in self._template_attempts(db,template_id)}
+            if affected!=set(confirmed_attempts):
+                raise ValueError('Los simulacros vinculados han cambiado. Vuelve a confirmar la eliminación.')
+            db.executemany('DELETE FROM saved_attempts WHERE id=?',[(i,) for i in affected])
+            for table in ('manual_draft','automatic_draft'):
+                r=db.execute(f'SELECT payload FROM {table} WHERE id=1').fetchone()
+                if r:
+                    d=json.loads(r[0])
+                    if d.get('template_id')==template_id or d.get('attempt_id') in affected:
+                        db.execute(f'DELETE FROM {table} WHERE id=1')
             db.execute('DELETE FROM manual_templates WHERE id=?',(template_id,))
-            if row:
-                ref=json.loads(row[0]).get('document_ref')
-                if ref: db.execute('UPDATE solution_documents SET listed=0 WHERE id=?',(ref,))
+            self._prune_pages(db)
+            return True
 
     def save_attempt(self, payload, attempt_id=None, pages=()):
         from datetime import datetime, timezone

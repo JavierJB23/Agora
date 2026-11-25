@@ -56,7 +56,7 @@ class ManualPage(QWidget):
                 record=self.storage.load_optical_page(ref); original,aligned,marks=unpack(record,i)
                 for kind,val in (('images',original),('aligned',aligned),('marks',marks),('records',record)):
                     cache.setdefault(kind,{})[i]=val
-        self.optical_cache.clear(); self.optical_cache.update(cache); self.template_id=d.get('template_id'); self.document_ref=d.get('document_ref')
+        self.optical_cache.clear(); self.optical_cache.update(cache); self.template_id=d.get('template_id'); self.template_id=self.template_id if any(i==self.template_id for i,_,_ in self.storage.templates()) else None; self.document_ref=d.get('document_ref')
         self.config=c; self.key=k; self.answers=a; self.key_source=d.get('key_source') or ('Plantilla anterior' if all(k) else ''); self.stage=stage if stage in (0,1,2,3) else 0; self.cursor=max(0,min(int(cursor),c.size-1)); self.result=None
         self.attempt_id=d.get('attempt_id'); self.saved_snapshot=self.storage.load_attempt(self.attempt_id) if self.attempt_id is not None else None
         self.form_override=d.get('form') if self.stage==0 else None
@@ -82,7 +82,7 @@ class ManualPage(QWidget):
     @staticmethod
     def comparable(d):
         if not d: return None
-        return {**{k:d.get(k) for k in ('config','key','answers','key_source','form','document_ref')},'optical_pages':d.get('optical_pages',{}),'corrected':bool(d.get('corrected',d.get('stage')==3))}
+        return {**{k:d.get(k) for k in ('config','key','answers','key_source','form','document_ref','template_id')},'optical_pages':d.get('optical_pages',{}),'corrected':bool(d.get('corrected',d.get('stage')==3))}
 
     def active(self):
         d=self.payload(True)
@@ -271,9 +271,14 @@ class ManualPage(QWidget):
 
     def remove_template(self):
         tid=self.templates_combo.currentData()
-        if tid is not None and confirm(self,'Eliminar plantilla','¿Eliminar la plantilla seleccionada? El borrador actual no se modifica.'):
-            try: self.storage.delete_template(tid); self.refresh_templates()
-            except Exception as e: QMessageBox.warning(self,'No se pudo eliminar',str(e))
+        if tid is None: return
+        from .template_ui import delete_named_template
+        try:
+            active=self.template_id==tid or self.attempt_id in {i for i,_ in self.storage.template_attempts(tid)}
+            if delete_named_template(self,self.storage,tid,active):
+                if active: self.reset_state()
+                else: self.refresh_templates()
+        except Exception as e: QMessageBox.warning(self,'No se pudo eliminar',str(e))
 
     def reset(self):
         if not confirm(self,'Nuevo simulacro','Se borrará el borrador actual y sus cambios no guardados. Las plantillas y los simulacros guardados se conservarán. ¿Continuar?'): return
@@ -308,7 +313,7 @@ class ManualPage(QWidget):
             QMessageBox.warning(self,'No se pudo leer el solucionario',str(e)); return
         self.review_import(imported,name,data)
     def review_import(self,imported,name,data=None):
-        from .template_ui import review_key, named_save
+        from .template_ui import review_key
         options=review_key(self,imported,name,self.config.options)
         if options is None: return
         c=replace(self.config,questions=len(imported.ordinary),reserves=len(imported.reserves),options=options)
@@ -319,12 +324,6 @@ class ManualPage(QWidget):
         except Exception as e: QMessageBox.warning(self,'No se pudo conservar el documento',str(e)); return
         if changed or (any(self.answers) and imported.key!=self.key): self.answers=['']*c.size
         self.install_key(imported,name,c.options,document_ref=ref)
-        if ref:
-            try:
-                payload={'config':asdict(c),'key':list(imported.key),'key_source':name,'document_ref':ref}
-                self.template_id=named_save(self,self.storage,payload,Path(name).stem,automatic=True)
-                self.persist()
-            except Exception as e: QMessageBox.warning(self,'No se pudo registrar la plantilla',str(e))
     def install_key(self,imported,name,options,document_ref=None):
         # Internal operation, after preview/confirmation.
         c=replace(self.config,questions=len(imported.ordinary),reserves=len(imported.reserves),options=options)
@@ -408,7 +407,8 @@ class ManualPage(QWidget):
         from .template_ui import named_save
         try:
             payload={'config':asdict(self.config),'key':list(self.key),'key_source':self.key_source,'document_ref':self.document_ref}
-            tid=named_save(self,self.storage,payload,self.config.name)
+            suggested=next((n for i,n,_ in self.storage.templates() if i==self.template_id),None) or (Path(self.key_source).stem if self.document_ref else self.config.name)
+            tid=named_save(self,self.storage,payload,suggested)
             if tid is not None:
                 self.template_id=tid; self.persist(); self.notice.setText('Plantilla guardada')
         except Exception as e: QMessageBox.warning(self,'No se pudo guardar',str(e))

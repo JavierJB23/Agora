@@ -21,20 +21,10 @@ def review_key(parent, imported, name, default_options=3):
     return options.value() if dlg.exec()==QDialog.DialogCode.Accepted else None
 
 
-def named_save(parent,storage,payload,suggested,automatic=False):
+def named_save(parent,storage,payload,suggested,document=None):
     """Return ID or None. Exact pattern ignores name, scoring and option count."""
     c=ExamConfig(**payload['config']); evaluate(c,payload['key'],['-']*c.size)
     matches=storage.matching_templates(payload)
-    if automatic:
-        # Reimporting the identical file and key needs no new record or dialog.
-        same=next((tid for tid,_,p in matches if payload.get('document_ref') and p.get('document_ref')==payload['document_ref']),None)
-        if same is not None: return same
-        if not matches:
-            base=suggested.strip()[:120] or 'Plantilla'; name=base; i=2
-            names={n.casefold() for _,n,_ in storage.templates()}
-            while name.casefold() in names:
-                suffix=f' ({i})'; name=base[:120-len(suffix)]+suffix; i+=1
-            return storage.save_template(name,dict(payload,config=dict(payload['config'],name=name)))
     replace_id=None
     if matches:
         box=QMessageBox(parent); box.setWindowTitle('Plantilla coincidente'); box.setIcon(QMessageBox.Icon.Question)
@@ -48,13 +38,31 @@ def named_save(parent,storage,payload,suggested,automatic=False):
                 if not ok: return None
                 replace_id,suggested,_=matches[choices.index(chosen)]
         elif box.clickedButton() is not other: return None
-    dlg=QInputDialog(parent); dlg.setWindowTitle('Guardar plantilla'); dlg.setLabelText('Nombre de la plantilla:'); dlg.setTextValue(suggested[:120]); dlg.setOkButtonText('Guardar'); dlg.setCancelButtonText('Cancelar')
-    if dlg.exec()!=QDialog.DialogCode.Accepted: return None
-    name=dlg.textValue().strip()
+    name=ask_template_name(parent,suggested)
+    if name is None: return None
     if not name: return None
     if len(name)>120: raise ValueError('Usa como máximo 120 caracteres.')
     existing=[r for r in storage.templates() if r[1].casefold()==name.casefold() and r[0]!=replace_id]
     if existing:
         QMessageBox.warning(parent,'Nombre ya utilizado','Elige un nombre diferente para distinguir las plantillas.'); return None
     if replace_id is not None and not confirm(parent,'Sobrescribir plantilla','Se sustituirá la plantilla guardada. Los simulacros existentes no cambiarán. ¿Continuar?'): return None
+    if document is not None:
+        payload=dict(payload,document_ref=storage.archive_solution_document(*document))
     return storage.save_template(name,dict(payload,config=dict(payload['config'],name=name)),replace_id=replace_id)
+
+
+def ask_template_name(parent,suggested):
+    dlg=QInputDialog(parent); dlg.setWindowTitle('Guardar plantilla'); dlg.setLabelText('Nombre de la plantilla:'); dlg.setTextValue(suggested[:120]); dlg.setOkButtonText('Guardar'); dlg.setCancelButtonText('Cancelar')
+    return dlg.textValue().strip() if dlg.exec()==QDialog.DialogCode.Accepted else None
+
+
+def delete_named_template(parent,storage,tid,active=False):
+    affected=storage.template_attempts(tid)
+    message='Se va a eliminar la plantilla seleccionada.'
+    if affected:
+        message+=f' Se ha utilizado en {len(affected)} simulacro(s) guardado(s), que también se eliminarán:\n'+'\n'.join(n for _,n in affected)
+    if active: message+='\nEl simulacro actual que utiliza esta plantilla también se cerrará.'
+    message+='\nEsta operación no se puede deshacer. ¿Seguro que quieres continuar?'
+    if not confirm(parent,'Eliminar plantilla',message): return False
+    return storage.delete_template(tid,confirmed_attempts=[i for i,_ in affected])
+
