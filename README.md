@@ -1,3 +1,15 @@
+# ÁGORA v0.6.0 — BLOCK 06 — RC1 (integra ajustes del BLOCK 05)
+
+Actualizar con el paquete completo: subir agora, tests, assets, scripts y archivos raíz. Mantener el windows.yml del BLOCK05 FIX01 (ya incluye prueba del ejecutable real y nombre dinámico). Sin instalar Python en Windows.
+
+Ambos correctores comparten el asistente de configuración, solucionario, respuestas y resultado. En automático, las respuestas se importan por un único botón PC/QR, hasta dos archivos y dos páginas en total, 100 MiB agregados por carga. Puede cargar primero reservas o principal, o añadir la otra página después. Reconoce la distribución de casillas de la plantilla conocida (no OCR general de la numeración), y recentra las reservas por detección de círculos. Solo compatible con el modelo de referencia A/B/C de 120 preguntas ordinarias y 9 reservas como máximo. Fotos completas, verticales, PDF/JPG/JPEG/PNG; HEIC, otras tintas y modelos no soportados. Si el modelo no coincide, rechazar la lectura. Se ignoran las casillas sobrantes según solucionario. Azul claro y ausencia de azul se proponen automáticamente (la ausencia se interpreta como blanco bajo la hipótesis de uso exclusivo de azul); rojo informativo, débiles/dobles y rojo sin azul pendientes. El filtro permite revisar solo pendientes o todas; confirmar el conjunto antes de calificar. No certifica precisión universal. La selección puede modificarse; el motor no cambia.
+
+SQLite migra de esquema 3 a 4, conserva datos y plantillas, añade borrador automático independiente, historial con modo y reapertura correcta. Guarda respuestas, soluciones y configuración; las fotos y recortes no se guardan en la BD, solo se conservan en memoria mientras se trabaja en el intento. Al recuperar después de cerrar, se conservan letras, pero no recortes; reimportar para comprobar visualmente. Hacer copia de la carpeta de datos antes de actualizar; no abrir BD migrada con versiones anteriores.
+
+48 pruebas no gráficas superadas, 12 GUI pendientes por no disponer de PySide6. Probados los dos documentos reales: clasificación y recorte de reservas centrado; en las 107 preguntas del examen, 105 propuestas (72 iguales al solucionario y 33 distintas), 2 pendientes (33 y 60). Plantilla rosa vacía: 120+9 propuestas de blanco. No prueba exactitud letra por letra. QR probado por HTTP local, no en iPhone físico. Windows y EXE pendientes. No distribuir documentos privados.
+
+## Registro de versiones anteriores
+
 # ÁGORA v0.5.1 — BLOCK 05 — FIX01
 
 Actualiza PyInstaller a 6.22.3, añade la dependencia interna de NumPy 2.3 y comprueba el EXE real (arranque Qt, ventana, lectura OMR PNG y PDF) antes de publicar el artefacto. No modifica el esquema de datos ni el lector. Actualizar también windows.yml. Prueba del EXE en Windows pendiente de GitHub Actions.

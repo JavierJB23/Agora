@@ -54,6 +54,13 @@ def smoke_test(report):
             pdf.write(buf)
             if len(omr.decode('test.pdf', buf.getvalue())) != 1:
                 raise RuntimeError('Prueba de render PDF incorrecta')
+            from agora.answer_import import ImportedKey
+            from agora.grading import evaluate
+            m=w.automatic; m.install_key(ImportedKey(('B',),()),'test.pdf',3); m.next_entry()
+            m.reader.install(0,images[0],omr.align(images[0]),marks); m.optical_changed()
+            if m.answers!=['B']: raise RuntimeError('Integración del lector incorrecta')
+            m.result=evaluate(m.config,m.key,m.answers); m.move_stage(3)
+            if m.result.correct!=1 or not m.save_progress(): raise RuntimeError('Corrección automática incorrecta')
             w.go('home')
             w.close()
             app.processEvents()

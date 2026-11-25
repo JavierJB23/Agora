@@ -29,3 +29,6 @@ FIX02 de BLOCK 03–04 (v0.4.2): quitar campos redundantes de configuración; de
 BLOCK 05 RC1: lector experimental de plantilla 120+9 A/B/C, sugerencias azules, recortes y revisión, ajuste manual de esquinas, PDF 1–2 páginas o JPG/PNG desde PC o móvil. No integra puntuación ni guardado de lectura hasta BLOCK 06. Artefacto de GitHub nombrado por VERSION, BLOCK, BUILD_LABEL y número/intento de ejecución.
 
 BLOCK 05 FIX01: actualizar empaquetador y prueba de arranque del EXE real obligatoria antes de publicar; no avanzar hasta validar en Windows.
+
+
+BLOCK 06 RC1: integración del lector en el mismo asistente del manual; importador único para hojas, dos archivos/páginas PC o QR por lote, máximo 100 MiB; orden indiferente por geometría de la plantilla (no OCR de números arbitrarios). Ajuste de reservas por círculos, propuestas de azul/blanco, pendientes filtrables, confirmación conjunta y puntuación. Borradores independientes y modo en historial, migración SQLite 4. Recortes no persistidos; solo letras y datos del examen. Mantener BLOCK 05/06 en validación hasta pruebas en Windows, móvil y revisión de muestra real.

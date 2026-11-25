@@ -26,13 +26,16 @@ test_black_not_guessed (test_omr.OpticalTests.test_black_not_guessed) ... ok
 test_blue_red_and_blank (test_omr.OpticalTests.test_blue_red_and_blank) ... ok
 test_decode_and_alignment (test_omr.OpticalTests.test_decode_and_alignment) ... ok
 test_double (test_omr.OpticalTests.test_double) ... ok
+test_identify_reversed_and_shifted_reserve (test_omr.OpticalTests.test_identify_reversed_and_shifted_reserve) ... ok
 test_layout (test_omr.OpticalTests.test_layout) ... ok
+test_proposals_clear_ambiguous_blank (test_omr.OpticalTests.test_proposals_clear_ambiguous_blank) ... ok
 test_reject_empty (test_omr.OpticalTests.test_reject_empty) ... ok
 test_reserves (test_omr.OpticalTests.test_reserves) ... ok
 test_delete_attempt_preserves_unrelated_draft_and_templates (test_storage.ManualStorageTests.test_delete_attempt_preserves_unrelated_draft_and_templates) ... ok
 test_delete_attempt_removes_linked_recovery (test_storage.ManualStorageTests.test_delete_attempt_removes_linked_recovery) ... ok
 test_draft_roundtrip (test_storage.ManualStorageTests.test_draft_roundtrip) ... ok
 test_saved_attempts_are_independent_of_recovery (test_storage.ManualStorageTests.test_saved_attempts_are_independent_of_recovery) ... ok
+test_separate_automatic_draft_and_history (test_storage.ManualStorageTests.test_separate_automatic_draft_and_history) ... ok
 test_templates_independent (test_storage.ManualStorageTests.test_templates_independent) ... ok
 test_upgrade_from_block01 (test_storage.ManualStorageTests.test_upgrade_from_block01) ... ok
 test_upgrade_from_schema2_preserves_data (test_storage.ManualStorageTests.test_upgrade_from_schema2_preserves_data) ... ok
@@ -41,9 +44,11 @@ test_initialization (test_storage.StorageTests.test_initialization) ... ok
 test_module_registry (test_storage.StorageTests.test_module_registry) ... ok
 test_persistence (test_storage.StorageTests.test_persistence) ... ok
 test_reject_unknown (test_storage.StorageTests.test_reject_unknown) ... ok
+test_batch_two_images_atomic (test_transfer.TransferTests.test_batch_two_images_atomic) ... ok
 test_limit_and_browser_agree (test_transfer.TransferTests.test_limit_and_browser_agree) ... ok
 test_transfer_above_previous_limit (test_transfer.TransferTests.test_transfer_above_previous_limit) ... ok
 test_upload_once_and_token (test_transfer.TransferTests.test_upload_once_and_token) ... ok
+test_automatic_workflow_history_and_excluded_cells (test_ui.UITests.test_automatic_workflow_history_and_excluded_cells) ... skipped 'PySide6 no disponible'
 test_config_structure_only_from_import (test_ui.UITests.test_config_structure_only_from_import) ... skipped 'PySide6 no disponible'
 test_direct_steps_and_current_result (test_ui.UITests.test_direct_steps_and_current_result) ... skipped 'PySide6 no disponible'
 test_exit_and_reentry_dialogs (test_ui.UITests.test_exit_and_reentry_dialogs) ... skipped 'PySide6 no disponible'
@@ -57,6 +62,6 @@ test_view_template_without_replacing_draft (test_ui.UITests.test_view_template_w
 test_wheel_does_not_change_form_controls (test_ui.UITests.test_wheel_does_not_change_form_controls) ... skipped 'PySide6 no disponible'
 
 ----------------------------------------------------------------------
-Ran 55 tests in 0.854s
+Ran 60 tests in 1.064s
 
-OK (skipped=11)
+OK (skipped=12)
