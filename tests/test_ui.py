@@ -35,7 +35,7 @@ class UITests(unittest.TestCase):
     def test_manual_workflow_and_reopen(self):
         with tempfile.TemporaryDirectory() as d:
             w=MainWindow(Storage(d)); w.show(); w.go('manual'); self.app.processEvents(); m=w.manual
-            m.name.setText('Prueba 3'); m.n.setValue(3); m.r.setValue(1); m.apply_config(); self.app.processEvents()
+            m.name.setText('Prueba 3'); m.apply_config(); self.app.processEvents()
             self.assertEqual(m.stage,1)
             m.install_key(ImportedKey(tuple('AXB'),('C',)),'prueba.pdf',3)
             m.next_entry(); self.app.processEvents(); self.assertEqual(m.stage,2)
@@ -50,7 +50,7 @@ class UITests(unittest.TestCase):
     def test_manual_keyboard(self):
         with tempfile.TemporaryDirectory() as d:
             w=MainWindow(Storage(d)); w.show(); w.go('manual'); self.app.processEvents(); m=w.manual
-            m.n.setValue(2); m.r.setValue(0); m.apply_config(); self.app.processEvents(); m.focus_entry(); self.app.processEvents()
+            m.apply_config(); self.app.processEvents(); m.focus_entry(); self.app.processEvents()
             m.install_key(ImportedKey(('C','C'),()),'prueba.pdf',3); self.app.processEvents()
             # Exercise the keyboard handlers via their real QShortcut signals as well as mouse clicks.
             m.shortcuts[0].activated.emit(); self.assertEqual(m.key[0],'A'); self.assertEqual(m.cursor,1)
@@ -61,7 +61,7 @@ class UITests(unittest.TestCase):
     def test_direct_steps_and_current_result(self):
         with tempfile.TemporaryDirectory() as d:
             w=MainWindow(Storage(d)); w.show(); w.go('manual'); self.app.processEvents(); m=w.manual
-            m.n.setValue(2); m.r.setValue(0); m.step_labels[1].click()
+            m.step_labels[1].click()
             self.assertEqual(m.stage,1)
             m.step_labels[2].click(); self.assertEqual(m.stage,1)
             m.install_key(ImportedKey(('A','B'),()),'prueba.pdf',3); m.step_labels[2].click()
@@ -116,7 +116,7 @@ class UITests(unittest.TestCase):
     def test_saved_progress_and_reopen(self):
         with tempfile.TemporaryDirectory() as d:
             s=Storage(d); w=MainWindow(s); w.show(); w.go('manual'); m=w.manual
-            m.name.setText('Parcial'); m.n.setValue(2); m.r.setValue(0); m.apply_config(); m.install_key(ImportedKey(('A','B'),()),'prueba.pdf',3); m.next_entry(); m.choose(0,'A')
+            m.name.setText('Parcial'); m.apply_config(); m.install_key(ImportedKey(('A','B'),()),'prueba.pdf',3); m.next_entry(); m.choose(0,'A')
             self.assertTrue(m.dirty()); self.assertTrue(m.save_progress()); self.assertFalse(m.dirty()); aid=m.attempt_id
             m.choose(1,'C'); self.assertTrue(m.dirty()); self.assertTrue(m.start_new()); self.assertFalse(m.active()); self.assertEqual(len(s.attempts()),1)
             self.assertTrue(m.open_saved(aid)); self.assertEqual(m.answers,['A','']); self.assertFalse(m.dirty())
@@ -153,4 +153,28 @@ class UITests(unittest.TestCase):
             click('Salir sin guardar'); self.assertTrue(ORIGINAL_LEAVE(m)); self.assertEqual(w.storage.load_draft()['form']['name'],'Sin guardar')
             click('Continuar'); self.assertTrue(ORIGINAL_ENTER(m)); self.assertEqual(m.name.text(),'Sin guardar')
             click('Iniciar uno nuevo'); self.assertTrue(ORIGINAL_ENTER(m)); self.assertFalse(m.active()); self.assertIsNone(w.storage.load_draft())
+            w.close(); w.deleteLater(); self.app.processEvents()
+
+    def test_config_structure_only_from_import(self):
+        from PySide6.QtWidgets import QSpinBox
+        with tempfile.TemporaryDirectory() as d:
+            w=MainWindow(Storage(d)); w.show(); w.go('manual'); m=w.manual
+            self.assertFalse(m.content.findChildren(QSpinBox))
+            m.name.setText('Importado'); m.apply_config(); m.install_key(ImportedKey(('A','B','D'),('A',)),'prueba.pdf',4)
+            m.next_entry(); m.choose(0,'A'); m.move_stage(0); m.penalty.setCurrentText('0'); m.apply_config(target=2)
+            self.assertEqual((m.config.questions,m.config.reserves,m.config.options),(3,1,4)); self.assertEqual(m.answers[0],'A'); self.assertEqual(m.config.penalty,'0')
+            w.close(); w.deleteLater(); self.app.processEvents()
+
+    def test_history_delete_confirmation_and_active_draft(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as d:
+            s=Storage(d); w=MainWindow(s); w.show(); w.go('manual'); m=w.manual
+            m.name.setText('Conservar'); m.apply_config(); m.install_key(ImportedKey(('A','B'),()),'prueba.pdf',3); m.next_entry(); m.choose(0,'A'); m.save_progress(); keep=m.attempt_id
+            m.start_new(); m.name.setText('Eliminar'); m.apply_config(); m.install_key(ImportedKey(('B','C'),()),'prueba.pdf',3); m.next_entry(); m.choose(0,'B'); m.save_progress(); remove=m.attempt_id
+            w.go('history')
+            with patch('agora.ui.confirm',return_value=False): w.delete_history(remove,'Eliminar')
+            self.assertEqual(len(s.attempts()),2); self.assertEqual(m.attempt_id,remove)
+            with patch('agora.ui.confirm',return_value=True): w.delete_history(remove,'Eliminar')
+            self.assertEqual([x[0] for x in s.attempts()],[keep]); self.assertIsNone(s.load_draft()); self.assertFalse(m.active())
+            self.assertTrue(m.open_saved(keep)); self.assertEqual(m.answers,['A',''])
             w.close(); w.deleteLater(); self.app.processEvents()

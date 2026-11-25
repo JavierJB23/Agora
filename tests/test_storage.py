@@ -66,3 +66,12 @@ class ManualStorageTests(unittest.TestCase):
             with s.connection() as db:
                 db.execute('DROP TABLE saved_attempts'); db.execute('PRAGMA user_version=2')
             s=Storage(d); self.assertEqual(s.load_draft()['key'],['B']); self.assertEqual(s.templates()[0][1],'Anterior'); self.assertEqual(s.attempts(),[])
+
+    def test_delete_attempt_preserves_unrelated_draft_and_templates(self):
+        with tempfile.TemporaryDirectory() as d:
+            s=Storage(d); a=s.save_attempt({'answers':['A']}); b=s.save_attempt({'answers':['B']}); s.save_template('Plantilla',{'key':['C']})
+            draft=s.load_draft(); self.assertTrue(s.delete_attempt(a)); self.assertIsNone(s.load_attempt(a)); self.assertEqual(s.load_draft(),draft); self.assertEqual(s.load_attempt(b)['answers'],['B']); self.assertEqual(len(s.templates()),1); self.assertFalse(s.delete_attempt(a))
+    def test_delete_attempt_removes_linked_recovery(self):
+        with tempfile.TemporaryDirectory() as d:
+            s=Storage(d); a=s.save_attempt({'answers':['A']}); s.save_draft({'attempt_id':a,'answers':['C']})
+            self.assertTrue(s.delete_attempt(a)); self.assertEqual(s.attempts(),[]); self.assertIsNone(s.load_draft())
