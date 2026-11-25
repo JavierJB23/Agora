@@ -1,3 +1,5 @@
+FIX03 — v0.6.3
+56 pruebas no gráficas superadas, 17 GUI omitidas por falta de PySide6. Ver salida local:
 test_columns_with_reserves (test_answer_import.ImportTests.test_columns_with_reserves) ... ok
 test_compact (test_answer_import.ImportTests.test_compact) ... ok
 test_docx (test_answer_import.ImportTests.test_docx) ... ok
@@ -41,10 +43,12 @@ test_optical_draft_replacement_does_not_change_saved (test_storage.ManualStorage
 test_optical_snapshots_exact_and_shared (test_storage.ManualStorageTests.test_optical_snapshots_exact_and_shared) ... ok
 test_saved_attempts_are_independent_of_recovery (test_storage.ManualStorageTests.test_saved_attempts_are_independent_of_recovery) ... ok
 test_separate_automatic_draft_and_history (test_storage.ManualStorageTests.test_separate_automatic_draft_and_history) ... ok
+test_solution_original_archive_independent (test_storage.ManualStorageTests.test_solution_original_archive_independent) ... ok
 test_templates_independent (test_storage.ManualStorageTests.test_templates_independent) ... ok
 test_upgrade_from_block01 (test_storage.ManualStorageTests.test_upgrade_from_block01) ... ok
 test_upgrade_from_schema2_preserves_data (test_storage.ManualStorageTests.test_upgrade_from_schema2_preserves_data) ... ok
 test_upgrade_from_schema4_keeps_legacy_attempt (test_storage.ManualStorageTests.test_upgrade_from_schema4_keeps_legacy_attempt) ... ok
+test_upgrade_from_schema5_preserves_documents_and_attempts (test_storage.ManualStorageTests.test_upgrade_from_schema5_preserves_documents_and_attempts) ... ok
 test_future_db_not_downgraded (test_storage.StorageTests.test_future_db_not_downgraded) ... ok
 test_initialization (test_storage.StorageTests.test_initialization) ... ok
 test_module_registry (test_storage.StorageTests.test_module_registry) ... ok
@@ -61,18 +65,20 @@ test_direct_steps_and_current_result (test_ui.UITests.test_direct_steps_and_curr
 test_exit_and_reentry_dialogs (test_ui.UITests.test_exit_and_reentry_dialogs) ... skipped 'PySide6 no disponible'
 test_history_delete_confirmation_and_active_draft (test_ui.UITests.test_history_delete_confirmation_and_active_draft) ... skipped 'PySide6 no disponible'
 test_import_source_tiles_and_mobile_page (test_ui.UITests.test_import_source_tiles_and_mobile_page) ... skipped 'PySide6 no disponible'
+test_library_documents_and_fresh_entry_from_history (test_ui.UITests.test_library_documents_and_fresh_entry_from_history) ... skipped 'PySide6 no disponible'
 test_manual_keyboard (test_ui.UITests.test_manual_keyboard) ... skipped 'PySide6 no disponible'
 test_manual_workflow_and_reopen (test_ui.UITests.test_manual_workflow_and_reopen) ... skipped 'PySide6 no disponible'
 test_navigation_and_settings (test_ui.UITests.test_navigation_and_settings) ... skipped 'PySide6 no disponible'
 test_optical_reopen_images_and_review (test_ui.UITests.test_optical_reopen_images_and_review) ... skipped 'PySide6 no disponible'
+test_same_template_consult_does_not_change_name_or_answers (test_ui.UITests.test_same_template_consult_does_not_change_name_or_answers) ... skipped 'PySide6 no disponible'
 test_saved_progress_and_reopen (test_ui.UITests.test_saved_progress_and_reopen) ... skipped 'PySide6 no disponible'
 test_template_auto_load_cancel_preserves_active (test_ui.UITests.test_template_auto_load_cancel_preserves_active) ... skipped 'PySide6 no disponible'
 test_view_template_without_replacing_draft (test_ui.UITests.test_view_template_without_replacing_draft) ... skipped 'PySide6 no disponible'
 test_wheel_does_not_change_form_controls (test_ui.UITests.test_wheel_does_not_change_form_controls) ... skipped 'PySide6 no disponible'
 
 ----------------------------------------------------------------------
-Ran 69 tests in 1.875s
+Ran 73 tests in 1.755s
 
-OK (skipped=15)
+OK (skipped=17)
 
-Prueba real externa (no distribuida): alineación automática y manual por centros, 106 de 107 propuestas, pendiente 33; al elegir B, 74 aciertos, 33 errores, nota 5,89. Reservas reales: 9 blancos en ambos modos. 54 pruebas no gráficas, 15 GUI no ejecutadas aquí.
+Verificación adicional: originales de los dos solucionarios reales archivados y recuperados byte a byte; render de su primera página con pypdfium2. GUI y EXE Windows pendientes.

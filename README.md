@@ -1,4 +1,11 @@
-# ÁGORA v0.6.2 — BLOCK 06 — FIX02
+# ÁGORA v0.6.3 — BLOCK 06 — FIX03
+
+## FIX03 — biblioteca y nuevo ciclo del simulacro
+- Al entrar desde Inicio o el menú lateral en cualquiera de los correctores se inicia un simulacro nuevo. Solo Mis simulacros abre intentos archivados. Al salir, guardar y salir archiva; salir sin guardar descarta el borrador y conserva la última versión archivada; cancelar mantiene la pantalla. Se mantiene el guardado temporal interno durante el trabajo, pero no se ofrece recuperación automática al entrar. Los antiguos borradores sin archivar no reaparecerán.
+- Si el examen está vacío, la plantilla elegida se carga automáticamente. Si ya existe trabajo, seleccionar una plantilla no lo cambia; Usar plantilla permite sustituirla explícitamente previa confirmación. Consultar es siempre de solo lectura.
+- Mi temario > Mis plantillas muestra los documentos originales (PDF/DOCX) aceptados en ambos correctores y las plantillas reutilizables. El PDF se consulta dentro de Ágora y puede guardarse una copia; Word conserva sus bytes y permite exportar copia. Los originales se archivan automáticamente y se deduplican por contenido y extensión. No se pueden recuperar los archivos originales de importaciones anteriores: se conservan las letras y plantillas antiguas; reimportar para archivar el archivo. Eliminar una plantilla o intento no borra los originales. Mis temas sigue pendiente de BLOCK 09.
+- SQLite esquema 6 conserva los datos anteriores. Realizar copia antes de actualizar. No usar una base migrada con EXE anteriores. No se modifica OMR ni puntuación.
+- Las notas históricas de versiones anteriores se incluyen a continuación; las reglas de FIX03 prevalecen.
 
 Actualización acumulativa. Subir agora, assets, tests, scripts y archivos de raíz a GitHub. Mantener windows.yml del BLOCK 05 FIX01. No instalar Python. Guardar una copia de la carpeta de datos con Ágora cerrado antes de actualizar: se migra de SQLite 4 a 5; no abrir esa BD con un EXE anterior.
 
