@@ -61,6 +61,10 @@ def smoke_test(report):
             if m.answers!=['B']: raise RuntimeError('Integración del lector incorrecta')
             m.result=evaluate(m.config,m.key,m.answers); m.move_stage(3)
             if m.result.correct!=1 or not m.save_progress(): raise RuntimeError('Corrección automática incorrecta')
+            aid=m.attempt_id
+            if not m.start_new() or not m.open_saved(aid): raise RuntimeError('Recuperación del simulacro incorrecta')
+            m.move_stage(2)
+            if not np.array_equal(m.reader.images[0],images[0]) or m.reader.marks[0]!=marks or m.answers!=['B']: raise RuntimeError('Recuperación de imágenes o respuestas incorrecta')
             w.go('home')
             w.close()
             app.processEvents()

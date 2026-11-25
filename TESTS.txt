@@ -28,6 +28,8 @@ test_decode_and_alignment (test_omr.OpticalTests.test_decode_and_alignment) ... 
 test_double (test_omr.OpticalTests.test_double) ... ok
 test_identify_reversed_and_shifted_reserve (test_omr.OpticalTests.test_identify_reversed_and_shifted_reserve) ... ok
 test_layout (test_omr.OpticalTests.test_layout) ... ok
+test_manual_grid_anchors_with_crop_and_perspective (test_omr.OpticalTests.test_manual_grid_anchors_with_crop_and_perspective) ... ok
+test_manual_grid_invalid_order (test_omr.OpticalTests.test_manual_grid_invalid_order) ... ok
 test_proposals_clear_ambiguous_blank (test_omr.OpticalTests.test_proposals_clear_ambiguous_blank) ... ok
 test_reject_empty (test_omr.OpticalTests.test_reject_empty) ... ok
 test_reserves (test_omr.OpticalTests.test_reserves) ... ok
@@ -35,11 +37,14 @@ test_shifted_main_grid_preserves_rows (test_omr.OpticalTests.test_shifted_main_g
 test_delete_attempt_preserves_unrelated_draft_and_templates (test_storage.ManualStorageTests.test_delete_attempt_preserves_unrelated_draft_and_templates) ... ok
 test_delete_attempt_removes_linked_recovery (test_storage.ManualStorageTests.test_delete_attempt_removes_linked_recovery) ... ok
 test_draft_roundtrip (test_storage.ManualStorageTests.test_draft_roundtrip) ... ok
+test_optical_draft_replacement_does_not_change_saved (test_storage.ManualStorageTests.test_optical_draft_replacement_does_not_change_saved) ... ok
+test_optical_snapshots_exact_and_shared (test_storage.ManualStorageTests.test_optical_snapshots_exact_and_shared) ... ok
 test_saved_attempts_are_independent_of_recovery (test_storage.ManualStorageTests.test_saved_attempts_are_independent_of_recovery) ... ok
 test_separate_automatic_draft_and_history (test_storage.ManualStorageTests.test_separate_automatic_draft_and_history) ... ok
 test_templates_independent (test_storage.ManualStorageTests.test_templates_independent) ... ok
 test_upgrade_from_block01 (test_storage.ManualStorageTests.test_upgrade_from_block01) ... ok
 test_upgrade_from_schema2_preserves_data (test_storage.ManualStorageTests.test_upgrade_from_schema2_preserves_data) ... ok
+test_upgrade_from_schema4_keeps_legacy_attempt (test_storage.ManualStorageTests.test_upgrade_from_schema4_keeps_legacy_attempt) ... ok
 test_future_db_not_downgraded (test_storage.StorageTests.test_future_db_not_downgraded) ... ok
 test_initialization (test_storage.StorageTests.test_initialization) ... ok
 test_module_registry (test_storage.StorageTests.test_module_registry) ... ok
@@ -50,6 +55,7 @@ test_limit_and_browser_agree (test_transfer.TransferTests.test_limit_and_browser
 test_transfer_above_previous_limit (test_transfer.TransferTests.test_transfer_above_previous_limit) ... ok
 test_upload_once_and_token (test_transfer.TransferTests.test_upload_once_and_token) ... ok
 test_automatic_workflow_history_and_excluded_cells (test_ui.UITests.test_automatic_workflow_history_and_excluded_cells) ... skipped 'PySide6 no disponible'
+test_clear_template_and_pending_number (test_ui.UITests.test_clear_template_and_pending_number) ... skipped 'PySide6 no disponible'
 test_config_structure_only_from_import (test_ui.UITests.test_config_structure_only_from_import) ... skipped 'PySide6 no disponible'
 test_direct_steps_and_current_result (test_ui.UITests.test_direct_steps_and_current_result) ... skipped 'PySide6 no disponible'
 test_exit_and_reentry_dialogs (test_ui.UITests.test_exit_and_reentry_dialogs) ... skipped 'PySide6 no disponible'
@@ -58,14 +64,15 @@ test_import_source_tiles_and_mobile_page (test_ui.UITests.test_import_source_til
 test_manual_keyboard (test_ui.UITests.test_manual_keyboard) ... skipped 'PySide6 no disponible'
 test_manual_workflow_and_reopen (test_ui.UITests.test_manual_workflow_and_reopen) ... skipped 'PySide6 no disponible'
 test_navigation_and_settings (test_ui.UITests.test_navigation_and_settings) ... skipped 'PySide6 no disponible'
+test_optical_reopen_images_and_review (test_ui.UITests.test_optical_reopen_images_and_review) ... skipped 'PySide6 no disponible'
 test_saved_progress_and_reopen (test_ui.UITests.test_saved_progress_and_reopen) ... skipped 'PySide6 no disponible'
 test_template_auto_load_cancel_preserves_active (test_ui.UITests.test_template_auto_load_cancel_preserves_active) ... skipped 'PySide6 no disponible'
 test_view_template_without_replacing_draft (test_ui.UITests.test_view_template_without_replacing_draft) ... skipped 'PySide6 no disponible'
 test_wheel_does_not_change_form_controls (test_ui.UITests.test_wheel_does_not_change_form_controls) ... skipped 'PySide6 no disponible'
 
 ----------------------------------------------------------------------
-Ran 62 tests in 1.260s
+Ran 69 tests in 1.875s
 
-OK (skipped=13)
+OK (skipped=15)
 
-Prueba real local: 106/107 propuestas, pendiente 33 (B), al confirmar 74 aciertos, 33 errores, 0 blancos, 5,89. 120+9 recortes revisados visualmente. Plantilla vacía: 120+9 blancos. No se incluyen documentos privados.
+Prueba real externa (no distribuida): alineación automática y manual por centros, 106 de 107 propuestas, pendiente 33; al elegir B, 74 aciertos, 33 errores, nota 5,89. Reservas reales: 9 blancos en ambos modos. 54 pruebas no gráficas, 15 GUI no ejecutadas aquí.

@@ -1,3 +1,15 @@
+# ÁGORA v0.6.2 — BLOCK 06 — FIX02
+
+Actualización acumulativa. Subir agora, assets, tests, scripts y archivos de raíz a GitHub. Mantener windows.yml del BLOCK 05 FIX01. No instalar Python. Guardar una copia de la carpeta de datos con Ágora cerrado antes de actualizar: se migra de SQLite 4 a 5; no abrir esa BD con un EXE anterior.
+
+- Quitar plantilla: deselecciona el solucionario cargado y, previa confirmación, limpia las respuestas asociadas del borrador sin eliminar plantillas ni simulacros archivados. Conserva los datos de configuración visibles. Si solo se había seleccionado una plantilla y se rechazó su carga, se puede deseleccionar sin modificar el solucionario importado independiente.
+- Números pendientes en el corrector manual: rosa más intenso; el guion registrado como blanco no cuenta como pendiente. El cursor conserva su borde resaltado.
+- Persistencia óptica: guarda las imágenes de página a la resolución de lectura (no el PDF/fichero original), imágenes alineadas y coordenadas de recorte, junto con las respuestas revisadas. SQLite guarda snapshots PNG sin pérdida, compartidos entre borrador e historial y eliminados al quedar sin referencias. Recuperar sin nueva importación, consultar en Respuestas > Ver hoja y casillas (Hoja original / Casillas leídas). Los simulacros de versiones anteriores no guardaban imágenes: no pueden recuperarse retroactivamente; reimportar si se necesita y guardar de nuevo. El tamaño de la BD aumenta con las fotos.
+- Ajustar alineación sustituye el ajuste de esquinas del papel: señalar los centros en orden 1A, 91C, 120C, 30A (ordinarias) o R1A, R7C, R9C, R3A (reservas). Zoom ×2/×3, deshacer y reiniciar puntos; alternativa Alineación automática. Si la nueva lectura falla se conserva la anterior. Si la detección inicial falla se ofrece indicar tipo de hoja y ajustar manualmente. El ajuste que sí se acepta vuelve a interpretar la página (con confirmación si ya estaba cargada); revisar cambios antes de corregir. Sigue siendo específico de la plantilla 120+9 A/B/C.
+- 54 pruebas no gráficas superadas y 15 GUI pendientes (PySide6 no disponible). Hoja real: tanto alineación automática como manual por círculos reproducen 106 propuestas y la 33 pendiente; al elegir B, 74 aciertos, 33 errores, 5,89. Reservas reales sin marcas: nueve blancos con ambos métodos. La prueba del EXE comprueba también recuperación de imágenes. Pendiente probar diálogos, zoom, reapertura visual y EXE en Windows. No se incluyen documentos privados.
+
+---
+
 # ÁGORA v0.6.1 — BLOCK 06 — FIX01
 
 Actualización acumulativa sobre v0.6.0 validada por el usuario (nota 5,89; 74 aciertos, 33 errores). Sin cambios en SQLite, dependencias ni windows.yml. Subir agora, assets, tests, scripts y archivos de raíz. No instalar Python en Windows. Nombre de artefacto dinámico.

@@ -35,3 +35,6 @@ BLOCK 06 RC1: integración del lector en el mismo asistente del manual; importad
 
 
 BLOCK 06 FIX01 (v0.6.1): usuario confirmó nota 5,89, 74/33 y resto de flujo RC1; pendiente perfeccionar recortes. Nueva alineación por círculos de ambas páginas y ajuste por fila. Interfaz compacta, carga automática de plantillas con protección ante sustitución y consulta/eliminación conservadas, modo visible junto al nombre en historial. Pendiente validar FIX01 antes de cerrar 05–06 STABLE.
+
+
+BLOCK 06 FIX02 (v0.6.2): quitar plantilla sin borrar archivo guardado; resaltar números pendientes manuales; persistir imágenes de lectura, alineación y recortes en SQLite 5 junto con respuestas confirmadas; conservar originales visuales al reabrir, no PDF binario. Ajustar por cuatro centros de círculos específicos (zoom/deshacer/reiniciar/auto), mantener lectura anterior si falla. Las fotos de versiones previas no son recuperables automáticamente. Validar antes de STABLE.
