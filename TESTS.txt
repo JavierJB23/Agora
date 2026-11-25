@@ -57,6 +57,6 @@ test_view_template_without_replacing_draft (test_ui.UITests.test_view_template_w
 test_wheel_does_not_change_form_controls (test_ui.UITests.test_wheel_does_not_change_form_controls) ... skipped 'PySide6 no disponible'
 
 ----------------------------------------------------------------------
-Ran 55 tests in 0.897s
+Ran 55 tests in 0.854s
 
 OK (skipped=11)

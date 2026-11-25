@@ -27,3 +27,5 @@ FIX01 de BLOCK 03–04: importación en dos tarjetas con iconos y pantalla QR se
 FIX02 de BLOCK 03–04 (v0.4.2): quitar campos redundantes de configuración; detectar ordinarias y reservas desde solucionario, confirmar opciones únicamente durante importación (la mayor letra es un mínimo). Mis simulacros permite eliminar con confirmación irreversible, incluyendo borrador vinculado si existe, sin afectar a otros intentos ni plantillas. FIX01 validado por usuario; FIX02 COMPLETO validado por el usuario en Windows. BLOCK 03–04 STABLE para corrector manual.
 
 BLOCK 05 RC1: lector experimental de plantilla 120+9 A/B/C, sugerencias azules, recortes y revisión, ajuste manual de esquinas, PDF 1–2 páginas o JPG/PNG desde PC o móvil. No integra puntuación ni guardado de lectura hasta BLOCK 06. Artefacto de GitHub nombrado por VERSION, BLOCK, BUILD_LABEL y número/intento de ejecución.
+
+BLOCK 05 FIX01: actualizar empaquetador y prueba de arranque del EXE real obligatoria antes de publicar; no avanzar hasta validar en Windows.
