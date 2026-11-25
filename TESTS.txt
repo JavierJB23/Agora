@@ -22,6 +22,13 @@ test_real_size_example (test_grading.GradingTests.test_real_size_example) ... ok
 test_replacement_order (test_grading.GradingTests.test_replacement_order) ... ok
 test_unused_reserves (test_grading.GradingTests.test_unused_reserves) ... ok
 test_zero_penalty (test_grading.GradingTests.test_zero_penalty) ... ok
+test_black_not_guessed (test_omr.OpticalTests.test_black_not_guessed) ... ok
+test_blue_red_and_blank (test_omr.OpticalTests.test_blue_red_and_blank) ... ok
+test_decode_and_alignment (test_omr.OpticalTests.test_decode_and_alignment) ... ok
+test_double (test_omr.OpticalTests.test_double) ... ok
+test_layout (test_omr.OpticalTests.test_layout) ... ok
+test_reject_empty (test_omr.OpticalTests.test_reject_empty) ... ok
+test_reserves (test_omr.OpticalTests.test_reserves) ... ok
 test_delete_attempt_preserves_unrelated_draft_and_templates (test_storage.ManualStorageTests.test_delete_attempt_preserves_unrelated_draft_and_templates) ... ok
 test_delete_attempt_removes_linked_recovery (test_storage.ManualStorageTests.test_delete_attempt_removes_linked_recovery) ... ok
 test_draft_roundtrip (test_storage.ManualStorageTests.test_draft_roundtrip) ... ok
@@ -50,6 +57,6 @@ test_view_template_without_replacing_draft (test_ui.UITests.test_view_template_w
 test_wheel_does_not_change_form_controls (test_ui.UITests.test_wheel_does_not_change_form_controls) ... skipped 'PySide6 no disponible'
 
 ----------------------------------------------------------------------
-Ran 48 tests in 0.607s
+Ran 55 tests in 0.897s
 
 OK (skipped=11)
