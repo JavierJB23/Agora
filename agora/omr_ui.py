@@ -64,6 +64,7 @@ class OpticalPage(QWidget):
         return v if v in (*self.config.letters,'-') else ''
     def choose_numbering(self,aligned,blocks):
         import cv2 as cv
+        import numpy as np
         shown=aligned.copy(); next_number=1; defaults=[]; details=[]
         for i,((x,y,w,h),marks) in enumerate(blocks):
             corners=[pt for m in marks for pt in m.quad]
