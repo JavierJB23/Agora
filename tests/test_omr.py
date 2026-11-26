@@ -239,3 +239,47 @@ class ManualColumnAndStrikeTests(unittest.TestCase):
         marks=omr.flag_strikes(im,marks)
         self.assertEqual([len(b) for b in omr.reading_blocks(marks)],[10,10]); self.assertIn('Posible anulada',marks[1].status)
         self.assertEqual(omr.proposed(marks[1]),''); self.assertEqual(omr.proposed(marks[0]),'C')
+
+class AutomaticColorTests(unittest.TestCase):
+    def test_colored_known_template_and_red_stroke(self):
+        im=np.full((omr.HEIGHT,omr.WIDTH,3),255,np.uint8)
+        for i,(_,xs,y) in enumerate(omr.locations(0)):
+            if i%2: cv.rectangle(im,(xs[0]-55,y-18),(xs[-1]+30,y+18),(255,222,234),-1)
+            for j,x in enumerate(xs):
+                cv.circle(im,(x,y),10,(200,55,130),2)
+                cv.putText(im,'ABC'[j],(x-4,y+4),cv.FONT_HERSHEY_SIMPLEX,.3,(200,55,130),1,cv.LINE_AA)
+        mark(im,0,0,1,(20,40,120)); mark(im,0,11,1,(20,40,120))
+        _,xs,y=list(omr.locations(0))[11]; cv.line(im,(xs[0]-17,y),(xs[-1]+17,y),(145,115,120),2)
+        _,marks=omr.automatic_page(im,120,0,3)
+        self.assertEqual(omr.proposed(marks[0]),'B')
+        self.assertEqual([m.number for m in marks if 'Posible anulada' in m.status],['12'])
+        self.assertEqual([omr.proposed(m) for m in marks].count('-'),118)
+
+    def test_new_blue_layout_not_fixed_coordinates(self):
+        im=np.full((omr.HEIGHT,omr.WIDTH,3),250,np.uint8)
+        for c,bx in enumerate([150,550,925]):
+            for r in range(20):
+                y=200+r*45
+                cv.putText(im,str(c*20+r+1),(bx-65,y+5),cv.FONT_HERSHEY_SIMPLEX,.45,(60,110,150),1)
+                for j in range(3):
+                    x=bx+j*35; cv.circle(im,(x,y),10,(95,165,230),2)
+                    if r==5 and j==1:
+                        cv.line(im,(x-7,y-7),(x+7,y+7),(20,40,120),3)
+                        cv.line(im,(x-7,y+7),(x+7,y-7),(20,40,120),3)
+        _,marks=omr.automatic_page(im,60,0,3)
+        self.assertEqual(len(marks),60)
+        self.assertEqual([(m.number,omr.proposed(m)) for m in marks if omr.proposed(m)!='-'],[('6','B'),('26','B'),('46','B')])
+
+    def test_square_auto_numbering_without_dialog(self):
+        im=square_sheet(); _,marks=omr.automatic_page(im,20,0,3)
+        self.assertEqual([m.number for m in marks],list(map(str,range(1,21))))
+        self.assertEqual([omr.proposed(marks[i]) for i in (0,10)],['C','C'])
+        self.assertTrue(all(len(m.scores)==4 for m in marks))
+
+    def test_auto_numbering_rejects_unmapped_partial_page(self):
+        blocks=omr.square_blocks(square_sheet())
+        with self.assertRaises(ValueError): omr.automatic_numbering(blocks,30,0)
+        self.assertEqual([m.number for m in omr.automatic_numbering(blocks,18,0)],list(map(str,range(1,21))))
+        # Only a separate short block at the configured boundary is inferred as reserves.
+        reserves=[blocks[0],(blocks[1][0],blocks[1][1][:3])]
+        self.assertEqual(omr.automatic_numbering(reserves,10,3)[-1].number,'R3')

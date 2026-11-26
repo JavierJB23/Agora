@@ -436,3 +436,19 @@ class UITests(unittest.TestCase):
         self.assertEqual(menus[0],menus[1])
         self.assertIn('Ajuste por bloques',menus[0]); self.assertIn('Redefinir bloques',menus[0])
         self.assertIn('Restablecer automática',menus[0]); self.assertNotIn('Ajuste por referencias',menus[0])
+
+    def test_successful_import_and_reset_never_open_numbering(self):
+        from unittest.mock import patch
+        from agora.omr_ui import OpticalPage
+        from agora.grading import ExamConfig
+        from agora import omr
+        from test_omr import square_sheet
+        im=square_sheet(); marks=omr.number_blocks(omr.square_blocks(im),['1','11'])
+        page=OpticalPage(ExamConfig(questions=20,reserves=0),['']*20,{},lambda:None)
+        with patch.object(omr,'automatic_page',return_value=(im,marks)) as detect,patch.object(page,'choose_numbering',side_effect=AssertionError('No debe abrir numeración')),patch.object(page,'alignment_workspace',side_effect=AssertionError('No debe abrir ajuste')):
+            self.assertEqual(page.read_page(im)[1],marks)
+            self.assertEqual(page.automatic_candidate(im)[1],marks)
+            self.assertEqual(detect.call_count,2)
+        with patch.object(omr,'automatic_page',side_effect=ValueError('Lectura incierta')),patch.object(page,'alignment_workspace',return_value=None) as fallback:
+            self.assertIsNone(page.read_page(im)); fallback.assert_called_once()
+        page.deleteLater(); self.app.processEvents()
