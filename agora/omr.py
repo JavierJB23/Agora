@@ -746,7 +746,7 @@ def automatic_numbering(blocks, questions, reserves=0, previous=None):
         if [(len(b),len(b[0].scores)) for b in old]==[(len(ms),len(ms[0].scores)) for _,ms in blocks]:
             return number_blocks(blocks,[b[0].number for b in old])
     if sum(sizes)<questions:
-        raise ValueError('La hoja no cubre todas las preguntas ordinarias. Si es una página parcial o de reservas, indica su numeración en Ajustar alineación.')
+        raise ValueError('La hoja no cubre todas las preguntas ordinarias. No se puede verificar su numeración automáticamente.')
     starts=[]; n=1; r=1
     # Infer reserves only when separate blocks start exactly at the configured
     # boundary and their sizes are clearly distinct from the ordinary columns.
@@ -755,6 +755,22 @@ def automatic_numbering(blocks, questions, reserves=0, previous=None):
         if split is not None and i>=split: starts.append('R'+str(r)); r+=size
         else: starts.append(str(n)); n+=size
     return number_blocks(blocks,starts)
+
+
+def header_end(gray, x, half=34):
+    """Locate a broad printed header locally, independent of hue or tilt.
+    Unlike isolated letters or marks, the dark bar covers most of the strip.
+    Return its lower edge, or None when there is no reliable header."""
+    x=int(x); a=max(0,x-half); b=min(gray.shape[1],x+half+1)
+    profile=np.median(gray[:,a:b],axis=1).astype(np.float32)
+    base=cv.dilate(profile[:,None],np.ones((81,1),np.uint8)).ravel()
+    dark=(base-profile>48)&(profile<160)
+    dark[:260]=False; dark[620:]=False
+    runs=np.split(np.flatnonzero(dark),np.where(np.diff(np.flatnonzero(dark))>1)[0]+1)
+    candidates=[r for r in runs if 10<=len(r)<=55 and r[-1]<619]
+    if not candidates: return None
+    best=max(candidates,key=lambda r:float(np.mean(base[r]-profile[r]))*min(len(r),22))
+    return int(best[-1])
 
 
 def repeated_circle_rows(im):
@@ -780,7 +796,9 @@ def repeated_circle_rows(im):
     if min(gaps)<120 or max(gaps)>min(gaps)*1.4: raise ValueError('Separación de columnas irregular.')
     # Fit all 30 row indices, including missing rows, with a quadratic pitch model.
     ring,square=_shape_response(np.repeat(gray[...,None],3,axis=2)); output=[]; span=None
-    for g in tracks:
+    headers=[header_end(gray,np.median(g[:,0])) for g in tracks]
+    anchored=all(h is not None for h in headers) and max(headers)-min(headers)<160
+    for col,g in enumerate(tracks):
         med=np.median(g,axis=0); rr=np.arange(30)
         # The horizontal morphology is only a coarse seed. Find triplets by
         # their real outlines, including rows whose ink hides a component.
@@ -805,17 +823,25 @@ def repeated_circle_rows(im):
         peaks=np.array([k for k in peaks if not is_header(k)],dtype=int)
         if len(peaks)<25: raise ValueError('Filas insuficientes tras excluir cabeceras.')
         y=ys[peaks]; strengths=prof[peaks]
-        starts=np.arange(290,570,2) if span is None else np.arange(max(270,span[0]-25),span[0]+26,2)
+        anchor=headers[col] if anchored else None
+        if anchor is not None:
+            starts=np.arange(anchor+5,anchor+40,1)
+        else:
+            starts=np.arange(290,570,2) if span is None else np.arange(max(270,span[0]-25),span[0]+26,2)
         pitch=np.arange(24,45,.5); bend=np.arange(-.14,.141,.025)
         s,p,b=np.meshgrid(starts,pitch,bend,indexing='ij'); s,p,b=s.ravel(),p.ravel(),b.ravel()
         pred=s[:,None]+p[:,None]*rr+b[:,None]*rr*(rr-29)
-        if span is not None:
+        if span is not None and not anchored:
             keep=(abs(pred[:,-1]-span[1])<45); pred=pred[keep]; p=p[keep]
         if not len(pred): raise ValueError('No coincide la numeración de columnas.')
         jj=np.searchsorted(y,pred); l=np.clip(jj-1,0,len(y)-1); r=np.clip(jj,0,len(y)-1); ids=np.where(abs(y[l]-pred)<=abs(y[r]-pred),l,r)
         d=abs(y[ids]-pred); valid=d<p[:,None]*.27
         score=np.where(valid,np.minimum(strengths[ids],45)-1.3*d,-8).sum(1)
-        if span is not None: score-=.45*(abs(pred[:,0]-span[0])+abs(pred[:,-1]-span[1]))
+        if anchor is not None:
+            offset=(pred[:,0]-anchor)/p
+            score-=np.abs(offset-.50)*35
+            score[(offset<.24)|(offset>.90)]=-1e6
+        elif span is not None: score-=.45*(abs(pred[:,0]-span[0])+abs(pred[:,-1]-span[1]))
         score[(valid.sum(1)<25)|~valid[:,0]|~valid[:,-1]]=-1e6
         k=int(score.argmax())
         if score[k]<200: raise ValueError('Secuencia de filas no verificada.')
@@ -901,34 +927,78 @@ def scan_repeated_rows(im, positions, extended=True):
         marks.append(m)
     return marks
 
+def verify_numbered_rows(im, marks):
+    """Never accept a dark printed header as an answer or a broken column.
+    For the recognizable four-column 30-row family, require full columns and
+    validate their starts against the printed headers if present."""
+    gray=geometry_gray(im)
+    blocks=reading_blocks(marks)
+    for m in marks:
+        crop=crop_image(im,m)
+        if crop.size and min(crop.shape[:2])>=4:
+            g=geometry_gray(crop)
+            # A filled header has dark ink throughout the crop, unlike bubbles.
+            if np.mean(g<150)>.65 and np.median(g)<120 and np.mean((g<150).mean(axis=0)>.70)>.66:
+                raise ValueError('Se ha detectado una cabecera como posible respuesta.')
+    if len(marks)>=100 and all(len(m.scores)==3 and not m.number.startswith('R') for m in marks):
+        # Group by physical x position as well as consecutive numbering. A
+        # missed row may split one logical block into multiple fragments.
+        centers=[(m.crop[0]+m.crop[2])/2 for m in marks]
+        width=float(np.median([m.crop[2]-m.crop[0] for m in marks]))
+        groups=[]
+        for x,m in sorted(zip(centers,marks),key=lambda t:t[0]):
+            if not groups or x-np.median([a for a,_ in groups[-1]])>width*.85: groups.append([])
+            groups[-1].append((x,m))
+        if len(groups)==4:
+            headers=[header_end(gray,np.median([x for x,_ in g])) for g in groups]
+            if all(h is not None for h in headers):
+                if len(blocks)!=4 or max(map(len,groups))-min(map(len,groups))>1:
+                    raise ValueError('No se ha podido verificar la numeración completa de las columnas.')
+                for b,h in zip(groups,headers):
+                    ys=np.sort([(m.crop[1]+m.crop[3])/2 for _,m in b]); pitch=float(np.median(np.diff(ys)))
+                    if pitch<=0 or not .15*pitch<ys[0]-h<1.1*pitch or np.any(abs(np.diff(ys)-pitch)>.48*pitch):
+                        raise ValueError('La primera fila o la secuencia de preguntas no coincide con la cabecera.')
+    return marks
+
+
 def automatic_page(im, questions, reserves=0, options=3, previous=None):
-    """Common no-dialog reader. The image is always kept for explicit adjustment."""
+    """Try independent normalizations; only install a verified row sequence."""
     aligned=align(im)
+    raw=original_canvas(im)[0]
+    errors=[]
     if options<=3 and questions<=120:
-        try: return aligned,scan_repeated_rows(aligned,repeated_circle_rows(aligned))
-        except ValueError: pass
-    # Known template remains the preferred route, with a color-contrast fallback.
-    for candidate in (aligned,):
+        # Preserve the actual camera aspect ratio first; a global paper warp
+        # can introduce artifacts when the photographed page is curved.
+        for candidate in (raw,aligned):
+            try:
+                positions=repeated_circle_rows(candidate)
+                marks=scan_repeated_rows(candidate,positions)
+                return candidate,verify_numbered_rows(candidate,marks)
+            except ValueError as e: errors.append(str(e))
+    for candidate in (aligned,raw):
         try:
             slot=identify(candidate)
             if options>3 or (slot==0 and questions>120): raise ValueError('Geometría distinta de la plantilla conocida.')
-            return candidate,scan(candidate,slot)
-        except ValueError: pass
-    # Repeated geometry can be much clearer in a saturated color channel.
-    contrast=geometry_gray(aligned); gray=cv.cvtColor(aligned,cv.COLOR_RGB2GRAY)
-    if float(np.mean(abs(contrast.astype(float)-gray)))>1.5 and options<=3 and questions<=120:
-        geom=np.repeat(contrast[...,None],3,axis=2)
-        try:
-            slot=identify(geom); return aligned,scan(aligned,slot,grid_positions(geom,slot))
-        except ValueError: pass
-    errors=[]
-    for detector in (lambda:square_page(im,aligned),lambda:(aligned,flexible_outline_blocks(aligned,options)),lambda:(original_canvas(im)[0],flexible_outline_blocks(original_canvas(im)[0],options))):
+            positions=grid_positions(candidate,slot)
+            marks=scan_repeated_rows(candidate,positions) if slot==0 else scan(candidate,slot,positions)
+            return candidate,verify_numbered_rows(candidate,marks)
+        except ValueError as e: errors.append(str(e))
+        contrast=geometry_gray(candidate); gray=cv.cvtColor(candidate,cv.COLOR_RGB2GRAY)
+        if float(np.mean(abs(contrast.astype(float)-gray)))>1.5 and options<=3 and questions<=120:
+            geom=np.repeat(contrast[...,None],3,axis=2)
+            try:
+                slot=identify(geom); positions=grid_positions(geom,slot)
+                marks=scan_repeated_rows(candidate,positions) if slot==0 else scan(candidate,slot,positions)
+                return candidate,verify_numbered_rows(candidate,marks)
+            except ValueError as e: errors.append(str(e))
+    for detector in (lambda:square_page(im,aligned),lambda:(aligned,flexible_outline_blocks(aligned,options)),lambda:(raw,flexible_outline_blocks(raw,options))):
         try:
             canvas,blocks=detector()
             if any(len(ms[0].scores)<options for _,ms in blocks): raise ValueError('Faltan opciones impresas.')
-            return canvas,automatic_numbering(blocks,questions,reserves,previous)
+            marks=automatic_numbering(blocks,questions,reserves,previous)
+            return canvas,verify_numbered_rows(canvas,marks)
         except ValueError as e: errors.append(str(e))
-    raise ValueError(errors[0] if errors else 'No se reconoce la estructura de la hoja.')
+    raise ValueError('No se ha podido verificar la estructura y numeración de la hoja. Prueba con otra fotografía o introduce las respuestas manualmente.')
 
 
 def guided_block(im, points, rows, options, start):

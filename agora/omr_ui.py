@@ -55,7 +55,7 @@ class OpticalPage(QWidget):
         self.images=cache.setdefault('images',{}); self.aligned=cache.setdefault('aligned',{}); self.marks=cache.setdefault('marks',{}); self.records=cache.setdefault('records',{})
         l=QVBoxLayout(self); l.setContentsMargins(0,0,0,0); l.setSpacing(7)
         l.addWidget(btn('Importar hojas de respuestas (PDF o fotos)',self.load,True))
-        row=QHBoxLayout(); self.page=SafeComboBox(); self.page.addItems(['Preguntas ordinarias','Reservas']); self.page.currentIndexChanged.connect(self.refresh); row.addWidget(self.page); self.filter=SafeComboBox(); self.filter.addItems(['Solo pendientes','Todas las preguntas']); self.filter.currentIndexChanged.connect(self.refresh); row.addWidget(self.filter); row.addWidget(btn('Ver hoja y casillas',self.preview)); row.addWidget(btn('Ajustar alineación',self.adjust)); l.addLayout(row)
+        row=QHBoxLayout(); self.page=SafeComboBox(); self.page.addItems(['Preguntas ordinarias','Reservas']); self.page.currentIndexChanged.connect(self.refresh); row.addWidget(self.page); self.filter=SafeComboBox(); self.filter.addItems(['Solo pendientes','Todas las preguntas']); self.filter.currentIndexChanged.connect(self.refresh); row.addWidget(self.filter); row.addWidget(btn('Ver hoja y casillas',self.preview)); row.addWidget(btn('Releer hoja',self.adjust)); l.addLayout(row)
         self.count=text(''); self.count.setToolTip('Las lecturas claras se rellenan automáticamente; revisa las dudosas y las posibles anuladas.'); l.addWidget(self.count)
         self.table=QTableWidget(0,4); self.table.setHorizontalHeaderLabels(['Pregunta','Recorte original','Estado de lectura','Respuesta']); self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch); self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers); self.table.setAlternatingRowColors(True); self.table.verticalHeader().hide(); self.table.setMinimumHeight(260); l.addWidget(self.table)
         if self.images:
@@ -130,10 +130,8 @@ class OpticalPage(QWidget):
         try:
             return self.automatic_candidate(im)
         except ValueError as e:
-            # Same preview and editing tools for every layout; never open the
-            # legacy circle-specific reference or numbering dialog on import.
-            canvas,_=omr.original_canvas(im)
-            return self.alignment_workspace(None,original=im,initial=(canvas,[]),error=str(e))
+            QMessageBox.warning(self,'Lectura no verificada',str(e))
+            return None
     def load(self,checked=False,force_guided=False):
         d=ImportDialog(self,omr.EXTENSIONS,multiple=True,max_files=20)
         if d.exec()!=QDialog.DialogCode.Accepted or not d.items: return
@@ -143,19 +141,13 @@ class OpticalPage(QWidget):
                 for im in omr.decode(name,data):
                     count+=1
                     if count>20: raise ValueError('Selecciona un máximo de 20 páginas en total.')
-                    if force_guided:
-                        canvas,_=omr.original_canvas(im); result=self.alignment_workspace(None,original=im,initial=(canvas,[]))
-                    else: result=self.read_page(im)
+                    result=self.read_page(im)
                     if result is None: return
                     aligned,marks=result
                     nums={m.number for m in marks if self.target_index(m.number) is not None}
                     if not nums: continue
                     if any(nums&{m.number for m in p[2]} for p in pending.values()):
-                        adjusted=self.alignment_workspace(None,original=im,initial=(aligned,marks),error='La numeración coincide con otra página. Redefine los bloques de esta hoja.')
-                        if adjusted is None: return
-                        aligned,marks=adjusted
-                        nums={m.number for m in marks if self.target_index(m.number) is not None}
-                        if not nums or any(nums&{m.number for m in p[2]} for p in pending.values()): raise ValueError('Hay páginas con numeraciones repetidas o fuera del solucionario.')
+                        raise ValueError('Hay páginas con numeraciones repetidas. Comprueba las hojas seleccionadas.')
                     overlaps=[slot for slot,old in self.marks.items() if nums&{m.number for m in old}]
                     if len(overlaps)>1: raise ValueError('La página se solapa con varias lecturas guardadas. Reinicia la lectura para sustituirlas.')
                     if overlaps:
@@ -243,42 +235,25 @@ class OpticalPage(QWidget):
         if initial is None:
             original=self.images[i]; initial=(self.aligned[i],self.marks[i])
         current=initial; candidate=current
-        d=QDialog(self); d.setWindowTitle('Ajustar alineación'); d.resize(760,min(820,self.screen().availableGeometry().height()-80)); l=QVBoxLayout(d)
+        d=QDialog(self); d.setWindowTitle('Releer hoja'); d.resize(760,min(820,self.screen().availableGeometry().height()-80)); l=QVBoxLayout(d)
         message=text(error or 'Vista previa de la lectura guardada.'); l.addWidget(message)
         preview=QLabel(); preview.setAlignment(A.AlignCenter); l.addWidget(preview,1)
         def show():
             aligned,marks=candidate; canvas=aligned.copy()
             for m in marks: omr.draw_mark(canvas,m)
             preview.setPixmap(pix(canvas).scaled(680,max(200,min(640,self.screen().availableGeometry().height()-300)),Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation))
-            apply.setEnabled(bool(marks)); adjust_blocks.setEnabled(bool(marks))
+            apply.setEnabled(bool(marks))
         def automatic():
             nonlocal candidate
             result=self.automatic_candidate(original)
             if result is not None:
                 candidate=result; message.setText('Vista previa automática. Aplica para conservarla.'); show()
-        def action(kind):
-            nonlocal candidate
-            try:
-                if kind=='auto': automatic(); return
-                canvas,marks=candidate
-                if kind=='blocks':
-                    replacement=self.adjust_existing_block(canvas,marks)
-                    adjusted=(canvas,replacement) if replacement is not None else None
-                else:
-                    # Explicit full-page rebuild for a previously misidentified layout.
-                    canvas,_=omr.original_canvas(original)
-                    replacement=self.guided_dialog(canvas,can_restore=True,printed_options=max((len(m.scores) for m in marks),default=self.config.options))
-                    adjusted=(canvas,replacement) if replacement else None
-                if adjusted is not None:
-                    candidate=adjusted; message.setText('Vista previa del ajuste. Aplica para conservarlo.'); show()
-            except RestoreAutomatic:
-                try: automatic()
-                except ValueError as e: QMessageBox.warning(d,'No se pudo alinear',str(e))
-            except ValueError as e: QMessageBox.warning(d,'No se pudo alinear',str(e))
+        def retry():
+            try: automatic()
+            except ValueError as e: QMessageBox.warning(d,'Lectura no verificada',str(e))
         row=QHBoxLayout(); row.addStretch(1)
-        row.addWidget(compact_btn('Restablecer automática',lambda:action('auto')))
-        adjust_blocks=compact_btn('Ajuste por bloques',lambda:action('blocks')); row.addWidget(adjust_blocks)
-        row.addWidget(compact_btn('Redefinir bloques',lambda:action('rebuild'))); row.addStretch(1)
+        row.addWidget(compact_btn('Restablecer automática',retry))
+        row.addStretch(1)
         l.addLayout(row)
         bottom=QHBoxLayout(); bottom.addStretch(1); bottom.addWidget(compact_btn('Cancelar',d.reject)); apply=compact_btn('Aplicar',d.accept,True); bottom.addWidget(apply); bottom.addStretch(1); l.addLayout(bottom)
         show()
@@ -289,7 +264,7 @@ class OpticalPage(QWidget):
         i=self.choose_page()
         if i==-1: return
         if i is None:
-            if confirm(self,'Ajustar alineación','No hay imagen para este tipo de preguntas. ¿Importar una hoja?'): self.load()
+            if confirm(self,'Releer hoja','No hay imagen para este tipo de preguntas. ¿Importar una hoja?'): self.load()
             return
         try:
             old=self.marks[i]; adjusted=self.alignment_workspace(i)
@@ -297,7 +272,7 @@ class OpticalPage(QWidget):
             aligned,marks=adjusted
             newnums={m.number for m in marks if self.target_index(m.number) is not None}
             if not newnums or any(newnums&{m.number for m in ms} for slot,ms in self.marks.items() if slot!=i): raise ValueError('El ajuste se solapa con otra hoja o no contiene preguntas del examen.')
-            if not confirm(self,'Aplicar alineación','Se volverán a interpretar las respuestas de esta página. Se conservarán las anuladas y las respuestas modificadas manualmente que sigan en ella. ¿Continuar?'): return
+            if not confirm(self,'Aplicar lectura','Se volverán a interpretar las respuestas de esta página. Se conservarán las anuladas y las respuestas modificadas manualmente que sigan en ella. ¿Continuar?'): return
             snapshot=record(self.images[i],aligned,marks)
             reviewed={}
             for m in old:
