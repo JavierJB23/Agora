@@ -409,7 +409,7 @@ def remove_print_ink(im, blue, red, rows, radius):
     return blue,red
 
 
-def red_strike(im, mark):
+def red_strike(im, mark, blue_ink=False):
     """Detect a long red stroke across a row, not an isolated red correction X.
     Work in the same horizontal row crop shown to the user, including gaps.
     """
@@ -423,6 +423,8 @@ def red_strike(im, mark):
     k=max(5, min(15, (h//3)|1))
     background=cv.medianBlur(gray.astype(np.uint8),k).astype(np.int16)
     mask=((r-g>=9)&(r-b>=8)&(g<225)&(r<252)&(r-b>=1.25*np.maximum(b-g,0))&((background-gray)>=5)).astype(np.uint8)
+    if blue_ink:
+        mask=((b-r>=4)&(b-g>=6)&(r<190)&((background-gray)>=5)).astype(np.uint8)
     # A stroke may be interrupted by dark printed outlines. Vote along near-horizontal lines.
     yy,xx=np.nonzero(mask)
     if len(xx)<w*.35: return False
@@ -431,7 +433,10 @@ def red_strike(im, mark):
         for center in range(round(h*.20),round(h*.80)+1):
             take=np.abs(intercept-center)<=max(1,round(h*.065))
             cols=np.unique(xx[take]); bins=np.unique(np.minimum(9,cols*10//w))
-            if len(cols)>=w*.48 and len(bins)>=8 and bins[0]<=1 and bins[-1]>=8:
+            # Ink must cross the empty gaps between adjacent printed outlines.
+            n=len(mark.scores); gaps=[(j+1)/n for j in range(n-1)]
+            bridges=all(sum(abs(cols/w-gap)<.035)>=max(2,round(w*.028)) for gap in gaps)
+            if bridges and len(cols)>=w*.48 and len(bins)>=8 and bins[0]<=1 and bins[-1]>=8:
                 return True
     return False
 
@@ -752,9 +757,156 @@ def automatic_numbering(blocks, questions, reserves=0, previous=None):
     return number_blocks(blocks,starts)
 
 
+def repeated_circle_rows(im):
+    """Find complete tracks of repeated printed triplets, using geometry alone.
+    Missing/tachured rows are interpolated, never removed from numbering."""
+    gray=geometry_gray(im)
+    mask=cv.adaptiveThreshold(gray,255,cv.ADAPTIVE_THRESH_GAUSSIAN_C,cv.THRESH_BINARY_INV,31,8)
+    mask=cv.morphologyEx(mask,cv.MORPH_CLOSE,np.ones((3,21),np.uint8))
+    mask=cv.morphologyEx(mask,cv.MORPH_OPEN,np.ones((3,45),np.uint8))
+    contours,_=cv.findContours(mask,cv.RETR_EXTERNAL,cv.CHAIN_APPROX_SIMPLE)
+    boxes=np.array([b for c in contours if 48<(b:=cv.boundingRect(c))[2]<130 and 5<b[3]<30 and 270<b[1]<1580 and b[2]/b[3]>3])
+    if len(boxes)<64: raise ValueError('No hay cuatro secuencias de filas completas.')
+    pts=np.column_stack([boxes[:,0]+boxes[:,2]/2,boxes[:,1]+boxes[:,3]/2,boxes[:,2],boxes[:,3]])
+    tracks=[]
+    for _ in range(4):
+        if len(pts)<16: raise ValueError('Faltan columnas.')
+        xs=pts[:,0]; best=xs[np.argmax((abs(xs[:,None]-xs)<45).sum(0))]
+        group=pts[abs(xs-best)<55]; pts=pts[abs(xs-best)>=90]
+        if len(group)<16: raise ValueError('Columna incompleta.')
+        tracks.append(group)
+    tracks.sort(key=lambda g:np.median(g[:,0]))
+    gaps=np.diff([np.median(g[:,0]) for g in tracks]);
+    if min(gaps)<120 or max(gaps)>min(gaps)*1.4: raise ValueError('Separación de columnas irregular.')
+    # Fit all 30 row indices, including missing rows, with a quadratic pitch model.
+    ring,square=_shape_response(np.repeat(gray[...,None],3,axis=2)); output=[]; span=None
+    for g in tracks:
+        med=np.median(g,axis=0); rr=np.arange(30)
+        # The horizontal morphology is only a coarse seed. Find triplets by
+        # their real outlines, including rows whose ink hides a component.
+        xs=np.arange(max(60,round(med[0]-55)),min(WIDTH-60,round(med[0]+56)))
+        ys=np.arange(270,1580); gap0=med[2]/2.67
+        best=np.full((len(ys),len(xs)),-100.,np.float32); steps=np.zeros(best.shape,np.int16)
+        for gap in range(max(18,round(gap0-7)),min(45,round(gap0+8))):
+            l=ring[270:1580,xs-gap]; c=ring[270:1580,xs]; r=ring[270:1580,xs+gap]
+            score=(l+c+r)/3-.30*(np.maximum(np.maximum(l,c),r)-np.minimum(np.minimum(l,c),r))-.10*abs(gap-gap0)
+            choose=score>best; best[choose]=score[choose]; steps[choose]=gap
+        prof=best.max(1); ix=best.argmax(1)
+        peaks=np.flatnonzero((prof>=cv.dilate(prof[:,None],np.ones((17,1),np.uint8)).ravel())&(prof>6))
+        if len(peaks)<25: raise ValueError('Filas insuficientes.')
+        # A header may produce strong pseudo-circles from its lettering. Unlike
+        # a real answer row, its entire left-hand gap is filled with printing.
+        # Compare that strip against nearby paper, not against an absolute hue.
+        def is_header(k):
+            cy=int(ys[k]); cx=int(xs[ix[k]]); gap=int(steps[k,ix[k]])
+            x1=max(0,cx-round(3.4*gap)); x2=max(x1+1,cx-round(1.65*gap))
+            strip=gray[cy-4:cy+5,x1:x2]; context=gray[max(0,cy-36):cy+37,x1:x2]
+            return float(np.median(strip))+27<float(np.percentile(context,75))
+        peaks=np.array([k for k in peaks if not is_header(k)],dtype=int)
+        if len(peaks)<25: raise ValueError('Filas insuficientes tras excluir cabeceras.')
+        y=ys[peaks]; strengths=prof[peaks]
+        starts=np.arange(290,570,2) if span is None else np.arange(max(270,span[0]-25),span[0]+26,2)
+        pitch=np.arange(24,45,.5); bend=np.arange(-.14,.141,.025)
+        s,p,b=np.meshgrid(starts,pitch,bend,indexing='ij'); s,p,b=s.ravel(),p.ravel(),b.ravel()
+        pred=s[:,None]+p[:,None]*rr+b[:,None]*rr*(rr-29)
+        if span is not None:
+            keep=(abs(pred[:,-1]-span[1])<45); pred=pred[keep]; p=p[keep]
+        if not len(pred): raise ValueError('No coincide la numeración de columnas.')
+        jj=np.searchsorted(y,pred); l=np.clip(jj-1,0,len(y)-1); r=np.clip(jj,0,len(y)-1); ids=np.where(abs(y[l]-pred)<=abs(y[r]-pred),l,r)
+        d=abs(y[ids]-pred); valid=d<p[:,None]*.27
+        score=np.where(valid,np.minimum(strengths[ids],45)-1.3*d,-8).sum(1)
+        if span is not None: score-=.45*(abs(pred[:,0]-span[0])+abs(pred[:,-1]-span[1]))
+        score[(valid.sum(1)<25)|~valid[:,0]|~valid[:,-1]]=-1e6
+        k=int(score.argmax())
+        if score[k]<200: raise ValueError('Secuencia de filas no verificada.')
+        sel=peaks[ids[k]]; good=valid[k]; py=pred[k]; span=(py[0],py[-1]) if span is None else span
+        xx=xs[ix[sel]].astype(float); yy=ys[sel].astype(float); widths=steps[sel,ix[sel]].astype(float)
+        for arr,limit in [(xx,10),(yy,8),(widths,5)]:
+            trend=np.polyval(np.polyfit(rr[good],arr[good],2),rr)
+            ok=good&(abs(arr-trend)<limit); arr[~ok]=trend[~ok]
+        for i in range(30):
+            row=[]
+            for j in (-1,0,1):
+                x0,y0=round(xx[i]+j*widths[i]),round(yy[i]); rad=5
+                patch=ring[y0-rad:y0+rad+1,x0-rad:x0+rad+1]; gy,gx=np.mgrid[-rad:rad+1,-rad:rad+1]
+                a,b=np.unravel_index(np.argmax(patch-.65*np.hypot(gx,gy)),patch.shape); row.append((x0+b-rad,y0+a-rad))
+            output.append(row)
+    pp=np.array(output); xx,yy=pp[:,:,0],pp[:,:,1]; strengths=ring[yy,xx]; shapes=strengths-square[yy,xx]
+    if any((strengths[i:i+30]>7).sum()<65 or np.median(shapes[i:i+30])<.2 for i in range(0,120,30)):
+        raise ValueError('No se confirman los contornos circulares.')
+    return [(str(i+1),[tuple(map(int,p)) for p in row]) for i,row in enumerate(pp)]
+
+
+def extended_strike(im,row):
+    """Find a crossing pen line in the normally empty gap before the first option.
+    This gap contains no colored outlines, unlike the answer cells themselves.
+    Work in row-relative coordinates to tolerate skew, and require continuity
+    both across the gap and into the answer area. Return ink color or None."""
+    a,b=np.asarray(row[0],float),np.asarray(row[-1],float)
+    v=(b-a)/2; gap=float(np.linalg.norm(v)); normal=np.array([-v[1],v[0]])/gap
+    q=np.float32([a-v*2.25-normal*gap*.55,b+v*.50-normal*gap*.55,b+v*.50+normal*gap*.55,a-v*2.25+normal*gap*.55])
+    if np.any(q<0) or np.any(q[:,0]>=im.shape[1]) or np.any(q[:,1]>=im.shape[0]): return None
+    w,h=190,44
+    view=cv.warpPerspective(im,cv.getPerspectiveTransform(q,np.float32([[0,0],[w-1,0],[w-1,h-1],[0,h-1]])),(w,h))
+    g=cv.cvtColor(view,cv.COLOR_RGB2GRAY).astype(np.int16)
+    # Vertical background subtraction: broad printed shading does not vote.
+    background=cv.medianBlur(g.astype(np.uint8),11).astype(np.int16)
+    R,G,B=view.astype(np.int16).transpose(2,0,1)
+    # A narrow dark line in the empty gap is evidence even for a desaturated pen.
+    dark=(background-g>=10)&(g<205)
+    yy,xx=np.nonzero(dark)
+    if not len(xx): return None
+    for slope in np.linspace(-.18,.18,19):
+        intercept=yy-slope*(xx-90)
+        for center in range(14,31):
+            take=abs(intercept-center)<=2
+            x=xx[take]; y=yy[take]
+            left=(x>=8)&(x<=67); across=(x>=82)&(x<=176)
+            if len(np.unique(x[left]))<36 or len(np.unique(x[across]))<33: continue
+            # Require presence in each of three subdivisions of the empty gap.
+            if any(len(np.unique(x[(x>=lo)&(x<hi)]))<8 for lo,hi in [(8,28),(28,48),(48,68)]): continue
+            r,g,b=R[y[left],x[left]],G[y[left],x[left]],B[y[left],x[left]]
+            if np.median(b-r)>2 and np.median(b-g)>3: return 'azul'
+            if np.median(r-b)>3 and np.median(r-g)>5: return 'roja'
+            return 'manuscrita'
+    return None
+
+
+def scan_repeated_rows(im, positions, extended=True):
+    """Sample within real cells; don't let the printed rim vote for a pen mark."""
+    marks=[]; rows=[np.array(p,float) for _,p in positions]
+    # Adaptive cell radius from printed pitch; use central region only.
+    a=im.astype(np.int16); R,G,B=a.transpose(2,0,1)
+    blue=(B-R>3)&(B-G>5)&(B<225)&(R<190)
+    red=(R-B>18)&(R-G>18)&(G<190)&(R-B>1.6*np.maximum(B-G,0)+8)&(R<225)
+    rad=max(4,round(np.median([np.linalg.norm(np.diff(p,axis=0),axis=1).mean() for p in rows])*.29))
+    blue,red=remove_print_ink(im,blue,red,rows,rad)
+    for (number,_),row in zip(positions,rows):
+        dx=np.linalg.norm(row[-1]-row[0])/2; pitch=dx*1.15; margin=dx*.48
+        scores=[]; reds=[]
+        for x,y in np.round(row).astype(int):
+            sl=np.s_[y-rad:y+rad+1,x-rad:x+rad+1]; scores.append(int(blue[sl].sum())); reds.append(int(red[sl].sum()))
+        hi,second=sorted(range(3),key=lambda j:scores[j],reverse=True)[:2]; s=scores[hi]; low=max(6,round(rad*1.3)); strong=max(12,round(rad*1.8))
+        suggestion='ABC'[hi] if s>=low and scores[second]<max(low,.40*s) else ''
+        status='Azul detectado' if suggestion else 'Doble o dudosa' if s>=low else 'Sin azul: revisar blanco u otra tinta'
+        if suggestion and s<strong: status='Azul débil: revisar'
+        if max(reds)>max(12,rad*2): status+=' · posible rojo'
+        x1,y1=row[0]; x2,y2=row[-1]
+        crop,quad=row_geometry([(x1-margin,y1-pitch*.39),(x2+margin,y2-pitch*.39),(x2+margin,y2+pitch*.39),(x1-margin,y1+pitch*.39)])
+        m=Mark(number,suggestion,status,tuple(scores),tuple(reds),crop,quad)
+        strike=extended_strike(im,row) if extended else None
+        if strike: m=replace(m,status=f'Posible anulada · tachadura {strike} · revisar')
+        elif red_strike(im,m): m=replace(m,status='Posible anulada · tachadura roja · revisar')
+        elif red_strike(im,m,True): m=replace(m,status='Posible anulada · tachadura azul · revisar')
+        marks.append(m)
+    return marks
+
 def automatic_page(im, questions, reserves=0, options=3, previous=None):
     """Common no-dialog reader. The image is always kept for explicit adjustment."""
     aligned=align(im)
+    if options<=3 and questions<=120:
+        try: return aligned,scan_repeated_rows(aligned,repeated_circle_rows(aligned))
+        except ValueError: pass
     # Known template remains the preferred route, with a color-contrast fallback.
     for candidate in (aligned,):
         try:
@@ -812,7 +964,12 @@ def guided_block(im, points, rows, options, start):
         bounds=np.float32([[[-.46,jrow-.46],[options-1+.46,jrow-.46],[options-1+.46,jrow+.46],[-.46,jrow+.46]]])
         crop,quad=row_geometry(cv.perspectiveTransform(bounds,mat)[0])
         marks.append(Mark('',suggestion,status,tuple(scores),tuple(reds),crop,quad))
-    return number_blocks([((0,0,0,0),flag_strikes(im,marks))],[start])
+    if options==3:
+        sampled=scan_repeated_rows(im,[('',row) for row in centers],extended=False)
+        marks=[replace(m,suggestion=n.suggestion,status=n.status,scores=n.scores,red=n.red) for m,n in zip(marks,sampled)]
+    else:
+        marks=flag_strikes(im,marks)
+    return number_blocks([((0,0,0,0),marks)],[start])
 
 
 def reading_blocks(marks):

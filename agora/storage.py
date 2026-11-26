@@ -175,6 +175,18 @@ class Storage:
             if oldref and oldref!=payload.get('document_ref'): db.execute('UPDATE solution_documents SET listed=0 WHERE id=?',(oldref,))
             return replace_id
 
+    def rename_template(self, template_id, name):
+        name=name.strip()
+        if not name or len(name)>120: raise ValueError('Introduce un nombre de hasta 120 caracteres.')
+        with self.connection() as db:
+            rows=db.execute('SELECT id,name,payload FROM manual_templates').fetchall()
+            if any(t!=template_id and n.casefold()==name.casefold() for t,n,_ in rows):
+                raise ValueError('Ya existe una plantilla con ese nombre.')
+            previous=next((raw for t,_,raw in rows if t==template_id),None)
+            if previous is None: raise ValueError('Plantilla no encontrada.')
+            payload=json.loads(previous); payload['config']=dict(payload['config'],name=name)
+            db.execute('UPDATE manual_templates SET name=?,payload=? WHERE id=?',(name,json.dumps(payload,ensure_ascii=False),template_id))
+
     @staticmethod
     def template_pattern(payload):
         c=payload.get('config',{}); k=tuple(payload.get('key',()))

@@ -2,7 +2,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt, QSize, QUrl
 from PySide6.QtGui import QIcon, QDesktopServices, QFont
 from PySide6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QLabel, QPushButton, QToolButton, QFrame, QStackedWidget, QScrollArea, QLineEdit, QMessageBox, QSizePolicy, QTabWidget)
+    QLabel, QInputDialog, QPushButton, QToolButton, QFrame, QStackedWidget, QScrollArea, QLineEdit, QMessageBox, QSizePolicy, QTabWidget)
 from . import VERSION, BLOCK
 from .modules import MODULES
 from .storage import Storage
@@ -266,9 +266,20 @@ class MainWindow(QMainWindow):
                 b=button('Consultar PDF' if e['filename'].lower().endswith('.pdf') else 'Consultar Word',role='softAction'); b.clicked.connect(lambda checked=False,r=e['ref']:consult_document(self,self.storage,r)); h.addWidget(b)
             if e['payload']:
                 b=button('Consultar plantilla',role='softAction'); b.clicked.connect(lambda checked=False,n=e['name'],p=e['payload']:consult_template(self,self.storage,n,p)); h.addWidget(b)
+            b=button('Renombrar',role='softAction'); b.clicked.connect(lambda checked=False,t=e['id'],n=e['name']:self.rename_library_template(t,n)); h.addWidget(b)
             b=button('Eliminar plantilla',role='softAction'); b.clicked.connect(lambda checked=False,t=e['id']:self.delete_library_template(t)); h.addWidget(b)
             l.addWidget(item)
         l.addStretch(); self.library_stack.updateGeometry()
+
+    def rename_library_template(self,tid,name):
+        dlg=QInputDialog(self); dlg.setWindowTitle('Renombrar plantilla'); dlg.setLabelText('Nombre de la plantilla:'); dlg.setTextValue(name); dlg.setOkButtonText('Guardar'); dlg.setCancelButtonText('Cancelar')
+        if dlg.exec()!=QInputDialog.DialogCode.Accepted: return
+        try:
+            self.storage.rename_template(tid,dlg.textValue())
+            for page in (self.manual,self.automatic):
+                if page.stage==0: page.refresh_templates()
+            self.refresh_library()
+        except Exception as e: QMessageBox.warning(self,'No se pudo renombrar',str(e))
 
     def delete_library_template(self,tid):
         from .template_ui import delete_named_template
