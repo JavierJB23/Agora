@@ -350,3 +350,24 @@ class UITests(unittest.TestCase):
                 self.assertLessEqual(abs(icon_rect.center().x()-tile.rect().center().x()),1)
                 self.assertGreater(text_rect.top(),icon_rect.bottom())
             dlg.reject(); w.close()
+
+    def test_restore_numbering_without_reimport(self):
+        from unittest.mock import patch
+        from PySide6.QtWidgets import QDialog,QLineEdit,QPushButton
+        from agora.omr_ui import OpticalPage
+        from agora import omr
+        from test_omr import square_sheet
+        im=square_sheet(); blocks=omr.square_blocks(im)
+        # Invoke the real dialog controls, without blocking on a modal window.
+        def exercise(d):
+            field=d.findChild(QLineEdit); self.assertEqual(field.text(),'1, 11')
+            field.setText('7, R1')
+            next(b for b in d.findChildren(QPushButton) if b.text()=='Restablecer').click()
+            self.assertEqual(field.text(),'1, 11')
+            return QDialog.DialogCode.Accepted
+        # Numbering dialog does not require the rest of the corrector state.
+        from PySide6.QtWidgets import QWidget
+        parent=QWidget()
+        with patch.object(QDialog,'exec',exercise):
+            marks=OpticalPage.choose_numbering(parent,im,blocks)
+        self.assertEqual([m.number for m in marks],list(map(str,range(1,21))))

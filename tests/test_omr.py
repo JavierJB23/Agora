@@ -160,3 +160,37 @@ class OutlineAlignmentTests(unittest.TestCase):
                     cv.rectangle(im,(x-10,y-10),(x+10,y+10),(50,50,50),2)
         with self.assertRaises(ValueError): omr.grid_positions(im,0)
         self.assertEqual([(len(m),len(m[0].scores)) for _,m in omr.square_blocks(im)],[(30,4)]*4)
+
+class SquarePreviewTests(unittest.TestCase):
+    def test_unrotated_canvas_and_horizontal_crops(self):
+        from agora.optical_archive import record,unpack
+        im=square_sheet()
+        view,blocks=omr.square_page(im)
+        self.assertTrue(np.array_equal(view,im))
+        marks=omr.number_blocks(blocks,['1','11'])
+        self.assertEqual(omr.proposed(marks[0]),'C')
+        self.assertTrue(all(len(m.quad)==4 for m in marks))
+        crop=omr.crop_image(view,marks[0]); self.assertGreater(crop.shape[1],crop.shape[0]*3)
+        self.assertEqual(unpack(record(im,view,marks),0)[2],marks)
+
+    def test_fallback_keeps_photo_and_maps_row_coordinates(self):
+        from unittest.mock import patch
+        im=square_sheet(); blocks=omr.square_blocks(im)
+        # Simulate the detector requiring a projective alignment, with a known offset.
+        original=np.roll(im,20,axis=0); corners=omr.full_corners(im)+np.float32([[0,20]]*4)
+        with patch.object(omr,'square_blocks',side_effect=[ValueError('raw'),blocks]),patch.object(omr,'detect_corners',return_value=corners):
+            view,mapped=omr.square_page(original,im)
+        self.assertTrue(np.array_equal(view,original))
+        old=blocks[0][1][0]; new=mapped[0][1][0]
+        np.testing.assert_allclose(np.array(new.quad),np.array(old.quad)+[0,20],atol=.01)
+        self.assertEqual(omr.proposed(new),omr.proposed(old))
+        np.testing.assert_array_equal(omr.crop_image(view,new),omr.crop_image(im,old))
+
+    def test_archive_without_row_geometry_remains_readable(self):
+        import json
+        from agora.optical_archive import record,unpack
+        im=sheet(); marks=omr.scan(im,0)
+        digest,original,view,metadata=record(im,im,marks)
+        values=json.loads(metadata)
+        for m in values: m.pop('quad')
+        self.assertEqual(unpack((digest,original,view,json.dumps(values)),0)[2],marks)
