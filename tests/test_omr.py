@@ -331,3 +331,13 @@ class VerifiedNumberingTests(unittest.TestCase):
         self.assertEqual([m.number for m in ms],list(map(str,range(1,121))))
         self.assertEqual([m.number for m in ms if 'Posible anulada' in m.status],['5','24','35','54','65','84','95','114'])
         self.assertTrue(all(omr.proposed(m)=='ABC'[i%30%3] for i,m in enumerate(ms) if i%30 not in (4,23)))
+
+class ReserveImportRegression(unittest.TestCase):
+    def test_physical_reserves_recognized_even_without_key(self):
+        im=sheet(1); mark(im,1,0,1,(20,40,120))
+        for count in (0,9):
+            events=[]
+            _,marks=omr.automatic_page(im,112,count,3,progress=lambda v,s:events.append(v))
+            self.assertEqual([m.number for m in marks],[f'R{i}' for i in range(1,10)])
+            self.assertEqual(omr.proposed(marks[0]),'B')
+            self.assertTrue(events)

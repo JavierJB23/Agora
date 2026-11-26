@@ -452,3 +452,29 @@ class UITests(unittest.TestCase):
         with patch.object(omr,'automatic_page',side_effect=ValueError('Lectura incierta')),patch.object(page,'alignment_workspace') as fallback,patch('agora.omr_ui.QMessageBox.warning') as warning:
             self.assertIsNone(page.read_page(im)); fallback.assert_not_called(); warning.assert_called_once()
         page.deleteLater(); self.app.processEvents()
+
+    def test_import_reserve_without_key_keeps_image_and_does_not_score(self):
+        from unittest.mock import patch
+        from agora.omr_ui import OpticalPage
+        from agora.grading import ExamConfig
+        from agora.optical_archive import record,unpack
+        from agora import omr
+        from test_omr import sheet,mark
+        from PySide6.QtWidgets import QDialog
+        ordinary=sheet(); reserve=sheet(1); mark(reserve,1,0,1,(20,40,120))
+        m0=omr.scan(ordinary,0); m1=omr.scan(reserve,1)
+        for count in (0,9):
+            answers=['']*(112+count); cache={}
+            page=OpticalPage(ExamConfig(questions=112,reserves=count),answers,cache,lambda:None)
+            results=[(im,im,marks,record(im,im,marks)) for im,marks in ((ordinary,m0),(reserve,m1))]
+            with patch('agora.omr_ui.ImportDialog') as dialog,patch.object(page,'run_import',return_value=(results,[])),patch('agora.omr_ui.QMessageBox.information'):
+                dialog.return_value.exec.return_value=QDialog.DialogCode.Accepted
+                dialog.return_value.items=[('main.png',b'main'),('reserve.png',b'reserve')]
+                page.load()
+            self.assertEqual(set(cache['images']),{0,1}); self.assertEqual(len(answers),112+count)
+            self.assertEqual(unpack(page.records[1],1)[2][0].number,'R1')
+            page.page.setCurrentIndex(1); page.filter.setCurrentIndex(1)
+            self.assertEqual(page.choose_page(),1); self.assertEqual(page.table.rowCount(),9)
+            if count: self.assertEqual(answers[112],'B')
+            else: self.assertIn('no puntúan',page.count.text())
+            page.deleteLater(); self.app.processEvents()
