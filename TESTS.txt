@@ -1,3 +1,4 @@
+FIX08: full suite after algorithm changes (before three additional tests):
 test_columns_with_reserves (test_answer_import.ImportTests.test_columns_with_reserves) ... ok
 test_compact (test_answer_import.ImportTests.test_compact) ... ok
 test_docx (test_answer_import.ImportTests.test_docx) ... ok
@@ -96,12 +97,33 @@ test_view_template_without_replacing_draft (test_ui.UITests.test_view_template_w
 test_wheel_does_not_change_form_controls (test_ui.UITests.test_wheel_does_not_change_form_controls) ... skipped 'PySide6 no disponible'
 
 ----------------------------------------------------------------------
-Ran 91 tests in 12.827s
+Ran 91 tests in 38.441s
 
 OK (skipped=22)
 
-Pruebas externas (documentos no incluidos):
-- Plantilla_corregida.pdf: 120+9, pregunta 33 sigue pendiente; geometría original con diferencia máxima de 3 px respecto al lector anterior.
-- TEST 10: cuatro bloques de 30 filas y cuatro casillas, no confundidos con círculos; 103 letras A–C, 8 blancos y 1 pendiente en las 112 primeras.
-- S24 imagen extraída de captura 110142: 120 filas alineadas automáticamente y con ajuste manual, 104 letras propuestas, 5 blancos propuestos, 11 pendientes. No se valida la nota ni la precisión de letras por tratarse de captura reducida.
-- Pruebas de interfaz y EXE Windows pendientes.
+OMR suite with three added tests:
+test_independent_columns_with_curvature (test_omr.CurvedCircleTests.test_independent_columns_with_curvature) ... ok
+test_guided_block_rectangles_and_archive (test_omr.FlexibleTests.test_guided_block_rectangles_and_archive) ... ok
+test_many_pdf_pages (test_omr.FlexibleTests.test_many_pdf_pages) ... ok
+test_square_detection_and_same_page_reserves (test_omr.FlexibleTests.test_square_detection_and_same_page_reserves) ... ok
+test_black_not_guessed (test_omr.OpticalTests.test_black_not_guessed) ... ok
+test_blue_red_and_blank (test_omr.OpticalTests.test_blue_red_and_blank) ... ok
+test_decode_and_alignment (test_omr.OpticalTests.test_decode_and_alignment) ... ok
+test_double (test_omr.OpticalTests.test_double) ... ok
+test_identify_reversed_and_shifted_reserve (test_omr.OpticalTests.test_identify_reversed_and_shifted_reserve) ... ok
+test_layout (test_omr.OpticalTests.test_layout) ... ok
+test_manual_grid_anchors_with_crop_and_perspective (test_omr.OpticalTests.test_manual_grid_anchors_with_crop_and_perspective) ... ok
+test_manual_grid_invalid_order (test_omr.OpticalTests.test_manual_grid_invalid_order) ... ok
+test_proposals_clear_ambiguous_blank (test_omr.OpticalTests.test_proposals_clear_ambiguous_blank) ... ok
+test_reject_empty (test_omr.OpticalTests.test_reject_empty) ... ok
+test_reserves (test_omr.OpticalTests.test_reserves) ... ok
+test_shifted_main_grid_preserves_rows (test_omr.OpticalTests.test_shifted_main_grid_preserves_rows) ... ok
+test_four_columns_of_squares_not_mistaken_for_circles (test_omr.OutlineAlignmentTests.test_four_columns_of_squares_not_mistaken_for_circles) ... ok
+test_fourth_column_shift_and_different_pitch (test_omr.OutlineAlignmentTests.test_fourth_column_shift_and_different_pitch)
+Four complete columns, but the last is displaced and the page is curved. ... ok
+test_missing_column_is_not_a_valid_main_sheet (test_omr.OutlineAlignmentTests.test_missing_column_is_not_a_valid_main_sheet) ... ok
+
+----------------------------------------------------------------------
+Ran 19 tests in 44.212s
+
+OK

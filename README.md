@@ -1,3 +1,12 @@
+# ÁGORA v0.6.8 — BLOCK 06 — FIX08
+
+- Círculos A–C: nueva detección de contornos impresos en cada columna, ajustando los extremos, las 30 filas, la curvatura y los centros individuales. Comprueba la forma circular frente a la cuadrada y la evidencia por columna; si necesita recurrir a los detectores anteriores, verifica y refina todas las columnas antes de aceptar sus centros. No acepta directamente una cuadrícula global descentrada.
+- No se modifica el lector de cuadrados, reservas, puntuación, QR, biblioteca, estética ni almacenamiento. Las imágenes y lecturas guardadas no se recalculan automáticamente: reimportar la hoja o usar Ajustar alineación > Alineación automática, confirmar y guardar. Se mantienen los tamaños de diálogos del FIX07.
+- Validación con la foto de S24 visible en las capturas del usuario, incluida una reconstrucción de la captura alineada (eliminando la superposición verde en la medida posible). No disponemos del fichero original de esta hoja; la comprobación es geométrica, no certifica sus respuestas ni nota. No se incluye material privado en el paquete.
+- Compilación manual: no cambiar windows.yml; subir archivos y pulsar Run workflow. Pendiente validación del EXE en Windows.
+
+## Histórico (FIX08 prevalece)
+
 # ÁGORA v0.6.7 — BLOCK 06 — FIX07
 
 - Todos los botones grandes (Inicio, Mi temario e importación PC/móvil) comparten un componente con icono y texto centrados como conjunto. No se cambian los iconos laterales de navegación ni el logotipo.

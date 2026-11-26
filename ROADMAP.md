@@ -54,3 +54,5 @@ BLOCK 06 FIX06 (v0.6.6): FIX05 validado para plantilla inicial. Se reabre valida
 Norma de compilación desde FIX06: workflow_dispatch exclusivamente, sin push. Subir todos los archivos antes de ejecutar una sola compilación manual desde Actions (main). Retención de artefactos nuevos: 3 días; conservar EXE STABLE localmente. Mantener nomenclatura de versión, pruebas unitarias y prueba de arranque. No hay cambios de código de aplicación ni de esquema de datos por este ajuste de CI.
 
 FIX07 (v0.6.7): componente común de tarjetas centradas para Inicio, Mi temario, importación; círculos con ajuste local independiente por columnas; círculos conocidos antes de cuadrados, respaldo anterior, diálogos adaptados a la altura de pantalla. Validación de FIX06 parcial; mantener 05–06 en revisión hasta probar hojas variadas en Windows. Compilación solo manual.
+
+FIX08 (v0.6.8): nuevo ajuste de contornos circulares por fila/columna, validación del respaldo por columna y distinción frente a cuadrados; conservar lecturas guardadas hasta reimportar/reajustar expresamente. S24 pendiente de validar con foto original en Windows.
