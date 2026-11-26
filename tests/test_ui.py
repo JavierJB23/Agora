@@ -337,3 +337,16 @@ class UITests(unittest.TestCase):
             self.assertEqual(m.stage,2)
             with patch('agora.manual.confirm',return_value=True): m.next_entry()
             self.assertEqual(m.result.correct,2); self.assertEqual(m.expected_counts,(2,0)); w.close()
+
+    def test_large_tile_content_centered(self):
+        from agora.import_ui import ImportDialog
+        from agora.controls import CenteredTile
+        with tempfile.TemporaryDirectory() as d:
+            w=MainWindow(Storage(d)); w.show(); self.app.processEvents()
+            dlg=ImportDialog(w); dlg.show(); self.app.processEvents()
+            for tile in [*w.home_tiles.values(),*w.library_buttons,*dlg.source.findChildren(CenteredTile)]:
+                icon_rect,text_rect=tile.content_rects()
+                self.assertLessEqual(abs(icon_rect.top()-(tile.height()-text_rect.bottom()-1)),1)
+                self.assertLessEqual(abs(icon_rect.center().x()-tile.rect().center().x()),1)
+                self.assertGreater(text_rect.top(),icon_rect.bottom())
+            dlg.reject(); w.close()

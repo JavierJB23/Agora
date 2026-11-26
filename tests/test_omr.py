@@ -102,3 +102,20 @@ class FlexibleTests(unittest.TestCase):
         w=PdfWriter()
         for i in range(3): w.add_blank_page(595,842)
         b=BytesIO(); w.write(b); self.assertEqual(len(omr.decode('test.pdf',b.getvalue())),3)
+
+class CurvedCircleTests(unittest.TestCase):
+    def test_independent_columns_with_curvature(self):
+        im=np.full((omr.HEIGHT,omr.WIDTH,3),250,np.uint8)
+        expected=[]
+        for i,(_,xs,y) in enumerate(omr.locations(0)):
+            col,row=divmod(i,30)
+            pts=[(x+int((col-1)*8+row*col*.35), y+int(12*np.sin(row/29*np.pi)*col/3+col*3)) for x in xs]
+            expected.append(pts)
+            for x,yy in pts: cv.circle(im,(x,yy),10,(60,60,60),2)
+            if i in (0,32,75,91,119):
+                x,yy=pts[1]; cv.line(im,(x-7,yy-7),(x+7,yy+7),(20,40,120),3); cv.line(im,(x-7,yy+7),(x+7,yy-7),(20,40,120),3)
+        fitted=omr.local_circle_positions(im)
+        self.assertLessEqual(np.max(abs(np.array([p for _,p in fitted])-np.array(expected))),5)
+        ans=[omr.proposed(m) for m in omr.scan(im,0)]
+        self.assertEqual([i for i,v in enumerate(ans) if v=='B'],[0,32,75,91,119])
+        self.assertEqual(ans.count('-'),115)
