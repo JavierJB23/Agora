@@ -37,6 +37,9 @@ QPushButton#primary {background: #A55379; color: white; border: 1px solid #A5537
 QPushButton#primary:hover {background: #904268;}
 QPushButton#softAction {background:#F4D6E3; color:#75405B; border:1px solid #E8CEDB; text-align:center;}
 QPushButton#softAction:hover {background:#EBC1D4;}
+QPushButton#libraryTile {background:white; border:1px solid #EEDDE5; border-radius:16px;}
+QPushButton#libraryTile:hover {background:#FAEAF1; border-color:#DDAEC4;}
+QPushButton#libraryTile:pressed {background:#F1D0DF;}
 QToolButton#homeTile:checked {background:#F4D6E3; border:1px solid #C987A6;}
 QToolButton#homeTile {background: #FFFFFF; border: 1px solid #EEDDE5; border-radius: 16px; padding: 10px 8px; color: #73425A; font-size: 17px; font-weight: 600;}
 QToolButton#homeTile:hover {background: #FAEAF1; border-color: #DDAEC4;}
@@ -201,7 +204,7 @@ class MainWindow(QMainWindow):
         back=button('Volver al inicio','home'); back.clicked.connect(lambda:self.go('home')); rl.addWidget(back,0,Qt.AlignmentFlag.AlignLeft)
         rl.addWidget(label('Mi temario','heading')); tiles=QHBoxLayout(); self.library_buttons=[]
         for i,(name,symbol) in enumerate((('Mis temas','books'),('Mis plantillas','template'))):
-            b=QToolButton(); b.setObjectName('homeTile'); b.setText(name); b.setIcon(icon(symbol)); b.setIconSize(QSize(64,64)); b.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon); b.setFixedSize(220,220); b.setCursor(Qt.CursorShape.PointingHandCursor); b.clicked.connect(lambda checked=False,j=i:self.select_library_tab(j)); tiles.addWidget(b); self.library_buttons.append(b)
+            b=QPushButton(); b.setObjectName('libraryTile'); b.setAccessibleName(name); b.setFixedSize(220,220); tile_layout=QVBoxLayout(b); tile_layout.setContentsMargins(12,12,12,12); tile_layout.setSpacing(16); tile_layout.addStretch(); pic=QLabel(); pic.setPixmap(icon(symbol).pixmap(64,64)); pic.setAlignment(Qt.AlignmentFlag.AlignCenter); pic.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents); tile_layout.addWidget(pic); title=label(name,'tileTitle'); title.setAlignment(Qt.AlignmentFlag.AlignCenter); title.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents); tile_layout.addWidget(title); tile_layout.addStretch(); b.setCursor(Qt.CursorShape.PointingHandCursor); b.clicked.connect(lambda checked=False,j=i:self.select_library_tab(j)); tiles.addWidget(b); self.library_buttons.append(b)
         tiles.addStretch(); rl.addLayout(tiles); rl.addStretch()
         tabs=QTabWidget(); tabs.setObjectName('libraryTabs'); tabs.tabBar().hide(); self.library_tabs=tabs; self.library_stack.addWidget(tabs)
         themes=QWidget(); tl=vertical(themes,spacing=16); back=button('Volver a Mi temario','book'); back.clicked.connect(lambda:self.library_stack.setCurrentIndex(0)); tl.addWidget(back,0,Qt.AlignmentFlag.AlignLeft); tl.addWidget(label('Mis temas','heading')); tl.addWidget(label('Temario de estudio','tileTitle')); tl.addStretch(); tabs.addTab(themes,'Mis temas')

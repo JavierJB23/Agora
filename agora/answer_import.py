@@ -6,7 +6,7 @@ import re, unicodedata, zipfile
 from xml.etree import ElementTree as ET
 
 MAX_BYTES=100*1024*1024
-PAIR=re.compile(r'(?<![\w])(?:(R(?:ESERVA)?)[ \t]*)?(\d{1,3})[ \t]*[.):\-]?[ \t]*(ANULAD[AO]|[A-EX])(?=$|[\s,;|])',re.I)
+PAIR=re.compile(r'(?<![\w])(?:(R(?:ESERVA)?)[ \t]*-?[ \t]*)?(\d{1,3})[ \t]*[.):\-]?[ \t]*(ANULAD[AO]|[A-EX])(?=$|[\s,;|])',re.I)
 TITLE=re.compile(r'^\s*(?:respuestas\s+correctas|soluciones(?:\s+correctas)?|solucionario|plantilla\s+de\s+(?:respuestas|soluciones)(?:\s+correctas)?)\b',re.I)
 RES=re.compile(r'(?:preguntas\s+de\s+reserva|preguntas\s+reserva|reservas?|respuestas\s+de\s+reserva)\s*:',re.I)
 

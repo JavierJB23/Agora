@@ -16,8 +16,8 @@ class Mark:
     number: str
     suggestion: str
     status: str
-    scores: tuple[int,int,int]
-    red: tuple[int,int,int]
+    scores: tuple[int,...]
+    red: tuple[int,...]
     crop: tuple[int,int,int,int]
 
 def decode(name,data):
@@ -26,7 +26,7 @@ def decode(name,data):
     if ext=='.pdf':
         doc=pdfium.PdfDocument(data)
         try:
-            if not 1<=len(doc)<=2: raise ValueError('Importa una o dos páginas de la hoja de respuestas, no el enunciado.')
+            if not 1<=len(doc)<=20: raise ValueError('Importa hasta 20 páginas de respuestas, no el enunciado.')
             result=[]
             for i in range(len(doc)):
                 page=doc[i]
@@ -188,3 +188,132 @@ def overlay(im,page):
     for _,points in centers(im,page):
         for x,y in points: cv.rectangle(result,(x-14,y-14),(x+14,y+14),(28,167,112),1)
     return result
+
+
+def _clusters(values, tolerance):
+    groups=[]
+    for v in sorted(values):
+        if not groups or v-np.median(groups[-1])>tolerance: groups.append([v])
+        else: groups[-1].append(v)
+    return [(float(np.median(g)),len(g)) for g in groups]
+
+
+def square_blocks(im):
+    """Detect connected printed grids, independently of paper size/position.
+    Return one block per column of questions. Numbering must be confirmed externally.
+    """
+    g=cv.cvtColor(im,cv.COLOR_RGB2GRAY)
+    mask=cv.adaptiveThreshold(g,255,cv.ADAPTIVE_THRESH_GAUSSIAN_C,cv.THRESH_BINARY_INV,31,9)
+    contours,_=cv.findContours(mask,cv.RETR_LIST,cv.CHAIN_APPROX_SIMPLE)
+    blocks=[]
+    for c in sorted(contours,key=cv.contourArea,reverse=True):
+        x,y,w,h=cv.boundingRect(c)
+        if not (65<=w<=WIDTH*.8 and 65<=h<=HEIGHT*.9 and cv.contourArea(c)>.45*w*h): continue
+        if any(x>=bx-5 and y>=by-5 and x+w<=bx+bw+5 and y+h<=by+bh+5 for (bx,by,bw,bh),_ in blocks): continue
+        q=cv.approxPolyDP(c,.015*cv.arcLength(c,True),True).reshape(-1,2).astype('float32')
+        if len(q)!=4 or not cv.isContourConvex(q): continue
+        q=q[np.argsort(q[:,1])]; q=np.vstack((q[:2][np.argsort(q[:2,0])],q[2:][np.argsort(q[2:,0])[::-1]]))
+        dst=np.float32([[0,0],[w-1,0],[w-1,h-1],[0,h-1]])
+        mat=cv.getPerspectiveTransform(q,dst); inv=cv.getPerspectiveTransform(dst,q)
+        a=cv.warpPerspective(im,mat,(w,h)); gray=cv.cvtColor(a,cv.COLOR_RGB2GRAY)
+        b=cv.adaptiveThreshold(gray,255,cv.ADAPTIVE_THRESH_GAUSSIAN_C,cv.THRESH_BINARY_INV,31,9)
+        cs,_=cv.findContours(b,cv.RETR_LIST,cv.CHAIN_APPROX_SIMPLE); pts=[]
+        for s in cs:
+            xx,yy,ww,hh=cv.boundingRect(s)
+            if 8<=ww<=45 and 8<=hh<=45 and .68<ww/hh<1.45 and cv.contourArea(s)/(ww*hh)>.48:
+                pts.append((xx+ww/2,yy+hh/2,ww,hh))
+        if len(pts)<12: continue
+        p=np.array(pts); size=float(np.median(p[:,2:4])); tol=max(4,size*.45)
+        # Use the last printed answer column (normally free of question numbers).
+        peaks=_clusters(p[:,0],tol)
+        peaks=[(v,n) for v,n in peaks if n>=max(4,len(p)*.055)]
+        if not 2<=len(peaks)<=7: continue
+        # Number labels may form an extra peak. Keep a regular suffix ending at the right edge.
+        xs=None
+        for k in range(min(5,len(peaks)),1,-1):
+            trial=np.array([v for v,n in peaks[-k:]])
+            gaps=np.diff(trial); step=float(np.median(gaps))
+            if trial[0]>w*.18 and step>=size*.85 and np.max(abs(gaps-step))<step*.23 and w-trial[-1]<step*1.05:
+                xs=trial; break
+        if xs is None: continue
+        last=p[abs(p[:,0]-xs[-1])<max(tol,size*.7)]
+        ys=np.array([v for v,n in _clusters(last[:,1],size*.65)])
+        if not 3<=len(ys)<=60: continue
+        pitch=float(np.median(np.diff(ys)))
+        if pitch<size*.85 or np.any(np.diff(ys)<pitch*.55) or np.any(np.diff(ys)>pitch*1.5) or ys[0]>pitch or h-ys[-1]>pitch: continue
+        # Refine individual cell centers from contours near the predicted grid.
+        rows=[]
+        for yy in ys:
+            local=[]
+            for xx in xs:
+                near=p[(abs(p[:,0]-xx)<size*.8)&(abs(p[:,1]-yy)<pitch*.35)]
+                px,py=(np.median(near[:,:2],axis=0) if len(near) else (xx,yy))
+                local.append((float(px),float(py)))
+            rows.append(local)
+        marks=[]; rgb=a.astype(np.int16); R,G,B=rgb.transpose(2,0,1)
+        blue=(B-R>5)&(B-G>7)&(B<225)&(R<190); red=(R-B>18)&(R-G>18)&(G<180)&(B-G<35)&(R<205)
+        for row in rows:
+            scores=[]; reds=[]; dark=[]
+            for xx,yy in row:
+                r=max(3,round(size*.32)); px,py=round(xx),round(yy); sl=np.s_[max(0,py-r):py+r+1,max(0,px-r):px+r+1]
+                scores.append(int(blue[sl].sum())); reds.append(int(red[sl].sum())); dark.append(int((gray[sl]<min(150,int(np.median(gray[sl]))-25)).sum()))
+            order=np.argsort(scores)[::-1]; first,second=order[:2]; s=scores[first]; minimum=max(4,round(size*.38)); strong=max(9,round(size*.85))
+            suggestion='ABCDE'[first] if s>=minimum and scores[second]<max(minimum,.35*s) else ''
+            status='Azul detectado' if suggestion else 'Doble o dudosa' if s>=minimum else 'Sin azul: revisar blanco u otra tinta'
+            if suggestion and s<strong: status='Azul débil: revisar'
+            if suggestion and max(reds)>8: status+=' · posible rojo'
+            if not suggestion and (max(dark)>max(10,size*.8) or max(reds)>8): status='Marca oscura o roja: revisar'; scores[0]=max(scores[0],5)
+            bounds=np.float32([[[row[0][0]-size*.7,row[0][1]-pitch*.45],[row[-1][0]+size*.7,row[-1][1]-pitch*.45],[row[-1][0]+size*.7,row[-1][1]+pitch*.45],[row[0][0]-size*.7,row[0][1]+pitch*.45]]])
+            xy=cv.perspectiveTransform(bounds,inv)[0]; x1,y1=np.floor(xy.min(0)).astype(int); x2,y2=np.ceil(xy.max(0)).astype(int)
+            crop=tuple(map(int,(max(0,x1),max(0,y1),min(WIDTH,x2),min(HEIGHT,y2))))
+            marks.append(Mark('',suggestion,status,tuple(scores),tuple(reds),crop))
+        blocks.append(((x,y,w,h),marks))
+    if not blocks: raise ValueError('No se reconocen bloques de casillas cuadradas con suficiente seguridad.')
+    # Sort groups left to right, then top to bottom for groups sharing the same column.
+    blocks.sort(key=lambda b:(b[0][0]//35,b[0][1]))
+    return blocks
+
+
+def number_blocks(blocks, starts):
+    from dataclasses import replace
+    import re
+    if len(blocks)!=len(starts): raise ValueError('Indica un número inicial por bloque.')
+    result=[]; seen=set()
+    for (_,marks),start in zip(blocks,starts):
+        m=re.fullmatch(r'(R-?)?([1-9][0-9]{0,2})',start.strip().upper())
+        if not m: raise ValueError('Usa números como 1, 31 o R1.')
+        prefix='R' if m[1] else ''; first=int(m[2]);
+        for j,mark in enumerate(marks):
+            number=prefix+str(first+j)
+            if number in seen: raise ValueError('La numeración de los bloques se solapa.')
+            seen.add(number); result.append(replace(mark,number=number))
+    return result
+
+
+def guided_block(im, points, rows, options, start):
+    """Read a regular grid from its four outer answer-cell centers."""
+    if not 2<=rows<=120 or not 2<=options<=5: raise ValueError('Bloque: 2–120 filas y 2–5 opciones.')
+    q=np.asarray(points,np.float32)
+    if q.shape!=(4,2) or not np.isfinite(q).all() or not cv.isContourConvex(q) or cv.contourArea(q)<100: raise ValueError('Marca los cuatro centros en orden.')
+    if np.any(q<0) or np.any(q[:,0]>=WIDTH) or np.any(q[:,1]>=HEIGHT): raise ValueError('Punto fuera de la hoja.')
+    if q[0,0]>=q[1,0] or q[3,0]>=q[2,0] or q[0,1]>=q[3,1] or q[1,1]>=q[2,1]: raise ValueError('Orden de puntos incorrecto.')
+    mat=cv.getPerspectiveTransform(np.float32([[0,0],[options-1,0],[options-1,rows-1],[0,rows-1]]),q)
+    centers=cv.perspectiveTransform(np.float32([[(j,i) for i in range(rows) for j in range(options)]]),mat)[0].reshape(rows,options,2)
+    dx=np.linalg.norm(np.diff(centers,axis=1),axis=2).min(); dy=np.linalg.norm(np.diff(centers,axis=0),axis=2).min()
+    if min(dx,dy)<10: raise ValueError('Las casillas son demasiado pequeñas o la cantidad de filas es incorrecta.')
+    r=max(3,min(15,round(min(dx,dy)*.29)))
+    a=im.astype(np.int16); R,G,B=a.transpose(2,0,1)
+    blue=(B-R>5)&(B-G>7)&(B<225)&(R<190); red=(R-B>18)&(R-G>18)&(G<180)&(B-G<35)&(R<205)
+    marks=[]
+    for row in centers:
+        scores=[]; reds=[]
+        for x,y in np.round(row).astype(int):
+            sl=np.s_[max(0,y-r):y+r+1,max(0,x-r):x+r+1]; scores.append(int(blue[sl].sum())); reds.append(int(red[sl].sum()))
+        high,second=sorted(range(options),key=lambda j:scores[j],reverse=True)[:2]; s=scores[high]
+        suggestion='ABCDE'[high] if s>=12 and scores[second]<max(12,.35*s) else ''
+        status='Azul detectado' if suggestion else 'Doble o dudosa' if s>=12 else 'Sin azul: revisar blanco u otra tinta'
+        if suggestion and s<25: status='Azul débil: revisar'
+        if max(reds)>20: status+=' · posible rojo'
+        x1,y1=np.floor(row.min(0)-r-3).astype(int); x2,y2=np.ceil(row.max(0)+r+4).astype(int)
+        marks.append(Mark('',suggestion,status,tuple(scores),tuple(reds),tuple(map(int,(max(0,x1),max(0,y1),min(WIDTH,x2),min(HEIGHT,y2))))))
+    return number_blocks([((0,0,0,0),marks)],[start])

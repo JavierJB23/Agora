@@ -32,7 +32,7 @@ def confirm(parent,title,text):
 class ManualPage(QWidget):
     def __init__(self, storage, go_home, mode="manual"):
         super().__init__(); self.mode=mode; self.storage=storage; self.optical_cache={}; self.config=ExamConfig(); self.key=['']*self.config.size; self.answers=['']*self.config.size
-        self.key_source=''; self.document_ref=None; self.template_id=None; self.stage=0; self.cursor=0; self.result=None; self._template_items=[]; self.persist_failed=False; self.attempt_id=None; self.saved_snapshot=None; self.form_override=None
+        self.key_source=''; self.document_ref=None; self.template_id=None; self.stage=0; self.cursor=0; self.result=None; self._template_items=[]; self.persist_failed=False; self.attempt_id=None; self.saved_snapshot=None; self.form_override=None; self.expected_counts=None
         self.root=QVBoxLayout(self); self.root.setContentsMargins(0,0,0,0); self.root.setSpacing(10)
         top=QHBoxLayout(); top.addWidget(btn('‹  Volver al inicio',go_home)); top.addWidget(btn('Guardar progreso',self.save_progress,'primary')); top.addStretch(); self.root.addLayout(top)
         self.root.addWidget(label('Corrector automático' if mode=='automatic' else 'Corrector manual','heading'))
@@ -52,41 +52,43 @@ class ManualPage(QWidget):
             from .optical_archive import unpack
             for slot,ref in d['optical_pages'].items():
                 i=int(slot)
-                if i not in (0,1): raise ValueError('Página guardada no válida.')
+                if not 0<=i<100: raise ValueError('Página guardada no válida.')
                 record=self.storage.load_optical_page(ref); original,aligned,marks=unpack(record,i)
                 for kind,val in (('images',original),('aligned',aligned),('marks',marks),('records',record)):
                     cache.setdefault(kind,{})[i]=val
         self.optical_cache.clear(); self.optical_cache.update(cache); self.template_id=d.get('template_id'); self.template_id=self.template_id if any(i==self.template_id for i,_,_ in self.storage.templates()) else None; self.document_ref=d.get('document_ref')
+        self.expected_counts=tuple(d['expected_counts']) if d.get('expected_counts') else None
         self.config=c; self.key=k; self.answers=a; self.key_source=d.get('key_source') or ('Plantilla anterior' if all(k) else ''); self.stage=stage if stage in (0,1,2,3) else 0; self.cursor=max(0,min(int(cursor),c.size-1)); self.result=None
         self.attempt_id=d.get('attempt_id'); self.saved_snapshot=self.storage.load_attempt(self.attempt_id) if self.attempt_id is not None else None
         self.form_override=d.get('form') if self.stage==0 else None
         if self.form_override is not None:
-            self.form_override=dict(self.form_override,questions=c.questions,reserves=c.reserves,options=c.options)
-            if self.form_override==asdict(c): self.form_override=None
+            self.form_override=dict(self.form_override,options=c.options)
+            if self.form_override==dict(asdict(c),questions=(self.expected_counts or (c.questions,c.reserves))[0],reserves=(self.expected_counts or (c.questions,c.reserves))[1]): self.form_override=None
         if self.stage>=2 and (not self.key_source or '' in self.key): self.stage=1
         if self.stage==3 and '' in self.answers: self.stage=2
         if (self.stage==3 or d.get('corrected')) and self.key_source and all(k) and all(a): self.result=evaluate(c,k,a)
 
     def form_data(self):
-        return {'name':self.name.text(),'questions':self.config.questions,'reserves':self.config.reserves,'options':self.config.options,'penalty':self.penalty.currentText(),'maximum':self.maximum.text(),'floor_zero':self.floor.isChecked()}
+        return {'name':self.name.text(),'questions':self.question_count.value(),'reserves':self.reserve_count.value(),'options':self.config.options,'penalty':self.penalty.currentText(),'maximum':self.maximum.text(),'floor_zero':self.floor.isChecked()}
 
     def payload(self,read_form=False):
         d={'mode':self.mode,'config':asdict(self.config),'key':list(self.key),'answers':list(self.answers),'stage':self.stage,'cursor':self.cursor,'key_source':self.key_source,'attempt_id':self.attempt_id,'corrected':self.result is not None}
+        if self.expected_counts is not None: d['expected_counts']=list(self.expected_counts)
         if self.template_id is not None: d['template_id']=self.template_id
         if self.document_ref is not None: d['document_ref']=self.document_ref
         if self.optical_cache.get('records'): d['optical_pages']={str(i):r[0] for i,r in self.optical_cache['records'].items()}
         form=self.form_data() if read_form and self.stage==0 and hasattr(self,'name') else self.form_override if self.stage==0 else None
-        if form is not None and form!=d['config']: d['form']=dict(form)
+        if form is not None and form!=dict(d['config'],questions=(self.expected_counts or (self.config.questions,self.config.reserves))[0],reserves=(self.expected_counts or (self.config.questions,self.config.reserves))[1]): d['form']=dict(form)
         return d
 
     @staticmethod
     def comparable(d):
         if not d: return None
-        return {**{k:d.get(k) for k in ('config','key','answers','key_source','form','document_ref','template_id')},'optical_pages':d.get('optical_pages',{}),'corrected':bool(d.get('corrected',d.get('stage')==3))}
+        return {**{k:d.get(k) for k in ('config','key','answers','key_source','form','document_ref','template_id','expected_counts')},'optical_pages':d.get('optical_pages',{}),'corrected':bool(d.get('corrected',d.get('stage')==3))}
 
     def active(self):
         d=self.payload(True)
-        return self.attempt_id is not None or any(self.key) or any(self.answers) or self.config!=ExamConfig() or bool(d.get('form'))
+        return self.attempt_id is not None or any(self.key) or any(self.answers) or self.config!=ExamConfig() or (self.expected_counts is not None and self.expected_counts!=(ExamConfig().questions,ExamConfig().reserves)) or bool(d.get('form'))
 
     def dirty(self):
         return self.active() and self.comparable(self.payload(True))!=self.comparable(self.saved_snapshot)
@@ -128,7 +130,7 @@ class ManualPage(QWidget):
 
     def reset_state(self):
         # In-memory reset only: caller handles database changes atomically.
-        self.optical_cache.clear(); self.config=ExamConfig(); self.key=['']*self.config.size; self.answers=['']*self.config.size; self.key_source=''; self.document_ref=None; self.template_id=None; self.result=None; self.stage=0; self.cursor=0; self.attempt_id=None; self.saved_snapshot=None; self.form_override=None; self.persist_failed=False; self.notice.setText(''); self.render()
+        self.optical_cache.clear(); self.config=ExamConfig(); self.key=['']*self.config.size; self.answers=['']*self.config.size; self.key_source=''; self.document_ref=None; self.template_id=None; self.result=None; self.stage=0; self.cursor=0; self.attempt_id=None; self.saved_snapshot=None; self.form_override=None; self.expected_counts=None; self.persist_failed=False; self.notice.setText(''); self.render()
 
     def open_saved(self,attempt_id):
         if self.active() and not confirm(self,'Abrir simulacro','Se sustituirá el borrador actual. El progreso no guardado en Mis simulacros se perderá. ¿Continuar?'): return False
@@ -165,15 +167,31 @@ class ManualPage(QWidget):
             self.complete_key()
             return
         if target==3:
-            if '' in self.answers:
+            if not self.check_counts(): return
+            candidate=list(self.answers); confirmed_reserves=False
+            if self.mode=='automatic' and '' not in candidate[:self.config.questions] and '' in candidate[self.config.questions:]:
+                from .grading import missing_reserves_message
+                message=missing_reserves_message(self.config,self.key,candidate)
+                if not confirm(self,'Reservas pendientes',message+'\nComprueba también las marcas azules y la alineación.'): return
+                candidate=[v or '-' for v in candidate]; confirmed_reserves=True
+            if '' in candidate:
                 self.move_stage(2)
-                self.notice.setText('Resuelve las lecturas pendientes y carga las hojas que falten.' if self.mode=='automatic' else 'Completa las respuestas o pulsa Corregir examen para confirmar las pendientes como blancas.')
+                self.notice.setText('Hay preguntas ordinarias pendientes. Revisa las lecturas o carga las hojas que falten.' if self.mode=='automatic' else 'Completa las respuestas o pulsa Corregir examen para confirmar las pendientes como blancas.')
                 return
-            if self.mode=='automatic' and self.result is None and not confirm(self,'Confirmar lectura','Comprueba que la hoja estaba marcada en azul y que la alineación y las respuestas propuestas son correctas. ¿Calcular la nota?'): return
-            try: self.result=evaluate(self.config,self.key,self.answers)
+            if self.mode=='automatic' and self.result is None and not confirmed_reserves and not confirm(self,'Confirmar lectura','Comprueba que la hoja estaba marcada en azul y que la alineación y las respuestas propuestas son correctas. ¿Calcular la nota?'): return
+            try: result=evaluate(self.config,self.key,candidate)
             except ValueError as e:
                 QMessageBox.warning(self,'No se pudo corregir',str(e)); return
+            self.answers[:]=candidate; self.result=result
         self.move_stage(target)
+
+    def check_counts(self):
+        actual=(self.config.questions,self.config.reserves)
+        if self.expected_counts is None or self.expected_counts==actual: return True
+        q,r=self.expected_counts
+        if not confirm(self,'Número de preguntas',f'Configuración: {q} ordinarias y {r} reservas.\nSolucionario: {actual[0]} ordinarias y {actual[1]} reservas.\n¿Corregir usando las cantidades del solucionario? Si no, vuelve a Configuración o importa el solucionario correcto.'): return False
+        self.expected_counts=actual
+        return True
 
     def key_summary_text(self):
         return f'Solucionario: {self.config.questions} preguntas · {self.config.reserves} reservas · {self.config.options} opciones'
@@ -185,12 +203,14 @@ class ManualPage(QWidget):
         self.penalty=SafeComboBox(); self.penalty.setEditable(True)
         self.penalty.addItems(['0','1/4','1/3','1/2','1']); self.penalty.setCurrentText(self.config.penalty)
         self.maximum=QLineEdit(self.config.maximum); self.maximum.setMaxLength(24)
-        for i,(title,widget) in enumerate((('Penalización por error',self.penalty),('Nota máxima',self.maximum))):
+        self.question_count=SafeSpinBox(); self.question_count.setRange(1,500); self.reserve_count=SafeSpinBox(); self.reserve_count.setRange(0,100)
+        q,r=self.expected_counts or (self.config.questions,self.config.reserves); self.question_count.setValue(q); self.reserve_count.setValue(r)
+        for i,(title,widget) in enumerate((('Preguntas ordinarias',self.question_count),('Preguntas de reserva',self.reserve_count),('Penalización por error',self.penalty),('Nota máxima',self.maximum))):
             col=i%2; row=(i//2)*2; grid.addWidget(label(title),row,col); grid.addWidget(widget,row+1,col)
         grid.setColumnStretch(0,1); grid.setColumnStretch(1,1); p.addLayout(grid)
         self.floor=QCheckBox('Limitar la nota mínima a 0'); self.floor.setChecked(self.config.floor_zero); p.addWidget(self.floor)
         if self.form_override:
-            f=self.form_override; self.name.setText(f['name']); self.penalty.setCurrentText(f['penalty']); self.maximum.setText(f['maximum']); self.floor.setChecked(f['floor_zero'])
+            f=self.form_override; self.name.setText(f['name']); self.penalty.setCurrentText(f['penalty']); self.maximum.setText(f['maximum']); self.floor.setChecked(f['floor_zero']); self.question_count.setValue(f.get('questions',q)); self.reserve_count.setValue(f.get('reserves',r))
         self.key_summary=label(self.key_summary_text(),'tileTitle',True); p.addWidget(self.key_summary); self.key_summary.setVisible(bool(self.key_source))
         t=panel(self.body); t.addWidget(label('Plantillas guardadas','tileTitle')); self.templates_combo=SafeComboBox(); t.addWidget(self.templates_combo)
         row=QHBoxLayout(); row.addWidget(btn('Consultar plantilla',self.view_template)); self.use_template_button=btn('Usar plantilla',self.load_template); row.addWidget(self.use_template_button); self.use_template_button.hide(); row.addWidget(btn('Eliminar plantilla',self.remove_template)); row.addWidget(btn('Quitar plantilla',self.clear_template)); row.addStretch(); t.addLayout(row); self.refresh_templates(); self.templates_combo.activated.connect(self.template_selected)
@@ -242,6 +262,7 @@ class ManualPage(QWidget):
             self.notice.setText('Plantilla seleccionada, no cargada'); return False
         # Stay in configuration so Consultar / Eliminar remain accessible.
         self.optical_cache.clear(); self.template_id=tid; self.document_ref=d.get('document_ref'); self.attempt_id=None; self.saved_snapshot=None; self.config=c; self.key=k; self.key_source=d.get('key_source') or 'Plantilla guardada'; self.answers=['']*c.size; self.result=None; self.cursor=0; self.form_override=None
+        self.expected_counts=(c.questions,c.reserves); self.question_count.setValue(c.questions); self.reserve_count.setValue(c.reserves)
         self.name.setText(c.name); self.penalty.setCurrentText(c.penalty); self.maximum.setText(c.maximum); self.floor.setChecked(c.floor_zero)
         self.key_summary.setText(self.key_summary_text()); self.key_summary.show()
         self.persist(True)
@@ -262,6 +283,7 @@ class ManualPage(QWidget):
             if idx>=0: self.templates_combo.setCurrentIndex(idx)
             return False
         self.form_override=self.form_data()
+        self.expected_counts=None
         self.config=replace(self.config,questions=ExamConfig().questions,reserves=ExamConfig().reserves,options=ExamConfig().options)
         self.key=['']*self.config.size; self.answers=['']*self.config.size
         self.key_source=''; self.document_ref=None; self.template_id=None; self.result=None; self.cursor=0
@@ -287,7 +309,9 @@ class ManualPage(QWidget):
     def apply_config(self,checked=False,*,target=1):
         try: c=replace(self.config,name=self.name.text().strip(),penalty=self.penalty.currentText().strip().replace(',','.'),maximum=self.maximum.text().strip().replace(',','.'),floor_zero=self.floor.isChecked())
         except ValueError as e: QMessageBox.warning(self,'Revisa la configuración',str(e)); return
-        if c!=self.config: self.result=None
+        counts=(self.question_count.value(),self.reserve_count.value())
+        self.expected_counts=counts
+        if c!=self.config or (self.expected_counts is not None and self.expected_counts!=(c.questions,c.reserves)): self.result=None
         self.config=c; self.form_override=None; self.open_stage(target)
 
     def show_key(self):
@@ -317,18 +341,24 @@ class ManualPage(QWidget):
         options=review_key(self,imported,name,self.config.options)
         if options is None: return
         c=replace(self.config,questions=len(imported.ordinary),reserves=len(imported.reserves),options=options)
+        expected=self.expected_counts or (self.config.questions,self.config.reserves)
+        if expected!=(c.questions,c.reserves):
+            q,r=expected
+            if not confirm(self,'Revisar cantidades',f'Configuración: {q} preguntas y {r} reservas. Solucionario: {c.questions} preguntas y {c.reserves} reservas. ¿Importar igualmente?'): return
         changed=(c.questions,c.reserves,c.options)!=(self.config.questions,self.config.reserves,self.config.options)
         if any(self.answers) and (changed or imported.key!=self.key):
             if not confirm(self,'Sustituir solucionario','Se borrarán tus respuestas actuales para evitar mezclarlas con otro examen. ¿Continuar?'): return
         try: ref=self.storage.archive_solution_document(name,data) if data is not None else None
         except Exception as e: QMessageBox.warning(self,'No se pudo conservar el documento',str(e)); return
         if changed or (any(self.answers) and imported.key!=self.key): self.answers=['']*c.size
-        self.install_key(imported,name,c.options,document_ref=ref)
-    def install_key(self,imported,name,options,document_ref=None):
+        self.expected_counts=expected
+        self.install_key(imported,name,c.options,document_ref=ref,preserve_expected=True)
+    def install_key(self,imported,name,options,document_ref=None,preserve_expected=False):
         # Internal operation, after preview/confirmation.
         c=replace(self.config,questions=len(imported.ordinary),reserves=len(imported.reserves),options=options)
         if c.size!=len(self.answers): self.answers=['']*c.size
         if c.size!=self.config.size or (c.questions,c.reserves,c.options)!=(self.config.questions,self.config.reserves,self.config.options) or list(imported.key)!=list(self.key): self.optical_cache.clear()
+        if not preserve_expected: self.expected_counts=(c.questions,c.reserves)
         self.template_id=None; self.document_ref=document_ref; self.config=c; self.key=imported.key; self.key_source=name; self.result=None; self.move_stage(1)
     def show_answers(self):
         if self.mode=='manual': self.show_entry(False); return
@@ -420,6 +450,7 @@ class ManualPage(QWidget):
         if self.is_key:
             if self.complete_key(): self.move_stage(2)
         else:
+            if not self.check_counts(): return
             if '' in self.answers:
                 n=self.answers.count('')
                 if not confirm(self,'Respuestas pendientes',f'Quedan {n} sin registrar. ¿Contarlas como respuestas en blanco?'): return

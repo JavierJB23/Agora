@@ -26,8 +26,11 @@ def unpack(row,slot):
     with Image.open(BytesIO(original)) as im: original=np.array(im.convert('RGB'))
     with Image.open(BytesIO(normalized)) as im: normalized=np.array(im.convert('RGB'))
     marks=[Mark(m['number'],m['suggestion'],m['status'],tuple(m['scores']),tuple(m['red']),tuple(m['crop'])) for m in json.loads(metadata)]
-    if normalized.shape!=(HEIGHT,WIDTH,3) or len(marks)!=(120 if slot==0 else 9): raise ValueError('Imagen guardada no válida.')
-    for j,m in enumerate(marks):
+    import re
+    if normalized.shape!=(HEIGHT,WIDTH,3) or not 1<=len(marks)<=600: raise ValueError('Imagen guardada no válida.')
+    seen=set()
+    for m in marks:
         x,y,x2,y2=m.crop
-        if m.number!=('' if slot==0 else 'R')+str(j+1) or not (0<=x<x2<=WIDTH and 0<=y<y2<=HEIGHT): raise ValueError('Recorte guardado no válido.')
+        if not re.fullmatch(r'R?[1-9][0-9]{0,2}',m.number) or m.number in seen or not (0<=x<x2<=WIDTH and 0<=y<y2<=HEIGHT) or not 2<=len(m.scores)==len(m.red)<=5: raise ValueError('Recorte guardado no válido.')
+        seen.add(m.number)
     return original,normalized,marks

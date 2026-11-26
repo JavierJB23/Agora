@@ -92,3 +92,15 @@ def evaluate(config, key, answers):
     raw=net*Fraction(config.maximum)/effective if effective else None
     grade=max(Fraction(0),raw) if raw is not None and config.floor_zero else raw
     return Result(tuple(rows),a,e,b,len(annulled),len(replacements),effective,net,grade,raw)
+
+
+def missing_reserves_message(config,key,answers):
+    missing=[i for i in range(config.questions,config.size) if not answers[i]]
+    annulled=sum(v=='X' for v in key[:config.questions])
+    used=[i for i in range(config.questions,config.size) if key[i]!='X'][:annulled]
+    needed=sum(i in missing for i in used)
+    if needed:
+        detail=f'{needed} de las reservas pendientes se necesitan para sustituir anuladas. Si continúas, se contarán como blancas y pueden afectar a la nota.'
+    else:
+        detail='Ninguna de las reservas pendientes se necesita para sustituir anuladas. No afectarán a la nota.'
+    return f'Faltan {len(missing)} respuestas de reserva. {detail} ¿Corregir igualmente?'
