@@ -478,3 +478,23 @@ class UITests(unittest.TestCase):
             if count: self.assertEqual(answers[112],'B')
             else: self.assertIn('no puntúan',page.count.text())
             page.deleteLater(); self.app.processEvents()
+
+    def test_mobile_reusable_dialog_accumulates_until_finish(self):
+        from unittest.mock import patch
+        from agora.import_ui import ImportDialog
+        from PySide6.QtWidgets import QDialog
+        from urllib.request import urlopen,Request
+        from urllib.parse import quote
+        import json
+        dlg=ImportDialog(None,('.png',),multiple=True,max_files=20)
+        try:
+            with patch('agora.import_ui.local_addresses',return_value=['127.0.0.1']): dlg.mobile()
+            url=dlg.session.url('127.0.0.1')
+            for i in range(2):
+                name=f'hoja{i}.png'; req=Request(url+'batch',data=b'abc',headers={'X-Files':quote(json.dumps([[name,3]]))})
+                with urlopen(req,timeout=3) as response: self.assertEqual(response.status,200)
+                dlg.poll(); self.assertEqual(len(dlg.items),i+1); self.assertEqual(dlg.session.url('127.0.0.1'),url)
+                self.assertNotEqual(dlg.result(),QDialog.DialogCode.Accepted)
+            self.assertIn('2',dlg.finish_button.text()); dlg.finish_upload()
+            self.assertEqual(dlg.result(),QDialog.DialogCode.Accepted); self.assertIsNone(dlg.session)
+        finally: dlg.cleanup(); dlg.deleteLater(); self.app.processEvents()

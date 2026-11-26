@@ -61,3 +61,27 @@ class TransferTests(unittest.TestCase):
                 self.assertIn('class="pick"',page); self.assertIn('Seleccionar archivos',page); self.assertIn('<svg ',page); self.assertIn('padding:14px;width:100%;font:inherit',page); self.assertIn('id="file"',page)
                 self.assertEqual('type="file" multiple' in page,multi)
             finally: s.close()
+
+    def test_reusable_qr_batches_and_finalization(self):
+        import json
+        from urllib.parse import quote
+        s=UploadSession(host='127.0.0.1',extensions=('.png','.pdf'),multiple=True,max_files=3,reusable=True,max_bytes=9)
+        url=s.url('127.0.0.1')
+        def req(name,data): return Request(url+'batch',data=data,headers={'X-Files':quote(json.dumps([[name,len(data)]]))})
+        try:
+            with urlopen(url,timeout=3) as r:
+                page=r.read().decode(); self.assertIn('Puedes seleccionar y enviar más',page); self.assertIn("f.value=''",page)
+            with urlopen(req('ordinaria.png',b'abc'),timeout=3) as r: self.assertEqual(r.status,200)
+            with self.assertRaises(HTTPError) as e: urlopen(req('reserva.png',b'def'),timeout=3)
+            self.assertEqual(e.exception.code,409)
+            self.assertEqual(s.items.get(timeout=1),[('ordinaria.png',b'abc')])
+            with urlopen(req('reserva.png',b'def'),timeout=3) as r: self.assertEqual(r.status,200)
+            self.assertEqual(s.items.get(timeout=1),[('reserva.png',b'def')])
+            with self.assertRaises(HTTPError) as e: urlopen(req('grande.pdf',b'1234'),timeout=3)
+            self.assertEqual(e.exception.code,413)
+            with urlopen(req('extra.pdf',b'123'),timeout=3) as r: self.assertEqual(r.status,200)
+            self.assertEqual(s.items.get(timeout=1),[('extra.pdf',b'123')])
+            self.assertTrue(s.seal())
+            with self.assertRaises(HTTPError) as e: urlopen(req('otra.png',b'x'),timeout=3)
+            self.assertEqual(e.exception.code,409)
+        finally: s.close()
