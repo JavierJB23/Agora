@@ -79,3 +79,7 @@ FIX11 (v0.6.11): espacio de ajuste de alineación común, restauración automát
 - Botones de ajuste compactos, texto centrado; se conserva la vista previa y aplicación explícita. No cambia el motor de puntuación, las anulaciones, las reservas, la base de datos ni el QR. No modificar windows.yml; compilación manual.
 - Pruebas locales: 27 pruebas OMR anteriores + 4 nuevas + 57 de otros módulos = 88 superadas por grupos. 27 pruebas GUI pendientes en Windows. Comprobaciones adicionales con los archivos de referencia externos: plantilla rosa en blanco (120 ordinarias, 9 reservas, sin falsas anulaciones), TEST 10 (103 propuestas, 8 blancos, 1 duda en 112 preguntas) y plantilla corregida original (106 propuestas, 1 duda en 107 preguntas). Las nuevas fotografías de color que fallaron en el ordenador del usuario no están adjuntas, por lo que no se han reproducido directamente. No se distribuye material privado.
 
+
+
+## FIX14 (v0.6.14)
+Detector complementario de filas repetidas, exclusión de cabeceras, muestreo de tinta y rayas azules/rojas, renombrado de plantillas y selector QR ampliado. Pendiente validación de usuario, OCR general de numeración y mayor variedad de diseños.

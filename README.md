@@ -1,3 +1,14 @@
+# ÁGORA v0.6.14 — BLOCK 06 — FIX14
+
+- Lector: nuevo detector complementario de cuatro columnas de círculos (30 filas por columna) basado en contornos, contraste y continuidad, sin posiciones absolutas de las casillas. Excluye cabeceras por contraste local, reconstruye filas tachadas y valida las cuatro secuencias. Conserva los detectores anteriores y el lector de cuadrados. La numeración general por OCR sigue pendiente.
+- Marcas: muestreo central adaptado al tamaño, separación de tinta de impresión repetida, detección de trazos que cruzan espacios entre casillas y de rayas manuscritas que atraviesan el hueco anterior a las opciones. Las posibles anulaciones quedan pendientes, nunca se anulan automáticamente. El ajuste manual de tres opciones comparte el muestreo.
+- Mis plantillas: Renombrar conserva ID, fecha, archivo original, patrón y vínculos a los simulacros; rechaza nombres vacíos o duplicados.
+- QR: selector de archivos de ancho completo, igual relleno que Enviar; logo original, nombre seleccionado y selección múltiple conservada. Sin cambios de red, límites de carga o almacenamiento.
+- Validación con 20 JPEG privados: 15 hojas ordinarias de círculos, cuatro de cuadrados y una de reservas. El detector ha recuperado las 120 filas físicas de las 19 hojas ordinarias y las 9 reservas de la última. En la hoja 2023: 107 letras propuestas, 2 blancos y 11 pendientes, incluidas las ocho rayas visibles (5, 6, 24, 38, 39, 100, 108, 109). No equivale a certificar todas las respuestas: faltan claves y comprobación manual individual. Se siguen observando dudas y algunos avisos adicionales; no se promete cualquier diseño o tinta indistinguible de la impresión.
+- Pruebas nuevas: renombrado, selector móvil y hoja sintética coloreada con rayas. Pruebas de regresión locales por grupos; ejecución íntegra y GUI pendientes en GitHub/Windows. No se incluyen fotografías ni datos privados. No cambia el esquema de base de datos ni windows.yml; compilación manual.
+
+## Histórico (FIX14 prevalece)
+
 # ÁGORA v0.6.13 — BLOCK 06 — FIX13
 
 - Círculos, cuadrados y diseños regulares alternativos: una ruta automática común tanto al importar como al restablecer. Los cuadrados ya no abren el diálogo de numeración. Si no se reconoce la hoja con suficiente seguridad, se ofrece la misma ventana de ajuste (sin seleccionar previamente el tipo de plantilla), conservando la imagen mientras se ajusta.
