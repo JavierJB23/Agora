@@ -1,5 +1,3 @@
-ÁGORA v0.6.6 — BLOCK 06 — FIX06
-Pruebas locales: python -m unittest discover -s tests -v
 test_columns_with_reserves (test_answer_import.ImportTests.test_columns_with_reserves) ... ok
 test_compact (test_answer_import.ImportTests.test_compact) ... ok
 test_docx (test_answer_import.ImportTests.test_docx) ... ok
@@ -36,6 +34,7 @@ test_migration_keeps_unknown_dates (test_library.LibraryTests.test_migration_kee
 EOF marker not found
 EOF marker not found
 ok
+test_independent_columns_with_curvature (test_omr.CurvedCircleTests.test_independent_columns_with_curvature) ... ok
 test_guided_block_rectangles_and_archive (test_omr.FlexibleTests.test_guided_block_rectangles_and_archive) ... ok
 test_many_pdf_pages (test_omr.FlexibleTests.test_many_pdf_pages) ... ok
 test_square_detection_and_same_page_reserves (test_omr.FlexibleTests.test_square_detection_and_same_page_reserves) ... ok
@@ -81,6 +80,7 @@ test_direct_steps_and_current_result (test_ui.UITests.test_direct_steps_and_curr
 test_exit_and_reentry_dialogs (test_ui.UITests.test_exit_and_reentry_dialogs) ... skipped 'PySide6 no disponible'
 test_history_delete_confirmation_and_active_draft (test_ui.UITests.test_history_delete_confirmation_and_active_draft) ... skipped 'PySide6 no disponible'
 test_import_source_tiles_and_mobile_page (test_ui.UITests.test_import_source_tiles_and_mobile_page) ... skipped 'PySide6 no disponible'
+test_large_tile_content_centered (test_ui.UITests.test_large_tile_content_centered) ... skipped 'PySide6 no disponible'
 test_library_documents_and_fresh_entry_from_history (test_ui.UITests.test_library_documents_and_fresh_entry_from_history) ... skipped 'PySide6 no disponible'
 test_library_root_and_deletion_confirmation (test_ui.UITests.test_library_root_and_deletion_confirmation) ... skipped 'PySide6 no disponible'
 test_manual_keyboard (test_ui.UITests.test_manual_keyboard) ... skipped 'PySide6 no disponible'
@@ -96,11 +96,12 @@ test_view_template_without_replacing_draft (test_ui.UITests.test_view_template_w
 test_wheel_does_not_change_form_controls (test_ui.UITests.test_wheel_does_not_change_form_controls) ... skipped 'PySide6 no disponible'
 
 ----------------------------------------------------------------------
-Ran 89 tests in 2.211s
+Ran 91 tests in 12.827s
 
-OK (skipped=21)
+OK (skipped=22)
 
-Pruebas con documentos privados (no incluidos):
-Plantilla original: 107 preguntas, 106 propuestas, pregunta 33 pendiente (B); confirmando B: 74 aciertos, 33 errores, nota 5,89.
-TEST 10: 4 bloques de 30 filas, 4 casillas; de 112 preguntas, 103 letras A–C, 8 blancos propuestos, pregunta 92 pendiente, 8 casillas sobrantes. Sin solucionario de TEST 10 no se valida la nota.
-21 pruebas gráficas y prueba del EXE pendientes en GitHub Windows.
+Pruebas externas (documentos no incluidos):
+- Plantilla_corregida.pdf: 120+9, pregunta 33 sigue pendiente; geometría original con diferencia máxima de 3 px respecto al lector anterior.
+- TEST 10: cuatro bloques de 30 filas y cuatro casillas, no confundidos con círculos; 103 letras A–C, 8 blancos y 1 pendiente en las 112 primeras.
+- S24 imagen extraída de captura 110142: 120 filas alineadas automáticamente y con ajuste manual, 104 letras propuestas, 5 blancos propuestos, 11 pendientes. No se valida la nota ni la precisión de letras por tratarse de captura reducida.
+- Pruebas de interfaz y EXE Windows pendientes.

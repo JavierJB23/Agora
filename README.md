@@ -1,3 +1,12 @@
+# ÁGORA v0.6.7 — BLOCK 06 — FIX07
+
+- Todos los botones grandes (Inicio, Mi temario e importación PC/móvil) comparten un componente con icono y texto centrados como conjunto. No se cambian los iconos laterales de navegación ni el logotipo.
+- Círculos A–C conocidos: ajuste independiente por columnas y refinamiento local de cada fila. Se comprueba la cobertura de las 30 filas, los extremos, separación de casillas y coherencia entre columnas; se conserva el algoritmo anterior como respaldo. Se prueba primero la geometría conocida y después la de cuadrados. Se mantiene la numeración confirmada de los bloques de cuadrados y la lectura de reservas.
+- Diálogos de alineación y numeración limitados a la altura de pantalla; no modifica corrección, almacenamiento, configuración ni transferencia. No requiere modificar windows.yml: conserva el disparo manual y la prueba del EXE. FIX07 pendiente de validación Windows.
+- Validación adicional con la imagen de la captura de S24 (no con la foto original de máxima resolución): alineación de 120 filas automática y por cuatro referencias. No valida la nota de S24 ni garantiza todas las lecturas; usar la revisión de pendientes. Se conservan las pruebas de los documentos anteriores. Ningún documento privado incluido.
+
+## Histórico (FIX07 prevalece)
+
 # ÁGORA v0.6.6 — BLOCK 06 — FIX06
 
 - Dos campos seguros en Configuración: preguntas ordinarias y reservas. Se conservan las cantidades previstas separadas de las detectadas por el solucionario. Si difieren, se avisa al importar y antes de corregir; tras aceptar la corrección se usan las cantidades del solucionario. Si no se acepta, vuelve a Configuración o carga el solucionario correcto. No se inventan claves ni se eliminan preguntas silenciosamente.
@@ -5,7 +14,7 @@
 - Lector flexible: conserva el OMR original de círculos A–C y añade detección geométrica de bloques de casillas cuadradas conectadas, con confirmación del número inicial de cada bloque. Distingue opciones impresas y válidas, y marca para revisión las opciones inválidas. Ajuste guiado por cuatro centros para otras cuadrículas regulares de 2–5 opciones y 2–120 filas por bloque. Indicar R1, R4… cuando sean reservas en la misma página o en otra. No es OCR universal de numeración; requiere confirmar la estructura de nuevos diseños. Tinta azul; rojo informativo. Las hojas atípicas todavía pueden requerir corrector manual. No se incluye aún el guardado de modelos de hoja.
 - Importación única de respuestas PC/QR: hasta 20 archivos/páginas por sesión, 100 MiB total, con páginas de ordinarias, reservas o mixtas, numeradas por bloque. Conserva imágenes y recortes de cada página en el mismo esquema SQLite 8; no modifica datos existentes. Se rechazan numeraciones duplicadas y sustituciones parciales de páginas para evitar mezclas. No abrir lecturas nuevas multipágina con EXE anteriores.
 - Mi temario: icono y nombre centrados verticalmente, separación reducida.
-- Subir paquete completo a GitHub. No cambiar windows.yml, no instalar Python. Prueba de arranque del EXE ampliada para verificar también cuadrados y guardado. Ver TESTS.txt. FIX06 pendiente validación Windows.
+- Compilación manual: actualizar una sola vez `.github/workflows/windows.yml` con el archivo incluido en este ZIP (si la carpeta oculta no se sube desde la web, editar el archivo existente y pegar su contenido completo). Subir el resto del paquete a GitHub si aún no está actualizado. En Actions > Compilar Agora Windows > Run workflow, elegir main y pulsar Run workflow. No hay compilaciones automáticas por push. Los artefactos nuevos caducan tras 3 días; conservar localmente los EXE. No instalar Python. Se conservan las pruebas y la prueba de arranque del EXE. FIX06 pendiente de validación Windows. No publicar documentos privados ni bases de datos.
 
 ## Registro histórico (prevalecen las reglas de FIX06)
 

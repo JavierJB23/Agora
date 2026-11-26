@@ -49,3 +49,8 @@ BLOCK 06 FIX05 (v0.6.5): raíz Mi temario con dos pantallas independientes; impo
 
 
 BLOCK 06 FIX06 (v0.6.6): FIX05 validado para plantilla inicial. Se reabre validación de OMR por hojas de otros diseños y reservas ausentes. Configuración de ordinarias y reservas con contraste contra solucionario; reservas pendientes no bloquean si el usuario confirma, advertencia si se necesitan para anuladas. Detección de bloques cuadrados con confirmación de numeración, ajuste guiado para cuadrículas regulares diferentes, opciones impresas 2–5 frente a opciones válidas, varias páginas y reservas mixtas. Centrado de tarjetas de Mi temario. Sin OCR genérico automático de números ni guardado de modelos por ahora. SQLite 8 sin nueva migración. Pendiente pruebas de Windows y hojas adicionales antes de STABLE y BLOCK 07.
+
+
+Norma de compilación desde FIX06: workflow_dispatch exclusivamente, sin push. Subir todos los archivos antes de ejecutar una sola compilación manual desde Actions (main). Retención de artefactos nuevos: 3 días; conservar EXE STABLE localmente. Mantener nomenclatura de versión, pruebas unitarias y prueba de arranque. No hay cambios de código de aplicación ni de esquema de datos por este ajuste de CI.
+
+FIX07 (v0.6.7): componente común de tarjetas centradas para Inicio, Mi temario, importación; círculos con ajuste local independiente por columnas; círculos conocidos antes de cuadrados, respaldo anterior, diálogos adaptados a la altura de pantalla. Validación de FIX06 parcial; mantener 05–06 en revisión hasta probar hojas variadas en Windows. Compilación solo manual.
