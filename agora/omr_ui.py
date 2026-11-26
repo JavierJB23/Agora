@@ -66,7 +66,10 @@ class OpticalPage(QWidget):
         import cv2 as cv
         shown=aligned.copy(); next_number=1; defaults=[]; details=[]
         for i,((x,y,w,h),marks) in enumerate(blocks):
-            cv.rectangle(shown,(x,y),(x+w,y+h),(165,83,121),3)
+            corners=[pt for m in marks for pt in m.quad]
+            if corners:
+                hull=cv.convexHull(np.round(corners).astype(np.int32)); cv.polylines(shown,[hull],True,(165,83,121),3)
+            else: cv.rectangle(shown,(x,y),(x+w,y+h),(165,83,121),3)
             cv.putText(shown,str(i+1),(x+3,max(22,y-5)),cv.FONT_HERSHEY_SIMPLEX,.9,(165,83,121),3)
             defaults.append(str(next_number)); next_number+=len(marks)
             details.append(f'{i+1}: {len(marks)} filas, {len(marks[0].scores)} opciones')
@@ -74,11 +77,16 @@ class OpticalPage(QWidget):
         l.addWidget(text('Confirma el número de la primera pregunta de cada bloque. Usa R1, R4… para reservas.'))
         preview=QLabel(); preview.setAlignment(A.AlignCenter); preview.setPixmap(pix(shown).scaled(640,max(200,min(630,self.screen().availableGeometry().height()-300)),Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation)); l.addWidget(preview,1)
         l.addWidget(text(' · '.join(details))); field=QLineEdit(', '.join(defaults)); l.addWidget(field)
-        row=QHBoxLayout(); row.addWidget(btn('Cancelar',d.reject)); row.addWidget(btn('Ajuste por bloques',lambda:d.done(2))); row.addWidget(btn('Confirmar',d.accept,True)); l.addLayout(row)
-        outcome=d.exec()
-        if outcome==2: return self.guided_dialog(aligned)
-        if outcome!=QDialog.DialogCode.Accepted: return None
-        return omr.number_blocks(blocks,field.text().split(','))
+        row=QHBoxLayout(); row.addWidget(btn('Cancelar',d.reject)); row.addWidget(btn('Restablecer',lambda:field.setText(', '.join(defaults)))); row.addWidget(btn('Ajuste por bloques',lambda:d.done(2))); row.addWidget(btn('Confirmar',d.accept,True)); l.addLayout(row)
+        while True:
+            outcome=d.exec()
+            if outcome==2:
+                marks=self.guided_dialog(aligned)
+                if marks is not None: return marks
+                continue
+            if outcome!=QDialog.DialogCode.Accepted: return None
+            try: return omr.number_blocks(blocks,field.text().split(','))
+            except ValueError as e: QMessageBox.warning(d,'Numeración incorrecta',str(e))
     def guided_dialog(self,aligned):
         allmarks=[]
         while True:
@@ -110,12 +118,12 @@ class OpticalPage(QWidget):
         except ValueError as e:
             circle_error=str(e)
         try:
-            blocks=omr.square_blocks(aligned)
+            square_view,blocks=omr.square_page(im,aligned)
         except ValueError:
             blocks=None
         if blocks:
-            marks=self.choose_numbering(aligned,blocks)
-            return (aligned,marks) if marks is not None else None
+            marks=self.choose_numbering(square_view,blocks)
+            return (square_view,marks) if marks is not None else None
         else:
             box=QMessageBox(self); box.setWindowTitle('Alinear hoja'); box.setText(circle_error); box.setInformativeText('Puedes ajustar la plantilla de círculos conocida o indicar otros bloques de casillas.'); box.setIcon(QMessageBox.Icon.Question)
             ordinary=box.addButton('Círculos A–C',QMessageBox.ButtonRole.ActionRole); reserve=box.addButton('Reservas A–C',QMessageBox.ButtonRole.ActionRole); generic=box.addButton('Otro diseño',QMessageBox.ButtonRole.ActionRole); cancel=box.addButton('Cancelar',QMessageBox.ButtonRole.RejectRole); box.setEscapeButton(cancel); box.exec()
@@ -187,7 +195,7 @@ class OpticalPage(QWidget):
             img=self.images[i] if original else self.aligned[i].copy()
             if not original:
                 for m in self.marks[i]:
-                    x,y,x2,y2=m.crop; cv.rectangle(img,(x,y),(x2-1,y2-1),(28,167,112),2)
+                    omr.draw_mark(img,m)
             im.setPixmap(pix(img).scaled(600,690,Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation))
         row.addWidget(btn('Hoja original',lambda:show(True))); row.addWidget(btn('Casillas leídas',lambda:show(False))); l.addLayout(row)
         sc=QScrollArea(); sc.setWidget(im); sc.setWidgetResizable(True); l.addWidget(sc,1); l.addWidget(btn('Cerrar',d.accept),0,A.AlignCenter); show(True); d.exec()
@@ -246,7 +254,7 @@ class OpticalPage(QWidget):
             for col,s in [(0,self.config.number(i)),(2,status)]:
                 t=QTableWidgetItem(s); t.setTextAlignment(A.AlignCenter); self.table.setItem(row,col,t)
             if m:
-                x,y,x2,y2=m.crop; crop=QLabel(); crop.setAlignment(A.AlignCenter); crop.setPixmap(pix(self.aligned[page][y:y2,x:x2]).scaled(155,43,Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation)); self.table.setCellWidget(row,1,crop)
+                crop=QLabel(); crop.setAlignment(A.AlignCenter); crop.setPixmap(pix(omr.crop_image(self.aligned[page],m)).scaled(155,43,Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation)); self.table.setCellWidget(row,1,crop)
             combo=SafeComboBox(); vals=['',*self.config.letters,'-']; combo.addItems(['Pendiente',*self.config.letters,'En blanco']); combo.setCurrentIndex(vals.index(self.answers[i])); combo.currentIndexChanged.connect(lambda k,n=i,v=vals:self.set_choice(n,v[k])); self.table.setCellWidget(row,3,combo)
         self.update_count()
     def set_choice(self,i,value):

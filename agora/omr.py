@@ -1,7 +1,7 @@
 """Block 05: optical mark proposals for the supplied 120+9 A/B/C layout.
 Blue ink is interpreted; clear results are proposed and the set is confirmed before scoring.
 """
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from io import BytesIO
 from pathlib import Path
 import cv2 as cv
@@ -19,6 +19,7 @@ class Mark:
     scores: tuple[int,...]
     red: tuple[int,...]
     crop: tuple[int,int,int,int]
+    quad: tuple[tuple[float,float],...] = ()  # ordered corners of the actual row
 
 def decode(name,data):
     ext=Path(name).suffix.lower()
@@ -482,14 +483,82 @@ def square_blocks(im):
             if suggestion and max(reds)>8: status+=' · posible rojo'
             if not suggestion and (max(dark)>max(10,size*.8) or max(reds)>8): status='Marca oscura o roja: revisar'; scores[0]=max(scores[0],5)
             bounds=np.float32([[[row[0][0]-size*.7,row[0][1]-pitch*.45],[row[-1][0]+size*.7,row[-1][1]-pitch*.45],[row[-1][0]+size*.7,row[-1][1]+pitch*.45],[row[0][0]-size*.7,row[0][1]+pitch*.45]]])
-            xy=cv.perspectiveTransform(bounds,inv)[0]; x1,y1=np.floor(xy.min(0)).astype(int); x2,y2=np.ceil(xy.max(0)).astype(int)
-            crop=tuple(map(int,(max(0,x1),max(0,y1),min(WIDTH,x2),min(HEIGHT,y2))))
-            marks.append(Mark('',suggestion,status,tuple(scores),tuple(reds),crop))
+            xy=cv.perspectiveTransform(bounds,inv)[0]
+            crop,quad=row_geometry(xy)
+            marks.append(Mark('',suggestion,status,tuple(scores),tuple(reds),crop,quad))
         blocks.append(((x,y,w,h),marks))
     if not blocks: raise ValueError('No se reconocen bloques de casillas cuadradas con suficiente seguridad.')
     # Sort groups left to right, then top to bottom for groups sharing the same column.
     blocks.sort(key=lambda b:(b[0][0]//35,b[0][1]))
     return blocks
+
+
+def row_geometry(points):
+    q=np.asarray(points,np.float32).reshape(4,2)
+    q[:,0]=np.clip(q[:,0],0,WIDTH-1); q[:,1]=np.clip(q[:,1],0,HEIGHT-1)
+    x1,y1=np.floor(q.min(0)).astype(int); x2,y2=np.ceil(q.max(0)).astype(int)+1
+    crop=tuple(map(int,(x1,y1,x2,y2)))
+    if not cv.isContourConvex(q) or cv.contourArea(q)<4: return crop,()
+    return crop,tuple(tuple(float(v) for v in point) for point in q)
+
+
+def crop_image(im,mark):
+    """Display one row level, without borrowing pixels from adjacent rows."""
+    if mark.quad:
+        q=np.float32(mark.quad)
+        w=max(2,round(max(np.linalg.norm(q[1]-q[0]),np.linalg.norm(q[2]-q[3]))))
+        h=max(2,round(max(np.linalg.norm(q[3]-q[0]),np.linalg.norm(q[2]-q[1]))))
+        dst=np.float32([[0,0],[w-1,0],[w-1,h-1],[0,h-1]])
+        return cv.warpPerspective(im,cv.getPerspectiveTransform(q,dst),(w,h),borderMode=cv.BORDER_REPLICATE)
+    x,y,x2,y2=mark.crop
+    return im[y:y2,x:x2]
+
+
+def draw_mark(im,mark):
+    if mark.quad:
+        cv.polylines(im,[np.round(mark.quad).astype(np.int32)],True,(28,167,112),2)
+    else:
+        x,y,x2,y2=mark.crop; cv.rectangle(im,(x,y),(x2-1,y2-1),(28,167,112),2)
+
+
+def original_canvas(im):
+    """Fit the photo to archive dimensions without rotating or stretching it."""
+    h,w=im.shape[:2]; scale=min(WIDTH/w,HEIGHT/h)
+    dx=(WIDTH-w*scale)/2; dy=(HEIGHT-h*scale)/2
+    mat=np.float32([[scale,0,dx],[0,scale,dy],[0,0,1]])
+    return cv.warpPerspective(im,mat,(WIDTH,HEIGHT),borderValue=(255,255,255)),mat
+
+
+def square_page(im,aligned=None):
+    """Prefer the untouched photo geometry. Keep the existing rectified detector
+    as a fallback, and map its rows back onto the original view if needed."""
+    canvas,mat=original_canvas(im)
+    if aligned is None: aligned=align(im)
+    try: raw=square_blocks(canvas)
+    except ValueError: raw=[]
+    try: warped=square_blocks(aligned)
+    except ValueError: warped=[]
+    if not raw and not warped: raise ValueError('No se reconocen bloques de casillas cuadradas con suficiente seguridad.')
+    def shape(blocks): return [(len(ms),len(ms[0].scores)) for _,ms in blocks]
+    def readings(blocks): return [proposed(m) for _,ms in blocks for m in ms]
+    # Preserve the proven reading if both candidates cover the same rows but disagree.
+    if raw and (not warped or (shape(raw)==shape(warped) and readings(raw)==readings(warped))):
+        return canvas,raw
+    dst=np.float32([[0,0],[WIDTH-1,0],[WIDTH-1,HEIGHT-1],[0,HEIGHT-1]])
+    back=mat @ cv.getPerspectiveTransform(dst,detect_corners(im))
+    result=[]
+    for (x,y,w,h),marks in warped:
+        mapped=[]
+        for m in marks:
+            x1,y1,x2,y2=m.crop
+            q=m.quad or ((x1,y1),(x2-1,y1),(x2-1,y2-1),(x1,y2-1))
+            crop,quad=row_geometry(cv.perspectiveTransform(np.float32([q]),back)[0])
+            mapped.append(replace(m,crop=crop,quad=quad))
+        # Bounds for the numbering preview (not used for sampling).
+        x1=min(m.crop[0] for m in mapped); y1=min(m.crop[1] for m in mapped)
+        x2=max(m.crop[2] for m in mapped); y2=max(m.crop[3] for m in mapped)
+        result.append(((x1,y1,x2-x1,y2-y1),mapped))
+    return canvas,result
 
 
 def number_blocks(blocks, starts):

@@ -25,12 +25,16 @@ def unpack(row,slot):
     _,original,normalized,metadata=row
     with Image.open(BytesIO(original)) as im: original=np.array(im.convert('RGB'))
     with Image.open(BytesIO(normalized)) as im: normalized=np.array(im.convert('RGB'))
-    marks=[Mark(m['number'],m['suggestion'],m['status'],tuple(m['scores']),tuple(m['red']),tuple(m['crop'])) for m in json.loads(metadata)]
+    marks=[Mark(m['number'],m['suggestion'],m['status'],tuple(m['scores']),tuple(m['red']),tuple(m['crop']),tuple(tuple(float(v) for v in pt) for pt in m.get('quad',()))) for m in json.loads(metadata)]
     import re
     if normalized.shape!=(HEIGHT,WIDTH,3) or not 1<=len(marks)<=600: raise ValueError('Imagen guardada no válida.')
     seen=set()
     for m in marks:
         x,y,x2,y2=m.crop
         if not re.fullmatch(r'R?[1-9][0-9]{0,2}',m.number) or m.number in seen or not (0<=x<x2<=WIDTH and 0<=y<y2<=HEIGHT) or not 2<=len(m.scores)==len(m.red)<=5: raise ValueError('Recorte guardado no válido.')
+        if m.quad:
+            import cv2 as cv
+            q=np.asarray(m.quad,np.float32)
+            if q.shape!=(4,2) or not np.isfinite(q).all() or np.any(q<0) or np.any(q[:,0]>=WIDTH) or np.any(q[:,1]>=HEIGHT) or not cv.isContourConvex(q) or cv.contourArea(q)<4: raise ValueError('Geometría guardada no válida.')
         seen.add(m.number)
     return original,normalized,marks
