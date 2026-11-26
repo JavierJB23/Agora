@@ -216,11 +216,151 @@ def local_circle_positions(im):
     return groups
 
 
+def _shape_response(im):
+    """Printed outline evidence, independent of the blue answer ink."""
+    g=cv.cvtColor(im,cv.COLOR_RGB2GRAY).astype(np.float32)
+    yy,xx=np.mgrid[-21:22,-21:22]
+    maps=[]
+    for radius in (np.hypot(xx,yy),np.maximum(abs(xx),abs(yy))):
+        scores=[]
+        for r in (6.5,8.,9.5,11.,12.5,14.):
+            ring=np.exp(-.5*((radius-r)/1.1)**2)
+            outside=np.exp(-.5*((radius-r-3.1)/1.15)**2)
+            kernel=(outside/outside.sum()-ring/ring.sum()).astype(np.float32)
+            scores.append(cv.filter2D(g,-1,kernel))
+        maps.append(np.maximum.reduce(scores))
+    return maps
+
+
+def outline_circle_positions(im, evidence=None):
+    """Recover the 30 rows in each column from actual printed three-circle outlines.
+
+    A strong circle triplet is a row anchor, not just a match to a global warp.
+    Compare complete row sequences, reject competing row numbering, interpolate
+    missing weak outlines, and refine individual centers with bounded offsets.
+    """
+    ring,square=_shape_response(im) if evidence is None else evidence
+    groups=[]; previous_span=None
+    for col in range(4):
+        mid=list(locations(0))[col*30][1][1]
+        x=np.arange(max(50,mid-85),min(WIDTH-55,mid+95)); y=np.arange(250,1580)
+        best=np.full((len(y),len(x)),-100.,np.float32); gapmap=np.zeros(best.shape,np.int16)
+        for gap in range(26,46):
+            a=ring[250:1580,x-gap]; b=ring[250:1580,x]; c=ring[250:1580,x+gap]
+            score=(a+b+c)/3-.35*(np.maximum(np.maximum(a,b),c)-np.minimum(np.minimum(a,b),c))-.035*abs(gap-34)-.012*abs(x-mid)[None,:]
+            choose=score>best; best[choose]=score[choose]; gapmap[choose]=gap
+        # Restrict to the horizontal track with the most repeated strong triplets.
+        profile=best.max(1); px=best.argmax(1)
+        peaks=np.flatnonzero((profile>=cv.dilate(profile.reshape(-1,1),np.ones((19,1),np.uint8)).ravel())&(profile>9))
+        if len(peaks)<25: raise ValueError('No se reconocen suficientes filas de círculos.')
+        strong=peaks[np.argsort(profile[peaks])[-min(30,len(peaks)):]]
+        center=float(np.median(x[px[strong]]))
+        if np.sum(abs(x[px[strong]]-center)<32)<23: raise ValueError('Columna de círculos ambigua.')
+        keep=abs(x-center)<40
+        bx=best[:,keep]; xidx=np.flatnonzero(keep); ix=xidx[bx.argmax(1)]; prof=bx.max(1)
+        peaks=np.flatnonzero((prof>=cv.dilate(prof.reshape(-1,1),np.ones((19,1),np.uint8)).ravel())&(prof>9))
+        # Fit start/end anchors jointly. The second-order term follows page curvature.
+        yp=y[peaks]; row=np.arange(30); fits=[]
+        if len(peaks)<25: raise ValueError('Filas insuficientes en una columna.')
+        for start in yp[(yp>=275)&(yp<=570)]:
+            for end in yp:
+                pitch=(end-start)/29
+                if not 25<=pitch<=46.5: continue
+                if previous_span is not None and (abs(start-previous_span[0])>pitch*.60 or abs(end-previous_span[1])>pitch*.60): continue
+                for bend in np.arange(-.12,.121,.02):
+                    pred=start+row*pitch+bend*row*(row-29)
+                    delta=abs(pred[:,None]-yp[None,:]); ids=delta.argmin(1); dist=delta.min(1)
+                    valid=dist<pitch*.26
+                    if valid.sum()<26 or len(set(ids[valid]))!=valid.sum(): continue
+                    sel=peaks[ids]; strength=prof[sel]
+                    if min(strength[0],strength[-1])<max(10,.43*np.median(strength[valid])): continue
+                    # Prefer the full sequence of strong outlines; weak/noisy header or footer cannot replace a row.
+                    value=np.where(valid,np.minimum(strength,45)-1.25*dist,-8).mean()
+                    value-=.04*np.mean(abs(x[ix[sel[valid]]]-center))
+                    fits.append((float(value),pred,sel,valid,pitch))
+        if not fits: raise ValueError('No se reconoce la secuencia completa de 30 filas.')
+        fits.sort(key=lambda f:f[0],reverse=True)
+        value,pred,sel,valid,pitch=fits[0]
+        if any(v>value-.75 and abs(p[0]-pred[0])>pitch*.55 and abs(p[-1]-pred[-1])>pitch*.55 for v,p,_,_,_ in fits[1:]):
+            raise ValueError('Numeración de filas ambigua.')
+        previous_span=(pred[0],pred[-1])
+        centers=x[ix[sel]].astype(float); gap=gapmap[sel,ix[sel]].astype(float)
+        yy=y[sel].astype(float)
+        # Interpolate only missing or unsupported row anchors. Never extrapolate a different number of rows.
+        for arr in (centers,gap,yy):
+            trend=np.polyval(np.polyfit(row[valid],arr[valid],2),row)
+            limit=5 if arr is gap else 10
+            ok=valid&(abs(arr-trend)<limit)
+            arr[~ok]=trend[~ok]
+        pts=np.stack([np.column_stack([centers+gap*j,yy]) for j in (-1,0,1)],axis=1)
+        pts=np.rint(pts).astype(int)
+        # Recover small differences in height within a row, without jumping to adjacent cells.
+        for i in range(30):
+            for j in range(3):
+                xx0,yy0=pts[i,j]; rad=5
+                patch=ring[yy0-rad:yy0+rad+1,xx0-rad:xx0+rad+1]
+                gy,gx=np.mgrid[-rad:rad+1,-rad:rad+1]
+                a,b=np.unravel_index(np.argmax(patch-.65*np.hypot(gx,gy)),patch.shape)
+                pts[i,j]+=[b-rad,a-rad]
+        xx,yy=pts[:,:,0],pts[:,:,1]; strength=ring[yy,xx]; shape=strength-square[yy,xx]
+        if (np.median(strength)<12 or (strength>8).sum()<75 or ((strength>8).sum(1)>=2).sum()<28
+                or np.median(shape)<.35 or (shape>0).sum()<48
+                or np.any(np.diff(xx,axis=1)<20) or np.any(np.diff(xx,axis=1)>50)
+                or np.any(np.diff(yy,axis=0)<pitch*.55) or np.any(np.diff(yy,axis=0)>pitch*1.5)):
+            raise ValueError('No se confirma la forma o alineación de todos los círculos.')
+        groups.extend((str(col*30+i+1),[tuple(map(int,p)) for p in pts[i]]) for i in range(30))
+    return groups
+
+
+def _verified_circle_positions(im, groups, evidence):
+    """Validate every column of a fallback instead of accepting page-average support."""
+    ring,square=evidence
+    result=[]
+    for col in range(4):
+        block=groups[col*30:(col+1)*30]; pts=np.array([p for _,p in block],int)
+        pitch=float(np.median(np.diff(pts[:,:,1],axis=0))); gap=float(np.median(np.diff(pts[:,:,0],axis=1)))
+        dx=round(gap*.70); dy=round(pitch*.42)
+        shifts=np.array([(x,y) for y in range(-dy,dy+1) for x in range(-dx,dx+1)])
+        cand=pts[:,None,:,:]+shifts[None,:,None,:]
+        vals=ring[np.clip(cand[...,1],0,HEIGHT-1),np.clip(cand[...,0],0,WIDTH-1)]
+        score=vals.mean(2)-.35*np.ptp(vals,axis=2)-.04*np.linalg.norm(shifts,axis=1)
+        ids=np.argsort(score,axis=1)[:,-60:]; offsets=shifts[ids]; val=np.take_along_axis(score,ids,axis=1)
+        dp=val[0]; back=[]
+        for i in range(1,30):
+            cost=dp[:,None]-.9*np.linalg.norm(offsets[i-1,:,None,:]-offsets[i,None,:,:],axis=2)
+            back.append(cost.argmax(0)); dp=val[i]+cost.max(0)
+        k=dp.argmax(); track=[k]
+        for b in reversed(back): k=b[k]; track.append(k)
+        moved=offsets[np.arange(30),track[::-1]]; new=pts+moved[:,None,:]
+        # A solution at the boundary is not a verified row match; it can mean an entire row was missed.
+        if (abs(moved[:,1])>=dy-1).sum()>3 or (abs(moved[:,0])>=dx-1).sum()>3:
+            raise ValueError('La alineación de una columna es insuficiente.')
+        for i in range(30):
+            for j in range(3):
+                x,y=new[i,j]; r=4; patch=ring[y-r:y+r+1,x-r:x+r+1]
+                gy,gx=np.mgrid[-r:r+1,-r:r+1]
+                a,b=np.unravel_index(np.argmax(patch-.7*np.hypot(gx,gy)),patch.shape); new[i,j]+=[b-r,a-r]
+        x,y=new[:,:,0],new[:,:,1]; strength=ring[y,x]; shape=strength-square[y,x]
+        if (np.median(strength)<12 or (strength>8).sum()<75 or ((strength>8).sum(1)>=2).sum()<28
+                or np.median(shape)<.35 or (shape>0).sum()<48
+                or np.any(np.diff(y,axis=0)<pitch*.55) or np.any(np.diff(y,axis=0)>pitch*1.5)
+                or np.any(np.diff(x,axis=1)<20) or np.any(np.diff(x,axis=1)>50)):
+            raise ValueError('La alineación local no se ha podido verificar.')
+        result.extend((block[i][0],[tuple(map(int,p)) for p in new[i]]) for i in range(30))
+    return result
+
+
 def grid_positions(im,page):
-    if page==0:
-        try: return local_circle_positions(im)
+    if page!=0: return _legacy_grid_positions(im,page)
+    evidence=_shape_response(im)
+    # Prefer a full per-column outline lattice. The fallback is also checked and refined
+    # per column; never silently accept the global warp on its own.
+    try: return outline_circle_positions(im,evidence)
+    except ValueError: pass
+    for detector in (local_circle_positions,lambda a:_legacy_grid_positions(a,0)):
+        try: return _verified_circle_positions(im,detector(im),evidence)
         except ValueError: pass
-    return _legacy_grid_positions(im,page)
+    raise ValueError('No se confirma la alineación de las cuatro columnas de círculos.')
 
 def reserve_positions(im): return grid_positions(im,1)
 
