@@ -1,3 +1,14 @@
+# ÁGORA v0.6.6 — BLOCK 06 — FIX06
+
+- Dos campos seguros en Configuración: preguntas ordinarias y reservas. Se conservan las cantidades previstas separadas de las detectadas por el solucionario. Si difieren, se avisa al importar y antes de corregir; tras aceptar la corrección se usan las cantidades del solucionario. Si no se acepta, vuelve a Configuración o carga el solucionario correcto. No se inventan claves ni se eliminan preguntas silenciosamente.
+- Reservas pendientes: si todas las ordinarias están registradas, se permite corregir tras aviso explícito. El aviso distingue reservas no utilizadas y las necesarias para sustituir anuladas. Las pendientes se convierten en blancas solo al aceptar; las preguntas ordinarias sin resolver siguen pendientes. Se admiten prefijos R-1 en solucionarios y numeración por bloques.
+- Lector flexible: conserva el OMR original de círculos A–C y añade detección geométrica de bloques de casillas cuadradas conectadas, con confirmación del número inicial de cada bloque. Distingue opciones impresas y válidas, y marca para revisión las opciones inválidas. Ajuste guiado por cuatro centros para otras cuadrículas regulares de 2–5 opciones y 2–120 filas por bloque. Indicar R1, R4… cuando sean reservas en la misma página o en otra. No es OCR universal de numeración; requiere confirmar la estructura de nuevos diseños. Tinta azul; rojo informativo. Las hojas atípicas todavía pueden requerir corrector manual. No se incluye aún el guardado de modelos de hoja.
+- Importación única de respuestas PC/QR: hasta 20 archivos/páginas por sesión, 100 MiB total, con páginas de ordinarias, reservas o mixtas, numeradas por bloque. Conserva imágenes y recortes de cada página en el mismo esquema SQLite 8; no modifica datos existentes. Se rechazan numeraciones duplicadas y sustituciones parciales de páginas para evitar mezclas. No abrir lecturas nuevas multipágina con EXE anteriores.
+- Mi temario: icono y nombre centrados verticalmente, separación reducida.
+- Subir paquete completo a GitHub. No cambiar windows.yml, no instalar Python. Prueba de arranque del EXE ampliada para verificar también cuadrados y guardado. Ver TESTS.txt. FIX06 pendiente validación Windows.
+
+## Registro histórico (prevalecen las reglas de FIX06)
+
 # ÁGORA v0.6.5 — BLOCK 06 — FIX05
 
 - Mi temario es una raíz con dos tarjetas cuadradas. Cada tarjeta abre su propia pantalla, con botón de vuelta a Mi temario. Nuevo icono de libros. Mis temas continúa pendiente del BLOCK 09.

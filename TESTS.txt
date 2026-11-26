@@ -1,5 +1,5 @@
-ÁGORA v0.6.5 — BLOCK 06 — FIX05
-Pruebas ejecutadas: python -m unittest discover -s tests -v
+ÁGORA v0.6.6 — BLOCK 06 — FIX06
+Pruebas locales: python -m unittest discover -s tests -v
 test_columns_with_reserves (test_answer_import.ImportTests.test_columns_with_reserves) ... ok
 test_compact (test_answer_import.ImportTests.test_compact) ... ok
 test_docx (test_answer_import.ImportTests.test_docx) ... ok
@@ -24,6 +24,7 @@ test_real_size_example (test_grading.GradingTests.test_real_size_example) ... ok
 test_replacement_order (test_grading.GradingTests.test_replacement_order) ... ok
 test_unused_reserves (test_grading.GradingTests.test_unused_reserves) ... ok
 test_zero_penalty (test_grading.GradingTests.test_zero_penalty) ... ok
+test_missing_reserves_warning (test_grading.OptionalReservesTests.test_missing_reserves_warning) ... ok
 test_batch_library_limit (test_library.LibraryTests.test_batch_library_limit) ... ok
 test_delete_clears_only_linked_drafts (test_library.LibraryTests.test_delete_clears_only_linked_drafts) ... ok
 test_deleted_template_original_preserved_not_relisted (test_library.LibraryTests.test_deleted_template_original_preserved_not_relisted) ... ok
@@ -35,6 +36,9 @@ test_migration_keeps_unknown_dates (test_library.LibraryTests.test_migration_kee
 EOF marker not found
 EOF marker not found
 ok
+test_guided_block_rectangles_and_archive (test_omr.FlexibleTests.test_guided_block_rectangles_and_archive) ... ok
+test_many_pdf_pages (test_omr.FlexibleTests.test_many_pdf_pages) ... ok
+test_square_detection_and_same_page_reserves (test_omr.FlexibleTests.test_square_detection_and_same_page_reserves) ... ok
 test_black_not_guessed (test_omr.OpticalTests.test_black_not_guessed) ... ok
 test_blue_red_and_blank (test_omr.OpticalTests.test_blue_red_and_blank) ... ok
 test_decode_and_alignment (test_omr.OpticalTests.test_decode_and_alignment) ... ok
@@ -71,7 +75,8 @@ test_transfer_above_previous_limit (test_transfer.TransferTests.test_transfer_ab
 test_upload_once_and_token (test_transfer.TransferTests.test_upload_once_and_token) ... ok
 test_automatic_workflow_history_and_excluded_cells (test_ui.UITests.test_automatic_workflow_history_and_excluded_cells) ... skipped 'PySide6 no disponible'
 test_clear_template_and_pending_number (test_ui.UITests.test_clear_template_and_pending_number) ... skipped 'PySide6 no disponible'
-test_config_structure_only_from_import (test_ui.UITests.test_config_structure_only_from_import) ... skipped 'PySide6 no disponible'
+test_config_counts_mismatch_requires_confirmation (test_ui.UITests.test_config_counts_mismatch_requires_confirmation) ... skipped 'PySide6 no disponible'
+test_config_structure_and_import (test_ui.UITests.test_config_structure_and_import) ... skipped 'PySide6 no disponible'
 test_direct_steps_and_current_result (test_ui.UITests.test_direct_steps_and_current_result) ... skipped 'PySide6 no disponible'
 test_exit_and_reentry_dialogs (test_ui.UITests.test_exit_and_reentry_dialogs) ... skipped 'PySide6 no disponible'
 test_history_delete_confirmation_and_active_draft (test_ui.UITests.test_history_delete_confirmation_and_active_draft) ... skipped 'PySide6 no disponible'
@@ -80,6 +85,7 @@ test_library_documents_and_fresh_entry_from_history (test_ui.UITests.test_librar
 test_library_root_and_deletion_confirmation (test_ui.UITests.test_library_root_and_deletion_confirmation) ... skipped 'PySide6 no disponible'
 test_manual_keyboard (test_ui.UITests.test_manual_keyboard) ... skipped 'PySide6 no disponible'
 test_manual_workflow_and_reopen (test_ui.UITests.test_manual_workflow_and_reopen) ... skipped 'PySide6 no disponible'
+test_missing_reserves_and_invalid_printed_option (test_ui.UITests.test_missing_reserves_and_invalid_printed_option) ... skipped 'PySide6 no disponible'
 test_navigation_and_settings (test_ui.UITests.test_navigation_and_settings) ... skipped 'PySide6 no disponible'
 test_optical_reopen_images_and_review (test_ui.UITests.test_optical_reopen_images_and_review) ... skipped 'PySide6 no disponible'
 test_same_template_consult_does_not_change_name_or_answers (test_ui.UITests.test_same_template_consult_does_not_change_name_or_answers) ... skipped 'PySide6 no disponible'
@@ -90,6 +96,11 @@ test_view_template_without_replacing_draft (test_ui.UITests.test_view_template_w
 test_wheel_does_not_change_form_controls (test_ui.UITests.test_wheel_does_not_change_form_controls) ... skipped 'PySide6 no disponible'
 
 ----------------------------------------------------------------------
-Ran 83 tests in 3.110s
+Ran 89 tests in 2.211s
 
-OK (skipped=19)
+OK (skipped=21)
+
+Pruebas con documentos privados (no incluidos):
+Plantilla original: 107 preguntas, 106 propuestas, pregunta 33 pendiente (B); confirmando B: 74 aciertos, 33 errores, nota 5,89.
+TEST 10: 4 bloques de 30 filas, 4 casillas; de 112 preguntas, 103 letras A–C, 8 blancos propuestos, pregunta 92 pendiente, 8 casillas sobrantes. Sin solucionario de TEST 10 no se valida la nota.
+21 pruebas gráficas y prueba del EXE pendientes en GitHub Windows.

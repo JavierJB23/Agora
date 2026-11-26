@@ -48,6 +48,25 @@ def smoke_test(report):
             marks = omr.scan(omr.align(images[0]), 0)
             if len(marks) != 120 or marks[0].suggestion != 'B':
                 raise RuntimeError('Prueba de lectura OMR incorrecta')
+            # New reader: four physical cells per row, independent of valid options.
+            sq = np.full((omr.HEIGHT, omr.WIDTH, 3), 250, np.uint8)
+            for j in range(10):
+                y = 300+j*30
+                cv.rectangle(sq, (100,y-15), (275,y+15), (40,40,40), 2)
+                cv.putText(sq,str(j+1),(104,y+4),cv.FONT_HERSHEY_SIMPLEX,.5,(40,40,40),1)
+                for k in range(4):
+                    x = 145+k*35
+                    cv.rectangle(sq,(x-10,y-10),(x+10,y+10),(40,40,40),2)
+                    if j==0 and k==2:
+                        cv.line(sq,(x-6,y-6),(x+6,y+6),(20,40,120),2)
+                        cv.line(sq,(x-6,y+6),(x+6,y-6),(20,40,120),2)
+            blocks=omr.square_blocks(sq)
+            newmarks=omr.number_blocks(blocks,['1'])
+            if len(newmarks)!=10 or len(newmarks[0].scores)!=4 or omr.proposed(newmarks[0])!='C':
+                raise RuntimeError('Prueba del lector de cuadrados incorrecta')
+            from agora.optical_archive import record,unpack
+            if unpack(record(sq,sq,newmarks),0)[2]!=newmarks:
+                raise RuntimeError('Prueba de guardado de lectura flexible incorrecta')
             pdf = PdfWriter()
             pdf.add_blank_page(width=595, height=842)
             buf = BytesIO()
@@ -68,7 +87,7 @@ def smoke_test(report):
             w.go('home')
             w.close()
             app.processEvents()
-        report.write_text('OK\nNumPy '+np.__version__+'\nOpenCV '+cv.__version__+'\nQt, ventana, OMR PNG y PDF: OK\n', encoding='utf-8')
+        report.write_text('OK\nNumPy '+np.__version__+'\nOpenCV '+cv.__version__+'\nQt, ventana, OMR círculos y cuadrados, PNG y PDF: OK\n', encoding='utf-8')
         return 0
     except Exception:
         report.write_text(traceback.format_exc(), encoding='utf-8')
