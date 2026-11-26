@@ -155,3 +155,10 @@ Regla de reservas y puntuación: reemplazo por orden ascendente; sin reservas v�
 ## FIX02
 - Mis simulacros: Eliminar con confirmación explícita Sí/No (No por defecto). Si coincide con el intento activo, se elimina también su borrador, avisando antes; otros intentos y plantillas no se tocan. Se mantiene el esquema 3.
 - Configuración simplificada: sin campos manuales redundantes de preguntas, reservas y opciones. Se conservan los datos importados al cambiar el baremo.
+
+
+## BLOCK 06 — FIX12 — v0.6.12
+- Ajuste común para círculos y cuadrados: elegir una columna detectada, señalar los cuatro centros de esa columna, previsualizar y aplicar. Las demás columnas se conservan. Redefinir bloques reconstruye una página si la detección inicial fue incorrecta. Restablecer automática usa la imagen guardada.
+- Se rechazan encuadres desproporcionados y bloques que se solapan con otras preguntas.
+- Una raya roja que atraviesa la fila deja la respuesta pendiente con «Posible anulada · tachadura roja · revisar». Una cruz roja aislada sigue siendo informativa. La anulación requiere confirmación del usuario; no se modifica el motor de notas.
+- Las cuatro pruebas de regresión añadidas pasan localmente. La prueba gráfica común queda pendiente de GitHub.
