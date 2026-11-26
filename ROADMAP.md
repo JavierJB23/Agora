@@ -83,3 +83,5 @@ FIX11 (v0.6.11): espacio de ajuste de alineación común, restauración automát
 
 ## FIX14 (v0.6.14)
 Detector complementario de filas repetidas, exclusión de cabeceras, muestreo de tinta y rayas azules/rojas, renombrado de plantillas y selector QR ampliado. Pendiente validación de usuario, OCR general de numeración y mayor variedad de diseños.
+
+FIX15: refuerzo de numeración y eliminación del ajuste geométrico manual en interfaz. BLOCK 06B: OCR local, verificación real de números. BLOCK 06C: Mis modelos y PDF personalizable. BLOCK 06D/E: importar modelos en blanco y reconocer modelos propios/aprendidos. Pendientes, no implementados en FIX15.

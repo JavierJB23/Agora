@@ -277,3 +277,5 @@ FIX14 (v0.6.14):
 - Renombrar plantilla; comprobar que el PDF, patrón y simulacro vinculado siguen intactos.
 - QR en iPhone: seleccionar múltiples archivos con botón grande, comprobar logo y enviar.
 - No subir las fotografías privadas al repositorio.
+
+FIX15: comprobar Simulacro 2023 desde PC y QR (mismo archivo y distintas fotos), 120 filas físicas, 8 tachaduras (5,6,24,38,39,100,108,109), ausencia de cabeceras como respuestas. Probar también TEST10, círculos blancos, reservas, relectura y conservación de datos. La edición manual de respuestas sigue disponible; se retira el ajuste geométrico manual de la interfaz.

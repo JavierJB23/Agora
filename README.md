@@ -1,3 +1,10 @@
+# Ágora v0.6.15 — BLOCK 06 — FIX15
+
+- Verificación de cabeceras y secuencias de filas; detección por columnas con alturas independientes y preferencia por la foto sin deformar.
+- Ajuste manual retirado de la interfaz. Releer hoja conserva la previsualización automática y las revisiones manuales.
+- OCR general pendiente (BLOCK 06B).
+- Validación local: archivo 2023 del ZIP, recorte sin márgenes, reducción a 650 px de ancho y perspectiva simulada: 120 filas y las ocho posibles anuladas en todos los casos. El fichero exacto recibido desde el móvil no está disponible; verificarlo en Windows. TEST10: 120 filas físicas, 103 letras, 7 blancos y 2 dudas entre las 112 configuradas; no se certifica cada respuesta. Reservas: 9 filas.
+
 # ÁGORA v0.6.14 — BLOCK 06 — FIX14
 
 - Lector: nuevo detector complementario de cuatro columnas de círculos (30 filas por columna) basado en contornos, contraste y continuidad, sin posiciones absolutas de las casillas. Excluye cabeceras por contraste local, reconstruye filas tachadas y valida las cuatro secuencias. Conserva los detectores anteriores y el lector de cuadrados. La numeración general por OCR sigue pendiente.
@@ -7,7 +14,7 @@
 - Validación con 20 JPEG privados: 15 hojas ordinarias de círculos, cuatro de cuadrados y una de reservas. El detector ha recuperado las 120 filas físicas de las 19 hojas ordinarias y las 9 reservas de la última. En la hoja 2023: 107 letras propuestas, 2 blancos y 11 pendientes, incluidas las ocho rayas visibles (5, 6, 24, 38, 39, 100, 108, 109). No equivale a certificar todas las respuestas: faltan claves y comprobación manual individual. Se siguen observando dudas y algunos avisos adicionales; no se promete cualquier diseño o tinta indistinguible de la impresión.
 - Pruebas nuevas: renombrado, selector móvil y hoja sintética coloreada con rayas. Pruebas de regresión locales por grupos; ejecución íntegra y GUI pendientes en GitHub/Windows. No se incluyen fotografías ni datos privados. No cambia el esquema de base de datos ni windows.yml; compilación manual.
 
-## Histórico (FIX14 prevalece)
+## Histórico (FIX15 prevalece)
 
 # ÁGORA v0.6.13 — BLOCK 06 — FIX13
 
