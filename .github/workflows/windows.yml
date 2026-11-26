@@ -17,6 +17,19 @@ jobs:
         shell: pwsh
         run: python scripts/build_name.py
       - run: python -m pip install -r requirements-build.txt
+      - name: Preparar motor OCR local incluido en el EXE
+        shell: pwsh
+        run: |
+          choco install tesseract --version=5.5.3.20260724 --yes --no-progress --allow-downgrade
+          if ($LASTEXITCODE -notin @(0, 1641, 3010)) { throw "No se pudo instalar Tesseract: $LASTEXITCODE" }
+          $src = Join-Path $env:ProgramFiles 'Tesseract-OCR'
+          if (-not (Test-Path (Join-Path $src 'tesseract.exe'))) { throw 'No se encuentra Tesseract' }
+          New-Item -ItemType Directory -Path assets/ocr -Force | Out-Null
+          Copy-Item (Join-Path $src '*') -Destination assets/ocr -Recurse -Force
+          Get-ChildItem assets/ocr -Filter 'unins*.exe' | Remove-Item -Force
+          if (-not (Test-Path assets/ocr/tessdata/eng.traineddata)) { throw 'Faltan los datos OCR eng' }
+          & ./assets/ocr/tesseract.exe --tessdata-dir "$PWD/assets/ocr/tessdata" --list-langs
+          if ($LASTEXITCODE -ne 0) { throw 'El motor OCR no funciona' }
       - run: python -m unittest discover -s tests -v
       - run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name Agora --icon assets/logo.ico --add-data 'assets;assets' --hidden-import PySide6.QtSvg --hidden-import numpy._core._exceptions --collect-all pypdfium2 --collect-all pypdfium2_raw main.py
       - name: Comprobar arranque del EXE y lector optico
