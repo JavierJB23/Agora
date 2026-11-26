@@ -415,3 +415,24 @@ class UITests(unittest.TestCase):
             with patch('agora.manual.confirm',return_value=True): a.correct_optical()
             self.assertEqual((a.result.annulled,a.result.reserve_used,a.result.correct),(1,1,2)); self.assertEqual(a.key,['A','A','B'])
             w.close(); w.deleteLater(); self.app.processEvents()
+
+    def test_alignment_has_same_actions_for_both_shapes(self):
+        from unittest.mock import patch
+        from PySide6.QtWidgets import QDialog,QPushButton
+        from agora.omr_ui import OpticalPage
+        from agora.grading import ExamConfig
+        from agora import omr
+        from test_omr import square_sheet,sheet
+        menus=[]
+        for im,marks in [(sheet(),omr.scan(sheet(),0)),(square_sheet(),omr.number_blocks(omr.square_blocks(square_sheet()),['1','11']))]:
+            page=OpticalPage(ExamConfig(questions=120,reserves=0),['']*120,{},lambda:None)
+            page.install(0,im,im,marks)
+            def exercise(d):
+                menus.append([b.text() for b in d.findChildren(QPushButton)])
+                return QDialog.DialogCode.Rejected
+            with patch.object(QDialog,'exec',exercise):
+                self.assertIsNone(page.alignment_workspace(0))
+            page.deleteLater(); self.app.processEvents()
+        self.assertEqual(menus[0],menus[1])
+        self.assertIn('Ajuste por bloques',menus[0]); self.assertIn('Redefinir bloques',menus[0])
+        self.assertIn('Restablecer automática',menus[0]); self.assertNotIn('Ajuste por referencias',menus[0])

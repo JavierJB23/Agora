@@ -204,3 +204,38 @@ class GuidedPreviewTests(unittest.TestCase):
         crop=omr.crop_image(im,marks[0]); self.assertGreater(crop.shape[1],crop.shape[0]*3)
         from agora.optical_archive import record,unpack
         self.assertEqual(unpack(record(im,im,marks),0)[2],marks)
+
+
+class ManualColumnAndStrikeTests(unittest.TestCase):
+    def test_reject_full_page_as_one_block(self):
+        im=sheet()
+        with self.assertRaisesRegex(ValueError,'sola columna'):
+            omr.guided_block(im,[(205,359),(1047,359),(1047,1497),(205,1497)],30,3,'1')
+
+    def test_group_and_replace_one_column_only(self):
+        im=sheet(); marks=omr.scan(im,0); blocks=omr.reading_blocks(marks)
+        self.assertEqual([len(b) for b in blocks],[30]*4)
+        block=blocks[1]; loc=list(omr.locations(0)); _,xs,y=loc[30]; _,last_xs,last_y=loc[59]
+        new=omr.guided_block(im,[(xs[0],y),(xs[-1],y),(last_xs[-1],last_y),(last_xs[0],last_y)],30,3,'31')
+        merged=omr.replace_reading_block(marks,block,new)
+        self.assertEqual(merged[:30],marks[:30]); self.assertEqual(merged[60:],marks[60:]); self.assertEqual(merged[30:60],new)
+        wrong=omr.guided_block(im,[(loc[0][1][0],y),(loc[0][1][-1],y),(loc[29][1][-1],last_y),(loc[29][1][0],last_y)],30,3,'31')
+        with self.assertRaisesRegex(ValueError,'solapa'): omr.replace_reading_block(marks,block,wrong)
+
+    def test_red_strike_requires_review_not_red_cross(self):
+        im=sheet()
+        for q in (11,12,117):
+            mark(im,0,q,1,(20,40,120)); _,xs,y=list(omr.locations(0))[q]
+            cv.line(im,(xs[0]-17,y),(xs[-1]+17,y+2),(145,115,120),2)
+        mark(im,0,1,1,(20,40,120)); mark(im,0,1,2,(160,20,30))
+        marks=omr.scan(im,0)
+        self.assertEqual([m.number for m in marks if 'Posible anulada' in m.status],['12','13','118'])
+        self.assertTrue(all(omr.proposed(marks[q])=='' for q in (11,12,117)))
+        self.assertEqual(omr.proposed(marks[1]),'B')
+
+    def test_square_strike_and_grouping(self):
+        im=square_sheet(); blocks=omr.square_blocks(im); marks=omr.number_blocks(blocks,['1','11'])
+        cv.line(im,(133,330),(262,330),(140,100,105),2)
+        marks=omr.flag_strikes(im,marks)
+        self.assertEqual([len(b) for b in omr.reading_blocks(marks)],[10,10]); self.assertIn('Posible anulada',marks[1].status)
+        self.assertEqual(omr.proposed(marks[1]),''); self.assertEqual(omr.proposed(marks[0]),'C')
