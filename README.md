@@ -1,3 +1,12 @@
+# ÁGORA v0.6.9 — BLOCK 06 — FIX09
+
+- Numeración de hojas: botón Restablecer para recuperar los números iniciales propuestos sin volver a importar por QR/PC. Si se cancela el ajuste por bloques o se introduce numeración inválida, se vuelve al diálogo de numeración con la imagen conservada.
+- Casillas cuadradas: se conserva la orientación y proporción de la foto en la previsualización. Se intenta leer sin transformar la hoja globalmente; si la lectura previa rectificada resulta necesaria o ambas propuestas no coinciden, se conserva la ruta de lectura del FIX08 y se proyectan sus posiciones sobre la foto sin deformar. Cada fila tiene cuatro vértices propios para dibujar la superposición y enderezar el recorte, sin arrastrar las filas vecinas. La corrección de círculos no cambia.
+- Las coordenadas de fila se guardan en los metadatos de lectura junto a la imagen. Se leen también los archivos guardados sin esta geometría; para actualizar recortes de un simulacro antiguo, reimportar la hoja y guardar. No cambia el esquema SQLite ni el flujo QR.
+- Prueba con fotografía de referencia TEST 10: 103 letras, ocho blancos y una duda (92), en 112 preguntas. No certifica exactitud letra a letra ni nota. 75 pruebas no gráficas superadas por grupos, 23 GUI pendientes (sin PySide6 en este entorno). No se incluyen fotografías privadas. Compilación manual: mantener windows.yml, pulsar Run workflow.
+
+## Histórico (FIX09 prevalece)
+
 # ÁGORA v0.6.8 — BLOCK 06 — FIX08
 
 - Círculos A–C: nueva detección de contornos impresos en cada columna, ajustando los extremos, las 30 filas, la curvatura y los centros individuales. Comprueba la forma circular frente a la cuadrada y la evidencia por columna; si necesita recurrir a los detectores anteriores, verifica y refina todas las columnas antes de aceptar sus centros. No acepta directamente una cuadrícula global descentrada.

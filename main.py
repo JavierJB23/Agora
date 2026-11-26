@@ -60,12 +60,14 @@ def smoke_test(report):
                     if j==0 and k==2:
                         cv.line(sq,(x-6,y-6),(x+6,y+6),(20,40,120),2)
                         cv.line(sq,(x-6,y+6),(x+6,y-6),(20,40,120),2)
-            blocks=omr.square_blocks(sq)
+            square_view,blocks=omr.square_page(sq)
             newmarks=omr.number_blocks(blocks,['1'])
             if len(newmarks)!=10 or len(newmarks[0].scores)!=4 or omr.proposed(newmarks[0])!='C':
                 raise RuntimeError('Prueba del lector de cuadrados incorrecta')
             from agora.optical_archive import record,unpack
-            if unpack(record(sq,sq,newmarks),0)[2]!=newmarks:
+            if not newmarks[0].quad or omr.crop_image(square_view,newmarks[0]).shape[1]<40:
+                raise RuntimeError('Prueba de recorte horizontal incorrecta')
+            if unpack(record(sq,square_view,newmarks),0)[2]!=newmarks:
                 raise RuntimeError('Prueba de guardado de lectura flexible incorrecta')
             pdf = PdfWriter()
             pdf.add_blank_page(width=595, height=842)
