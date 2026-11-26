@@ -1,3 +1,11 @@
+# ÁGORA v0.6.11 — BLOCK 06 — FIX11
+
+- Ajustar alineación abre una vista previa común para círculos y cuadrados desde la fotografía conservada. Restablecer automática ejecuta los detectores originales (en cuadrados se confirma la numeración). Ajuste por bloques y, en la plantilla conocida, por referencias. En el ajuste por bloques se puede volver a la lectura automática sin reimportar. Los cambios se previsualizan con las casillas verdes antes de aplicar; cancelar conserva la lectura anterior. Las anuladas y las respuestas que difieren de la propuesta previa se preservan al reajustar sus mismas preguntas.
+- Anulada disponible en Respuestas de ambos correctores (X por teclado en manual). Se registra en el intento, no en el solucionario compartido. Las anulaciones de la clave y las del intento se combinan sin duplicarse; se usan tantas reservas válidas como anuladas ordinarias, por orden. Las reservas anuladas no sustituyen a nadie. Si faltan reservas necesarias, se avisa antes de contarlas como blancas; si no se necesitan, no afectan a la nota.
+- Recortes de ajuste manual por bloques: geometría individual de fila, con previsualización horizontal. No cambia el algoritmo automático de círculos ni cuadrados, ni la clasificación de marcas.
+- Compatible con la base de datos actual. La selección Anulada se guarda como X en las respuestas del intento; no se modifican simulacros anteriores al abrirlos. No requiere actualizar windows.yml. Compilación manual en Actions.
+- Pruebas: 79 pruebas no gráficas superadas en la suite previa al ajuste final de recortes; dos pruebas específicas de recortes guiados superadas después (una de ellas nueva). 25 pruebas GUI pendientes en Windows (PySide6 no disponible aquí), incluido el nuevo flujo de alineación y guardado de anulaciones.
+
 # ÁGORA v0.6.10 — BLOCK 06 — FIX10
 
 - Corrige la importación de NumPy (`np`) en el diálogo de numeración introducido en FIX09. No cambia la lectura, el QR ni el almacenamiento. Se conserva la prueba gráfica de restablecimiento. Compilación manual: no modificar windows.yml.

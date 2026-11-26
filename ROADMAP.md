@@ -60,3 +60,5 @@ FIX08 (v0.6.8): nuevo ajuste de contornos circulares por fila/columna, validaci�
 FIX09 (v0.6.9): restablecer numeración sin reimportar; conservar orientación de fotografía de cuadrados; recortes rectificados por fila y geometría archivada compatible con lecturas antiguas. Validación Windows pendiente. Mantener BLOCK 06 hasta confirmar.
 
 FIX10 (v0.6.10): importar NumPy en choose_numbering; mantener las pruebas y el flujo de compilación manual. Pendiente de validación Windows.
+
+FIX11 (v0.6.11): espacio de ajuste de alineación común, restauración automática desde imagen guardada, vista previa antes de aplicar y anulaciones por intento con reservas. Pendiente validar Windows antes de STABLE.

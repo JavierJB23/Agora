@@ -1,3 +1,5 @@
+FIX11 — 79 pruebas no gráficas superadas (102 ejecutadas, 23 GUI omitidas); tras el último cambio de recorte, 2 pruebas guiadas superadas, incluida 1 nueva. 80 pruebas no gráficas cubiertas; 25 GUI pendientes. Sintaxis Python correcta.
+
 FIX10 — Comprobación local de sintaxis de todos los archivos Python: OK. Ejecución aislada del prefijo de choose_numbering (incluida la línea del fallo y dibujo de contornos) con square_sheet: OK; numeración 1, 11. SquarePreviewTests: 3/3 OK. PySide6 no disponible localmente; prueba GUI completa y EXE pendientes en GitHub.
 
 FIX09 — 75 pruebas no gráficas OK (ejecutadas por grupos); 23 GUI omitidas por falta de PySide6.
