@@ -1,0 +1,5 @@
+Ágora uses Tesseract OCR, https://github.com/tesseract-ocr/tesseract (Apache License 2.0).
+Tesseract OCR is copyright Google Inc. and the Tesseract contributors.
+The Windows executable is obtained by the build workflow from the versioned Chocolatey package tesseract 5.5.3.20260724 (UB Mannheim build). The entire installed runtime, including its supplied notices, is copied into assets/ocr during build; the user does not install it separately.
+English OCR model: Tesseract tessdata, https://github.com/tesseract-ocr/tessdata (Apache License 2.0).
+The Windows runtime contains third-party components; review their individual notices and redistribution requirements before commercial distribution. This RC is a development build, not a commercial release.
