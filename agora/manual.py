@@ -46,7 +46,7 @@ class ManualPage(QWidget):
 
     def restore(self,d):
         c=ExamConfig(**d['config']); k=list(d['key']); a=list(d['answers']); stage=d.get('stage',0); cursor=d.get('cursor',0)
-        if len(k)!=c.size or len(a)!=c.size or any(v not in (*c.letters,'X','') for v in k) or any(v not in (*c.letters,'-','') for v in a): raise ValueError('Borrador no válido')
+        if len(k)!=c.size or len(a)!=c.size or any(v not in (*c.letters,'X','') for v in k) or any(v not in (*c.letters,'-','X','') for v in a): raise ValueError('Borrador no válido')
         cache={}
         if self.mode=='automatic' and d.get('optical_pages'):
             from .optical_archive import unpack
@@ -169,10 +169,10 @@ class ManualPage(QWidget):
         if target==3:
             if not self.check_counts(): return
             candidate=list(self.answers); confirmed_reserves=False
-            if self.mode=='automatic' and '' not in candidate[:self.config.questions] and '' in candidate[self.config.questions:]:
+            if '' not in candidate[:self.config.questions] and '' in candidate[self.config.questions:]:
                 from .grading import missing_reserves_message
                 message=missing_reserves_message(self.config,self.key,candidate)
-                if not confirm(self,'Reservas pendientes',message+'\nComprueba también las marcas azules y la alineación.'): return
+                if not confirm(self,'Reservas pendientes',message+('\nComprueba también las marcas azules y la alineación.' if self.mode=='automatic' else '')): return
                 candidate=[v or '-' for v in candidate]; confirmed_reserves=True
             if '' in candidate:
                 self.move_stage(2)
@@ -382,15 +382,15 @@ class ManualPage(QWidget):
             holder=QWidget(); h=QHBoxLayout(holder); h.setContentsMargins(1,1,1,1); h.setSpacing(2)
             num=btn('',lambda checked=False,j=i:self.select_slot(j)); num.setObjectName('manualNumber'); num.setFixedWidth(42); h.addWidget(num)
             choices=[]
-            for val in (*self.config.letters,('X' if is_key else '-')):
-                b=btn('—' if val=='-' else val,lambda checked=False,j=i,v=val:self.choose_slot(j,v)); b.setObjectName('manualChoice'); b.setCheckable(True); b.setMinimumWidth(24); b.setToolTip('Anulada' if val=='X' else 'En blanco' if val=='-' else 'Opción '+val); h.addWidget(b,1); choices.append((val,b))
+            for val in (*self.config.letters,*(['X'] if is_key else ['-','X'])):
+                b=btn('—' if val=='-' else 'Anulada' if val=='X' and not is_key else val,lambda checked=False,j=i,v=val:self.choose_slot(j,v)); b.setObjectName('manualChoice'); b.setCheckable(True); b.setMinimumWidth(24); b.setToolTip('Anulada' if val=='X' else 'En blanco' if val=='-' else 'Opción '+val); h.addWidget(b,1); choices.append((val,b))
             clear=btn('×',lambda checked=False,j=i:self.clear_slot(j)); clear.setObjectName('manualClear'); clear.setFixedWidth(24); clear.setToolTip('Borrar (dejar pendiente)'); h.addWidget(clear)
             self.entries_grid.addWidget(holder,i%8,i//8); self.grid_rows.append((holder,num,choices,clear))
         self.entries_grid.setColumnStretch(0,1); self.entries_grid.setColumnStretch(1,1)
         row=QHBoxLayout(); row.addWidget(btn('‹ Configuración' if is_key else '‹ Soluciones',lambda:self.move_stage(0 if is_key else 1))); row.addStretch()
         if not is_key: row.addWidget(btn('Pendientes → blanco',self.fill_blanks))
         p.addLayout(row); p.addWidget(btn('Continuar a respuestas ›' if is_key else 'Corregir examen',self.next_entry,'primary'))
-        for char in (*self.config.letters,('X' if is_key else '-')): self.shortcut(char,lambda v=char:self.choose(self.cursor,v))
+        for char in (*self.config.letters,*(['X'] if is_key else ['-','X'])): self.shortcut(char,lambda v=char:self.choose(self.cursor,v))
         self.shortcut('Backspace',lambda:self.clear(self.cursor)); self.shortcut('Up',lambda:self.select(self.cursor-1)); self.shortcut('Down',lambda:self.select(self.cursor+1)); self.refresh_entries()
 
     def shortcut(self,key,fn):
@@ -453,7 +453,13 @@ class ManualPage(QWidget):
             if not self.check_counts(): return
             if '' in self.answers:
                 n=self.answers.count('')
-                if not confirm(self,'Respuestas pendientes',f'Quedan {n} sin registrar. ¿Contarlas como respuestas en blanco?'): return
+                if '' in self.answers[self.config.questions:]:
+                    from .grading import missing_reserves_message
+                    message=missing_reserves_message(self.config,self.key,self.answers)
+                    ordinary=self.answers[:self.config.questions].count('')
+                    if ordinary: message=f'Quedan {ordinary} ordinarias pendientes; se contarán como blancas. '+message
+                else: message=f'Quedan {n} sin registrar. ¿Contarlas como respuestas en blanco?'
+                if not confirm(self,'Respuestas pendientes',message): return
                 self.answers[:]=[v or '-' for v in self.answers]
             try: self.result=evaluate(self.config,self.key,self.answers)
             except ValueError as e: QMessageBox.warning(self,'No se pudo corregir',str(e)); return
@@ -480,7 +486,7 @@ class ManualPage(QWidget):
         self.table.setRowCount(len(rows))
         from PySide6.QtGui import QColor,QBrush
         for i,r in enumerate(rows):
-            for j,v in enumerate((r.number,'—' if r.solution=='X' else r.solution,'—' if r.answer=='-' else r.answer,r.status,r.replaces or '—')):
+            for j,v in enumerate((r.number,'—' if r.solution=='X' else r.solution,'—' if r.answer=='-' else 'Anulada' if r.answer=='X' else r.answer,r.status,r.replaces or '—')):
                 x=QTableWidgetItem(v); x.setTextAlignment(ALIGN.AlignCenter)
                 if j==3 and r.status in ('Acierto','Error'): x.setForeground(QBrush(QColor('#30764D' if r.status=='Acierto' else '#A13952')))
                 self.table.setItem(i,j,x)

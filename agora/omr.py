@@ -592,7 +592,7 @@ def guided_block(im, points, rows, options, start):
     a=im.astype(np.int16); R,G,B=a.transpose(2,0,1)
     blue=(B-R>5)&(B-G>7)&(B<225)&(R<190); red=(R-B>18)&(R-G>18)&(G<180)&(B-G<35)&(R<205)
     marks=[]
-    for row in centers:
+    for jrow,row in enumerate(centers):
         scores=[]; reds=[]
         for x,y in np.round(row).astype(int):
             sl=np.s_[max(0,y-r):y+r+1,max(0,x-r):x+r+1]; scores.append(int(blue[sl].sum())); reds.append(int(red[sl].sum()))
@@ -601,6 +601,7 @@ def guided_block(im, points, rows, options, start):
         status='Azul detectado' if suggestion else 'Doble o dudosa' if s>=12 else 'Sin azul: revisar blanco u otra tinta'
         if suggestion and s<25: status='Azul débil: revisar'
         if max(reds)>20: status+=' · posible rojo'
-        x1,y1=np.floor(row.min(0)-r-3).astype(int); x2,y2=np.ceil(row.max(0)+r+4).astype(int)
-        marks.append(Mark('',suggestion,status,tuple(scores),tuple(reds),tuple(map(int,(max(0,x1),max(0,y1),min(WIDTH,x2),min(HEIGHT,y2))))))
+        bounds=np.float32([[[-.46,jrow-.46],[options-1+.46,jrow-.46],[options-1+.46,jrow+.46],[-.46,jrow+.46]]])
+        crop,quad=row_geometry(cv.perspectiveTransform(bounds,mat)[0])
+        marks.append(Mark('',suggestion,status,tuple(scores),tuple(reds),crop,quad))
     return number_blocks([((0,0,0,0),marks)],[start])

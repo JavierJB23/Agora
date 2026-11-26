@@ -73,14 +73,13 @@ def evaluate(config, key, answers):
         raise ValueError('La longitud de la plantilla y las respuestas debe coincidir con el examen.')
     if any(x not in (*config.letters,'X') for x in key):
         raise ValueError('Completa todas las soluciones o márcalas como anuladas.')
-    if any(x not in (*config.letters,'-') for x in answers):
+    if any(x not in (*config.letters,'-','X') for x in answers):
         raise ValueError('Hay respuestas pendientes o no válidas.')
-    annulled=[i for i in range(config.questions) if key[i]=='X']
-    reserves=[i for i in range(config.questions,config.size) if key[i]!='X']
+    annulled,reserves=reserve_plan(config,key,answers)
     replacements=dict(zip(reserves,annulled))
     rows=[]; counts={'Acierto':0,'Error':0,'En blanco':0}
     for i,(solution,answer) in enumerate(zip(key,answers)):
-        if solution=='X': status='Anulada' if i<config.questions else 'Reserva anulada'
+        if solution=='X' or answer=='X': status='Anulada' if i<config.questions else 'Reserva anulada'
         elif i>=config.questions and i not in replacements: status='Reserva no utilizada'
         else:
             status='En blanco' if answer=='-' else 'Acierto' if answer==solution else 'Error'
@@ -94,10 +93,15 @@ def evaluate(config, key, answers):
     return Result(tuple(rows),a,e,b,len(annulled),len(replacements),effective,net,grade,raw)
 
 
+def reserve_plan(config,key,answers):
+    # The user's annulment applies only to this attempt, not to its shared key.
+    annulled=[i for i in range(config.questions) if key[i]=='X' or answers[i]=='X']
+    reserves=[i for i in range(config.questions,config.size) if key[i]!='X' and answers[i]!='X']
+    return annulled,reserves[:len(annulled)]
+
 def missing_reserves_message(config,key,answers):
     missing=[i for i in range(config.questions,config.size) if not answers[i]]
-    annulled=sum(v=='X' for v in key[:config.questions])
-    used=[i for i in range(config.questions,config.size) if key[i]!='X'][:annulled]
+    _,used=reserve_plan(config,key,answers)
     needed=sum(i in missing for i in used)
     if needed:
         detail=f'{needed} de las reservas pendientes se necesitan para sustituir anuladas. Si continúas, se contarán como blancas y pueden afectar a la nota.'
