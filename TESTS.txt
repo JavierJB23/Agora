@@ -1,3 +1,5 @@
+FIX10 — Comprobación local de sintaxis de todos los archivos Python: OK. Ejecución aislada del prefijo de choose_numbering (incluida la línea del fallo y dibujo de contornos) con square_sheet: OK; numeración 1, 11. SquarePreviewTests: 3/3 OK. PySide6 no disponible localmente; prueba GUI completa y EXE pendientes en GitHub.
+
 FIX09 — 75 pruebas no gráficas OK (ejecutadas por grupos); 23 GUI omitidas por falta de PySide6.
 Pruebas nuevas: restauración de numeración (GUI pendiente), vista original sin giro, recorte horizontal, geometría de respaldo reproyectada, archivos antiguos sin quad. TEST 10 foto de referencia: 103 letras, 8 blancos, 1 duda (92); no se incluyen fuentes privadas.
 

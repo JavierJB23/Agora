@@ -1,3 +1,7 @@
+# ÁGORA v0.6.10 — BLOCK 06 — FIX10
+
+- Corrige la importación de NumPy (`np`) en el diálogo de numeración introducido en FIX09. No cambia la lectura, el QR ni el almacenamiento. Se conserva la prueba gráfica de restablecimiento. Compilación manual: no modificar windows.yml.
+
 # ÁGORA v0.6.9 — BLOCK 06 — FIX09
 
 - Numeración de hojas: botón Restablecer para recuperar los números iniciales propuestos sin volver a importar por QR/PC. Si se cancela el ajuste por bloques o se introduce numeración inválida, se vuelve al diálogo de numeración con la imagen conservada.

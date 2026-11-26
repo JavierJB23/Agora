@@ -58,3 +58,5 @@ FIX07 (v0.6.7): componente común de tarjetas centradas para Inicio, Mi temario,
 FIX08 (v0.6.8): nuevo ajuste de contornos circulares por fila/columna, validación del respaldo por columna y distinción frente a cuadrados; conservar lecturas guardadas hasta reimportar/reajustar expresamente. S24 pendiente de validar con foto original en Windows.
 
 FIX09 (v0.6.9): restablecer numeración sin reimportar; conservar orientación de fotografía de cuadrados; recortes rectificados por fila y geometría archivada compatible con lecturas antiguas. Validación Windows pendiente. Mantener BLOCK 06 hasta confirmar.
+
+FIX10 (v0.6.10): importar NumPy en choose_numbering; mantener las pruebas y el flujo de compilación manual. Pendiente de validación Windows.
