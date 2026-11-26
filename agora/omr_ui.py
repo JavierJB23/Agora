@@ -69,7 +69,7 @@ class ReadWorker(QThread):
                 try:
                     def stage(fraction,label):
                         self.progress.emit(20+round(75*(j+fraction)/len(pages)),f'Hoja {j+1} de {len(pages)} · {label}')
-                    aligned,marks=omr.automatic_page(im,self.config.questions,self.config.reserves,self.config.options,progress=stage)
+                    aligned,marks=omr.automatic_page(im,self.config.questions,self.config.reserves,self.config.options,progress=stage,verify_ocr=True)
                     stage(.90,'Conservando imagen')
                     self.results.append((im,aligned,marks,record(im,aligned,marks)))
                 except Exception as e: self.errors.append(f'{name} · página {k}: {e}')
@@ -255,7 +255,7 @@ class OpticalPage(QWidget):
         row.addWidget(btn('Hoja original',lambda:show(True))); row.addWidget(btn('Casillas leídas',lambda:show(False))); l.addLayout(row)
         sc=QScrollArea(); sc.setWidget(im); sc.setWidgetResizable(True); l.addWidget(sc,1); l.addWidget(btn('Cerrar',d.accept),0,A.AlignCenter); show(True); d.exec()
     def automatic_candidate(self,original):
-        return omr.automatic_page(original,self.config.questions,self.config.reserves,self.config.options)
+        return omr.automatic_page(original,self.config.questions,self.config.reserves,self.config.options,verify_ocr=True)
 
     def adjust_existing_block(self,canvas,marks):
         """One common editor for circles and squares, starting from the detected columns."""
@@ -358,7 +358,10 @@ class OpticalPage(QWidget):
             elif m and m.suggestion and m.suggestion not in self.config.letters: status=f'Opción {m.suggestion} no válida · revisar'
             elif m and m.suggestion and not self.proposal(m): status+=f' · posible {m.suggestion}'
             for col,s in [(0,self.config.number(i)),(2,status)]:
-                t=QTableWidgetItem(s); t.setTextAlignment(A.AlignCenter); self.table.setItem(row,col,t)
+                t=QTableWidgetItem(s); t.setTextAlignment(A.AlignCenter)
+                if col==0 and m and m.number_check:
+                    t.setToolTip({'OCR':'Número impreso leído por OCR','sequence':'Numeración contrastada por secuencia','geometry':'Numeración geométrica: OCR no concluyente','unavailable':'OCR no disponible: numeración geométrica'}.get(m.number_check,''))
+                self.table.setItem(row,col,t)
             if m:
                 crop=QLabel(); crop.setAlignment(A.AlignCenter); crop.setPixmap(pix(omr.crop_image(self.aligned[page],m)).scaled(155,43,Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation)); self.table.setCellWidget(row,1,crop)
             combo=SafeComboBox(); vals=['',*self.config.letters,'-','X']; combo.addItems(['Pendiente',*self.config.letters,'En blanco','Anulada']); combo.setCurrentIndex(vals.index(self.answers[i])); combo.currentIndexChanged.connect(lambda k,n=i,v=vals:self.set_choice(n,v[k])); self.table.setCellWidget(row,3,combo)
@@ -380,6 +383,12 @@ class OpticalPage(QWidget):
                 break
     def update_count(self):
         n=self.answers.count(''); suffix=' · Sin imagen guardada' if not self.images and any(self.answers[i] for i in self.indices(self.page.currentIndex())) else ''; extra=sum(m.number.startswith('R') and self.target_index(m.number) is None for ms in self.marks.values() for m in ms); self.count.setText(f'{len(self.answers)-n}/{len(self.answers)} respuestas · {n} pendientes'+suffix+(f' · {extra} reservas sin solución (no puntúan)' if extra else ''))
+        marks=[m for ms in self.marks.values() for m in ms if m.number.startswith('R')==(self.page.currentIndex()==1)]
+        if any(m.number_check for m in marks):
+            direct=sum(m.number_check=='OCR' for m in marks); sequence=sum(m.number_check=='sequence' for m in marks)
+            info=f' · OCR (hoja): {direct} leídos, {sequence} por secuencia' if direct or sequence else ' · Numeración geométrica (OCR no concluyente)'
+            if any(m.number_check=='unavailable' for m in marks): info+=' · OCR no disponible en alguna hoja'
+            self.count.setText(self.count.text()+info)
     def reset(self):
         if any(self.answers) and not confirm(self,'Reiniciar lectura','Se descartarán las respuestas y revisiones actuales. ¿Continuar?'): return
         self.images.clear(); self.aligned.clear(); self.marks.clear(); self.records.clear(); self.answers[:]=['']*len(self.answers); self.changed(); self.refresh()

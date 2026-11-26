@@ -36,6 +36,8 @@ class ImportDialog(QDialog):
         self.qr=QLabel(); self.qr.setAlignment(ALIGN.AlignCenter); mob.addWidget(self.qr,1)
         self.address=SafeComboBox(); self.address.currentTextChanged.connect(self.draw_qr); self.address.hide()
         self.network=QPushButton('¿Problemas de conexión?'); self.network.setObjectName('importCancel'); self.network.setCheckable(True); self.network.toggled.connect(self.address.setVisible); mob.addWidget(self.network,0,ALIGN.AlignCenter); mob.addWidget(self.address)
+        self.received_info=text(''); self.received_info.setAlignment(ALIGN.AlignCenter); self.received_info.hide(); mob.addWidget(self.received_info)
+        self.finish_button=centered_button('Importar archivos',self.finish_upload); self.finish_button.setFixedWidth(210); self.finish_button.setObjectName('primary'); self.finish_button.setStyleSheet('text-align:center;'); self.finish_button.hide(); mob.addWidget(self.finish_button,0,ALIGN.AlignCenter)
         self.retry=centered_button('Generar otro QR',self.mobile); self.retry.hide(); mob.addWidget(self.retry,0,ALIGN.AlignCenter)
         self.stack.addWidget(self.mobile_page)
         self.cancel=centered_button('Cancelar',self.reject); root.addWidget(self.cancel,0,ALIGN.AlignCenter)
@@ -78,13 +80,14 @@ class ImportDialog(QDialog):
             if self.stack.currentWidget() is self.source: self.error('No se ha encontrado una red local.')
             else: self.info.setText('No se ha encontrado una red local. Inténtalo de nuevo.')
             return
-        try: self.session=UploadSession(extensions=self.extensions,multiple=self.multiple,max_files=self.max_files)
+        try: self.session=UploadSession(extensions=self.extensions,multiple=self.multiple,max_files=self.max_files-len(self.items),reusable=self.multiple,max_bytes=MAX_BYTES-sum(len(data) for _,data in self.items))
         except OSError as e:
             if self.stack.currentWidget() is self.source: self.error('No se pudo iniciar la conexión local: '+str(e))
             else: self.info.setText('No se pudo iniciar la conexión local: '+str(e))
             return
         self.info.setText('Abre la cámara del móvil y escanea el QR. Ambos dispositivos deben estar en la misma red privada. Si Windows pregunta, permite el acceso solo en redes privadas.')
-        self.retry.hide(); self.network.show(); self.network.setChecked(False); self.address.clear(); self.address.addItems(ips); self.draw_qr(self.address.currentText()); self.stack.setCurrentWidget(self.mobile_page); self.resize(480,510); self.timer.start(); self.expiry.start(300000)
+        if self.multiple: self.info.setText(self.info.text()+' Puedes enviar varias tandas sin volver a escanear. Pulsa Importar archivos al terminar.')
+        self.retry.hide(); self.network.show(); self.network.setChecked(False); self.address.clear(); self.address.addItems(ips); self.draw_qr(self.address.currentText()); self.stack.setCurrentWidget(self.mobile_page); self.resize(480,min(600,self.screen().availableGeometry().height()-80)); self.timer.start(); self.expiry.start(900000 if self.multiple else 300000)
     def draw_qr(self,ip):
         if not self.session or not ip: return
         import qrcode
@@ -95,9 +98,27 @@ class ImportDialog(QDialog):
         if not self.session: return
         try: received=self.session.items.get_nowait()
         except queue.Empty: return
-        self.items=received if self.multiple else [received]; self.item=self.items[0]; self.accept()
+        if not self.multiple:
+            self.items=[received]; self.item=self.items[0]; self.accept(); return
+        self.items.extend(received); self.item=self.items[0]
+        full=len(self.items)>=self.max_files or sum(len(data) for _,data in self.items)>=MAX_BYTES
+        self.received_info.setText(f'{len(received)} archivo(s) nuevo(s) recibido(s). Total: {len(self.items)}. '+('Límite alcanzado; importa los recibidos.' if full else 'Puedes enviar más o importar los recibidos.'))
+        self.received_info.setToolTip('\n'.join(name for name,_ in self.items))
+        self.received_info.show(); self.finish_button.setText(f'Importar archivos ({len(self.items)})'); self.finish_button.show(); self.expiry.start(900000 if self.multiple else 300000)
+    def finish_upload(self):
+        if self.session and not self.session.seal():
+            self.received_info.setText('Hay una transferencia en curso. Espera a que termine.'); return
+        self.poll()
+        if self.items: self.accept()
     def expire(self):
-        self.cleanup(); self.qr.clear(); self.network.hide(); self.address.hide(); self.info.setText('El QR ha caducado. Genera otro para continuar.'); self.retry.show()
+        if self.session and not self.session.seal(): self.expiry.start(30000); return
+        self.poll()
+        self.cleanup(); self.qr.clear(); self.network.hide(); self.address.hide(); self.info.setText('El QR ha caducado. Puedes importar lo recibido o generar otro para continuar.'); self.retry.setVisible(len(self.items)<self.max_files and sum(len(data) for _,data in self.items)<MAX_BYTES)
+    def reject(self):
+        if self.multiple and self.items:
+            from .manual import confirm
+            if not confirm(self,'Descartar archivos',f'Se han recibido {len(self.items)} archivos. ¿Cerrar sin importarlos?'): return
+        super().reject()
     def cleanup(self,*_):
         self.timer.stop(); self.expiry.stop()
         if self.session: self.session.close(); self.session=None

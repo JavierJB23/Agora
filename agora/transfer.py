@@ -5,7 +5,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 from .answer_import import MAX_BYTES
 
-PAGE='''<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ágora</title><style>body{font:17px system-ui;background:#fff7fa;color:#75405b;margin:24px}main{max-width:520px;margin:auto;padding:24px;background:white;border-radius:20px}button{background:#a55379;color:white;border:0;border-radius:12px;padding:14px;width:100%;font:inherit}h1{display:flex;align-items:center;gap:12px;font-family:Georgia,serif}h1 svg{width:48px;height:48px;flex:none}.pick{display:block;box-sizing:border-box;text-align:center;background:#f1d0df;color:#75405b;border-radius:12px;padding:14px;width:100%;font:inherit;margin:18px 0 10px;cursor:pointer}.pick:focus-within{outline:2px solid #a55379}.pick input{position:absolute;opacity:0;width:1px;height:1px}#filename{overflow-wrap:anywhere;font-size:14px;margin:0 0 14px;text-align:center}progress{width:100%}</style><main><h1><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="2" y="2" width="96" height="96" rx="25" fill="#F1D0DF"/><g fill="none" stroke="#A35B7C" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 35L50 18 81 35Z M26 43V69 M42 43V69 M58 43V69 M74 43V69 M20 77H80 M15 84H85"/></g></svg>ÁGORA</h1><p>Enviar documento al ordenador</p><label class="pick">Seleccionar archivos<input id="file" type="file" accept=".pdf,.docx" onchange="document.getElementById('filename').textContent=Array.from(this.files).map(f=>f.name).join(', ')||'Ningún archivo seleccionado'"/></label><p id="filename">Ningún archivo seleccionado</p><button id="send">Enviar documento</button><p id="status" role="status"></p><progress id="progress" max="100" value="0"></progress></main><script>const f=document.querySelector('#file'),b=document.querySelector('#send'),s=document.querySelector('#status'),p=document.querySelector('#progress');b.onclick=()=>{if(!f.files.length){s.textContent='Selecciona un documento.';return}const file=f.files[0];if(file.size>104857600){s.textContent='Máximo 100 MB.';return}b.disabled=true;s.textContent='Enviando…';const x=new XMLHttpRequest();x.open('POST',location.pathname+'upload');x.setRequestHeader('X-File-Name',encodeURIComponent(file.name));x.upload.onprogress=e=>{if(e.lengthComputable)p.value=e.loaded/e.total*100};x.onload=()=>{s.textContent=x.status===200?'Documento recibido. Ya puedes volver al ordenador.':'No se pudo enviar ('+x.status+').';b.disabled=x.status===200};x.onerror=()=>{s.textContent='Conexión interrumpida. Comprueba el Wi-Fi.';b.disabled=false};x.send(file)};</script></html>'''
+PAGE='''<!doctype html><html lang="es"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Ágora</title><style>body{font:17px system-ui;background:#fff7fa;color:#75405b;margin:24px}main{max-width:520px;margin:auto;padding:24px;background:white;border-radius:20px}button{background:#a55379;color:white;border:0;border-radius:12px;padding:14px;width:100%;font:inherit}h1{display:flex;align-items:center;gap:12px;font-family:Georgia,serif}h1 svg{width:48px;height:48px;flex:none}.pick{display:block;box-sizing:border-box;text-align:center;background:#f1d0df;color:#75405b;border-radius:12px;padding:14px;width:100%;font:inherit;margin:18px 0 10px;cursor:pointer}.pick:focus-within{outline:2px solid #a55379}.pick input{position:absolute;opacity:0;width:1px;height:1px}#filename{overflow-wrap:anywhere;font-size:14px;margin:0 0 14px;text-align:center}progress{width:100%;accent-color:#a55379}</style><main><h1><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect x="2" y="2" width="96" height="96" rx="25" fill="#F1D0DF"/><g fill="none" stroke="#A35B7C" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path d="M19 35L50 18 81 35Z M26 43V69 M42 43V69 M58 43V69 M74 43V69 M20 77H80 M15 84H85"/></g></svg>ÁGORA</h1><p>Enviar documento al ordenador</p><label class="pick">Seleccionar archivos<input id="file" type="file" accept=".pdf,.docx" onchange="document.getElementById('filename').textContent=Array.from(this.files).map(f=>f.name).join(', ')||'Ningún archivo seleccionado'"/></label><p id="filename">Ningún archivo seleccionado</p><button id="send">Enviar documento</button><p id="status" role="status"></p><progress id="progress" max="100" value="0"></progress></main><script>const f=document.querySelector('#file'),b=document.querySelector('#send'),s=document.querySelector('#status'),p=document.querySelector('#progress');b.onclick=()=>{if(!f.files.length){s.textContent='Selecciona un documento.';return}const file=f.files[0];if(file.size>104857600){s.textContent='Máximo 100 MB.';return}b.disabled=true;s.textContent='Enviando…';const x=new XMLHttpRequest();x.open('POST',location.pathname+'upload');x.setRequestHeader('X-File-Name',encodeURIComponent(file.name));x.upload.onprogress=e=>{if(e.lengthComputable)p.value=e.loaded/e.total*100};x.onload=()=>{s.textContent=x.status===200?'Documento recibido. Ya puedes volver al ordenador.':'No se pudo enviar ('+x.status+').';b.disabled=x.status===200};x.onerror=()=>{s.textContent='Conexión interrumpida. Comprueba el Wi-Fi.';b.disabled=false};x.send(file)};</script></html>'''
 
 def local_addresses():
     addresses=[]
@@ -22,9 +22,9 @@ def local_addresses():
 MULTI_JS="""const f=document.querySelector('#file'),b=document.querySelector('#send'),s=document.querySelector('#status'),p=document.querySelector('#progress');b.onclick=()=>{const files=Array.from(f.files);if(!files.length||files.length>2){s.textContent='Selecciona una o dos hojas.';return}const total=files.reduce((n,v)=>n+v.size,0);if(total>104857600||files.some(v=>!v.size)){s.textContent='Máximo 100 MB en total.';return}b.disabled=true;s.textContent='Enviando…';const x=new XMLHttpRequest();x.open('POST',location.pathname+'batch');x.setRequestHeader('X-Files',encodeURIComponent(JSON.stringify(files.map(v=>[v.name,v.size]))));x.upload.onprogress=e=>{if(e.lengthComputable)p.value=e.loaded/e.total*100};x.onload=()=>{s.textContent=x.status===200?'Hojas recibidas. Vuelve al ordenador.':'No se pudo enviar ('+x.status+').';b.disabled=x.status===200};x.onerror=()=>{s.textContent='Conexión interrumpida.';b.disabled=false};x.send(new Blob(files));};"""
 
 class UploadSession:
-    def __init__(self, host='0.0.0.0', extensions=('.pdf','.docx'), multiple=False, max_files=2):
+    def __init__(self, host='0.0.0.0', extensions=('.pdf','.docx'), multiple=False, max_files=2, reusable=False, max_bytes=MAX_BYTES):
         self.token=secrets.token_urlsafe(24); self.items=queue.Queue(maxsize=1); self.lock=threading.Lock(); self.accepted=False
-        self.extensions=tuple(extensions); self.multiple=multiple; self.max_files=max(2,min(20,int(max_files))); owner=self
+        self.extensions=tuple(extensions); self.multiple=multiple; self.max_files=max(1,min(20,int(max_files))); self.reusable=bool(reusable and multiple); self.max_bytes=min(MAX_BYTES,max_bytes); self.count=0; self.total=0; self.closed=threading.Event(); owner=self
         class Handler(BaseHTTPRequestHandler):
             def setup(self): super().setup(); self.connection.settimeout(30)
             def log_message(self,*args): pass
@@ -34,6 +34,12 @@ class UploadSession:
                 if self.path!=f'/{owner.token}/': self.reply(404,'No disponible'); return
                 page=PAGE.replace('accept=".pdf,.docx"','accept="'+html.escape(','.join(owner.extensions))+'"')
                 if owner.multiple: page=page.split('<script>')[0].replace('type="file"','type="file" multiple').replace('Enviar documento','Enviar hojas')+'<script>'+MULTI_JS.replace('files.length>2',f'files.length>{owner.max_files}').replace('Selecciona una o dos hojas.',f'Selecciona hasta {owner.max_files} archivos.')+'</script></html>'
+                if owner.reusable:
+                    page=page.replace("Hojas recibidas. Vuelve al ordenador.","Archivos recibidos. Puedes seleccionar y enviar más, o finalizar en el ordenador.").replace("b.disabled=x.status===200", "b.disabled=false;if(x.status===200){f.value='';document.querySelector('#filename').textContent='Ningún archivo seleccionado';p.value=100}")
+                    page=page.replace('const files=Array.from(f.files);','const files=Array.from(f.files);p.value=0;')
+                    page=page.replace("b.disabled=true;s.textContent='Enviando…'", "b.disabled=true;f.disabled=true;s.textContent='Enviando…'")
+                    page=page.replace("b.disabled=false;", "b.disabled=false;f.disabled=false;").replace("b.disabled=false}", "b.disabled=false;f.disabled=false}")
+                    page=page.replace("'No se pudo enviar ('+x.status+').'", "(x.status===413?'Se ha alcanzado el límite de archivos o tamaño. Finaliza en el ordenador.':x.status===409?'Espera unos segundos y vuelve a intentar.':'No se pudo enviar ('+x.status+').')")
                 self.reply(200,page,'text/html; charset=utf-8')
             def do_POST(self):
                 if owner.multiple and self.path==f'/{owner.token}/batch': return self.batch()
@@ -44,11 +50,12 @@ class UploadSession:
                 name=unquote(self.headers.get('X-File-Name','')).replace('\\','/').split('/')[-1]
                 if not name or len(name)>255 or Path(name).suffix.lower() not in owner.extensions: self.reply(415,'Formato no admitido'); return
                 with owner.lock:
-                    if owner.accepted: self.reply(409,'Ya recibido'); return
+                    if owner.closed.is_set() or owner.accepted: self.reply(409,'Ya recibido'); return
                     try: data=self.rfile.read(size)
                     except (OSError,TimeoutError): return
                     if len(data)!=size: self.reply(400,'Transferencia incompleta'); return
-                    owner.accepted=True; owner.items.put_nowait((name,data)); self.reply(200,'Recibido')
+                    owner.accepted=True; owner.items.put_nowait((name,data))
+                self.reply(200,'Recibido')
             def batch(self):
                 try:
                     size=int(self.headers.get('Content-Length','0')); files=json.loads(unquote(self.headers.get('X-Files','')))
@@ -61,7 +68,8 @@ class UploadSession:
                     if sum(n for _,n in clean)!=size: raise ValueError()
                 except (ValueError,TypeError,AttributeError): self.reply(400,'Archivos no válidos'); return
                 with owner.lock:
-                    if owner.accepted: self.reply(409,'Ya recibido'); return
+                    if owner.closed.is_set() or (owner.accepted and not owner.reusable) or owner.items.full(): self.reply(409,'Espera a que el ordenador reciba la tanda'); return
+                    if owner.count+len(clean)>owner.max_files or owner.total+size>owner.max_bytes: self.reply(413,'Límite total de la sesión alcanzado'); return
                     items=[]
                     try:
                         for name,n in clean:
@@ -69,8 +77,15 @@ class UploadSession:
                             if len(data)!=n: self.reply(400,'Transferencia incompleta'); return
                             items.append((name,data))
                     except (OSError,TimeoutError): return
-                    owner.accepted=True; owner.items.put_nowait(items); self.reply(200,'Recibido')
+                    if owner.closed.is_set(): self.reply(409,'Sesión cerrada'); return
+                    owner.accepted=True; owner.count+=len(items); owner.total+=size; owner.items.put_nowait(items)
+                self.reply(200,'Recibido')
         self.server=ThreadingHTTPServer((host,0),Handler); self.server.daemon_threads=True
         self.thread=threading.Thread(target=self.server.serve_forever,kwargs={'poll_interval':0.1},daemon=True); self.thread.start()
     def url(self,address): return f'http://{address}:{self.server.server_port}/{self.token}/'
-    def close(self): self.server.shutdown(); self.server.server_close(); self.thread.join(timeout=1)
+    def seal(self):
+        # Do not block the GUI while a request is still uploading.
+        if not self.lock.acquire(blocking=False): return False
+        try: self.closed.set(); return True
+        finally: self.lock.release()
+    def close(self): self.closed.set(); self.server.shutdown(); self.server.server_close(); self.thread.join(timeout=1)

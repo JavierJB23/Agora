@@ -4,6 +4,7 @@ Blue ink is interpreted; clear results are proposed and the set is confirmed bef
 from dataclasses import dataclass, replace
 from io import BytesIO
 from pathlib import Path
+import subprocess
 import cv2 as cv
 import numpy as np
 from PIL import Image, ImageOps
@@ -20,6 +21,7 @@ class Mark:
     red: tuple[int,...]
     crop: tuple[int,int,int,int]
     quad: tuple[tuple[float,float],...] = ()  # ordered corners of the actual row
+    number_check: str = ""  # OCR, sequence, geometry, unavailable; empty for historical records
 
 def decode(name,data):
     ext=Path(name).suffix.lower()
@@ -961,7 +963,7 @@ def verify_numbered_rows(im, marks):
     return marks
 
 
-def automatic_page(im, questions, reserves=0, options=3, previous=None, progress=None):
+def _automatic_page(im, questions, reserves=0, options=3, previous=None, progress=None):
     """Try independent normalizations; only install a verified row sequence."""
     report=progress or (lambda *_:None)
     report(.05,"Preparando imagen")
@@ -1006,6 +1008,20 @@ def automatic_page(im, questions, reserves=0, options=3, previous=None, progress
             return canvas,verify_numbered_rows(canvas,marks)
         except ValueError as e: errors.append(str(e))
     raise ValueError('No se ha podido verificar la estructura y numeración de la hoja. Prueba con otra fotografía o introduce las respuestas manualmente.')
+
+
+def automatic_page(im, questions, reserves=0, options=3, previous=None, progress=None, verify_ocr=False):
+    canvas,marks=_automatic_page(im,questions,reserves,options,previous,progress)
+    if not verify_ocr: return canvas,marks
+    if progress: progress(.78,'Contrastando numeración impresa (OCR)')
+    from .number_ocr import verify
+    try:
+        checked,_,_,conflicts=verify(canvas,marks)
+    except (RuntimeError,OSError,subprocess.TimeoutExpired) as e:
+        # A local engine failure never masquerades as OCR verification.
+        return canvas,[replace(m,number_check='unavailable') for m in marks]
+    if conflicts: raise ValueError('El OCR detecta una posible discontinuidad de numeración en el bloque '+', '.join(conflicts)+'. No se aplicará una lectura dudosa.')
+    return canvas,checked
 
 
 def guided_block(im, points, rows, options, start):
