@@ -1,3 +1,5 @@
+06B RC1: comprobar compilación manual con windows.yml actualizado; EXE v0.6.17 BLOCK 06B; OCR en hojas conocidas y numeración real, reservas, casos de OCR no concluyente, archivo y recuperación. QR: enviar hoja ordinaria desde el móvil, seleccionar otras fotos en la misma página web, enviar segunda tanda sin escanear, comprobar contador, Importar archivos (N), conservación de todas las hojas; comprobar cancelación y caducidad. No se requiere instalar Python ni OCR en PC.
+
 FIX16 — Reservas reales R1–R9 con 0 y 9 configuradas; archivo y recuperación OK. Prueba sintética ReserveImportRegression OK; 59 pruebas no gráficas de importación, puntuación, biblioteca, almacenamiento y QR OK. GUI y compilación pendientes. Verificar barra durante lectura PC/QR, reserva sin clave consultable sin puntuar, reserva con clave puntúa solo si sustituye una anulada.
 
 FIX11 — 79 pruebas no gráficas superadas (102 ejecutadas, 23 GUI omitidas); tras el último cambio de recorte, 2 pruebas guiadas superadas, incluida 1 nueva. 80 pruebas no gráficas cubiertas; 25 GUI pendientes. Sintaxis Python correcta.

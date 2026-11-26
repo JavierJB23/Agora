@@ -1,3 +1,6 @@
+# BLOCK 06B — RC1 v0.6.17 (pendiente de validación)
+FIX16 es el punto estable anterior. RC1 incorpora OCR de números y prefijo R como complemento del OMR, con verificación por secuencia y QR reutilizable. Queda mejorar OCR en reservas pequeñas, letras de opciones, formatos desconocidos y páginas parciales; preservar el lector estable. 06C Mis modelos / generador PDF, 06D modelos externos, 06E reconocimiento combinado siguen pendientes.
+
 # Ágora — hoja de ruta acordada
 
 Desarrollo incremental por bloques; mantener la última versión STABLE y no avanzar sin aprobación. Windows, Python/PySide6/SQLite, estética rosa pastel y blanco. Primera versión funcional del corrector: fin de BLOCK 06.

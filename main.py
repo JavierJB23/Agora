@@ -48,6 +48,12 @@ def smoke_test(report):
             marks = omr.scan(omr.align(images[0]), 0)
             if len(marks) != 120 or marks[0].suggestion != 'B':
                 raise RuntimeError('Prueba de lectura OMR incorrecta')
+            # Exercise the bundled executable and language data, not merely the Python module.
+            from agora.number_ocr import recognize
+            sample = np.full((120,420),255,np.uint8)
+            cv.putText(sample,'123',(50,84),cv.FONT_HERSHEY_SIMPLEX,2,0,3)
+            if not any(x[0]=='123' for x in recognize(sample,7)):
+                raise RuntimeError('Prueba OCR del motor incluido incorrecta')
             # New reader: four physical cells per row, independent of valid options.
             sq = np.full((omr.HEIGHT, omr.WIDTH, 3), 250, np.uint8)
             for j in range(10):
@@ -88,7 +94,7 @@ def smoke_test(report):
             w.go('home')
             w.close()
             app.processEvents()
-        report.write_text('OK\nNumPy '+np.__version__+'\nOpenCV '+cv.__version__+'\nQt, ventana, OMR círculos y cuadrados, PNG y PDF: OK\n', encoding='utf-8')
+        report.write_text('OK\nNumPy '+np.__version__+'\nOpenCV '+cv.__version__+'\nQt, ventana, OMR círculos y cuadrados, OCR local, PNG y PDF: OK\n', encoding='utf-8')
         return 0
     except Exception:
         report.write_text(traceback.format_exc(), encoding='utf-8')
