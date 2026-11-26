@@ -70,9 +70,9 @@ class OpticalPage(QWidget):
             cv.putText(shown,str(i+1),(x+3,max(22,y-5)),cv.FONT_HERSHEY_SIMPLEX,.9,(165,83,121),3)
             defaults.append(str(next_number)); next_number+=len(marks)
             details.append(f'{i+1}: {len(marks)} filas, {len(marks[0].scores)} opciones')
-        d=QDialog(self); d.setWindowTitle('Numeración de la hoja'); d.resize(720,820); l=QVBoxLayout(d)
+        d=QDialog(self); d.setWindowTitle('Numeración de la hoja'); d.resize(720,min(820,self.screen().availableGeometry().height()-80)); l=QVBoxLayout(d)
         l.addWidget(text('Confirma el número de la primera pregunta de cada bloque. Usa R1, R4… para reservas.'))
-        preview=QLabel(); preview.setAlignment(A.AlignCenter); preview.setPixmap(pix(shown).scaled(640,630,Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation)); l.addWidget(preview,1)
+        preview=QLabel(); preview.setAlignment(A.AlignCenter); preview.setPixmap(pix(shown).scaled(640,max(200,min(630,self.screen().availableGeometry().height()-300)),Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation)); l.addWidget(preview,1)
         l.addWidget(text(' · '.join(details))); field=QLineEdit(', '.join(defaults)); l.addWidget(field)
         row=QHBoxLayout(); row.addWidget(btn('Cancelar',d.reject)); row.addWidget(btn('Ajuste por bloques',lambda:d.done(2))); row.addWidget(btn('Confirmar',d.accept,True)); l.addLayout(row)
         outcome=d.exec()
@@ -89,7 +89,7 @@ class OpticalPage(QWidget):
             buttons=QHBoxLayout(); buttons.addWidget(btn('Cancelar',form.reject)); buttons.addWidget(btn('Continuar',form.accept,True)); fl.addLayout(buttons)
             if form.exec()!=QDialog.DialogCode.Accepted: return None
             start=number.text(); rows=rows_box.value(); options=options_box.value()
-            d=QDialog(self); d.setWindowTitle('Ajustar bloque'); d.resize(720,800); l=QVBoxLayout(d)
+            d=QDialog(self); d.setWindowTitle('Ajustar bloque'); d.resize(720,min(800,self.screen().availableGeometry().height()-80)); l=QVBoxLayout(d)
             l.addWidget(text('Señala los centros de las casillas exteriores del bloque, no los números.'))
             status=text('','tileTitle'); l.addWidget(status); apply=btn('Aplicar',lambda:None,True)
             refs=['Primera fila · A','Primera fila · última opción','Última fila · última opción','Última fila · A']
@@ -106,19 +106,18 @@ class OpticalPage(QWidget):
     def read_page(self,im):
         aligned=omr.align(im)
         try:
+            slot=omr.identify(aligned); return aligned,omr.scan(aligned,slot)
+        except ValueError as e:
+            circle_error=str(e)
+        try:
             blocks=omr.square_blocks(aligned)
-        except ValueError: blocks=None
+        except ValueError:
+            blocks=None
         if blocks:
             marks=self.choose_numbering(aligned,blocks)
-            if marks is None: return None
-            return aligned,marks
-        try:
-            slot=omr.identify(aligned); marks=omr.scan(aligned,slot)
-            # The known layouts can be read automatically. For other numbering or
-            # extra blocks, the user can choose the guided mapping instead.
-            return aligned,marks
-        except ValueError as e:
-            box=QMessageBox(self); box.setWindowTitle('Alinear hoja'); box.setText(str(e)); box.setInformativeText('Puedes ajustar la plantilla de círculos conocida o indicar otros bloques de casillas.'); box.setIcon(QMessageBox.Icon.Question)
+            return (aligned,marks) if marks is not None else None
+        else:
+            box=QMessageBox(self); box.setWindowTitle('Alinear hoja'); box.setText(circle_error); box.setInformativeText('Puedes ajustar la plantilla de círculos conocida o indicar otros bloques de casillas.'); box.setIcon(QMessageBox.Icon.Question)
             ordinary=box.addButton('Círculos A–C',QMessageBox.ButtonRole.ActionRole); reserve=box.addButton('Reservas A–C',QMessageBox.ButtonRole.ActionRole); generic=box.addButton('Otro diseño',QMessageBox.ButtonRole.ActionRole); cancel=box.addButton('Cancelar',QMessageBox.ButtonRole.RejectRole); box.setEscapeButton(cancel); box.exec()
             if box.clickedButton() is generic:
                 marks=self.guided_dialog(aligned); return (aligned,marks) if marks else None
@@ -218,7 +217,7 @@ class OpticalPage(QWidget):
             self.install(i,self.images[i],aligned,marks,snapshot); self.changed(); self.refresh()
         except Exception as e: QMessageBox.warning(self,'No se pudo alinear',str(e)+'\n\nSe conserva la lectura anterior. Usa los centros de los círculos indicados o la alineación automática.')
     def alignment_dialog(self,original,i):
-        d=QDialog(self); d.setWindowTitle('Ajustar alineación'); d.resize(720,800); l=QVBoxLayout(d)
+        d=QDialog(self); d.setWindowTitle('Ajustar alineación'); d.resize(720,min(800,self.screen().availableGeometry().height()-80)); l=QVBoxLayout(d)
         refs=['1 · A','91 · C','120 · C','30 · A'] if i==0 else ['R1 · A','R7 · C','R9 · C','R3 · A']
         guide=text('Marca el CENTRO de los círculos indicados, no los bordes del papel.'); l.addWidget(guide)
         status=text('','tileTitle'); l.addWidget(status); apply=btn('Aplicar',lambda:None,True)

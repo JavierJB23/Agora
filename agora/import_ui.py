@@ -6,7 +6,7 @@ from PySide6.QtCore import Qt,QTimer,QByteArray,QSize
 from PySide6.QtGui import QPixmap,QImage,QIcon,QPainter
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (QDialog,QVBoxLayout,QHBoxLayout,QLabel,QPushButton,QFileDialog,QToolButton,QWidget,QStackedWidget)
-from .controls import SafeComboBox
+from .controls import SafeComboBox, CenteredTile
 from .answer_import import MAX_BYTES
 from .transfer import UploadSession,local_addresses
 ASSETS=Path(__file__).resolve().parent.parent/'assets'
@@ -27,7 +27,7 @@ class ImportDialog(QDialog):
         title=text('¿Desde dónde quieres cargarlo?'); title.setObjectName('heading'); title.setAlignment(ALIGN.AlignCenter); source.addWidget(title)
         row=QHBoxLayout(); row.setSpacing(14)
         for name,asset,fn in [('Desde PC','monitor',self.pc),('Desde móvil','qr-code',self.mobile)]:
-            b=QToolButton(); b.setObjectName('homeTile'); b.setText(name); b.setIcon(QIcon(str(ASSETS/(asset+'.svg')))); b.setIconSize(QSize(64,64)); b.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextUnderIcon); b.setFixedSize(170,170); b.setCursor(Qt.CursorShape.PointingHandCursor); b.clicked.connect(fn); row.addWidget(b)
+            b=CenteredTile(name,QIcon(str(ASSETS/(asset+'.svg')))); b.setFixedSize(170,170); b.clicked.connect(fn); row.addWidget(b)
         source.addLayout(row); note=text((f'Selecciona o arrastra hasta {self.max_files} archivos (100 MB en total).\nFormatos: ' if multiple else 'También puedes arrastrar un documento aquí.\nFormatos: ')+', '.join(extensions)+f' · Hasta {MAX_BYTES//(1024**2)} MB.'); note.setObjectName('muted'); note.setAlignment(ALIGN.AlignCenter); source.addWidget(note)
         self.source_error=text(''); self.source_error.hide(); source.addWidget(self.source_error); self.stack.addWidget(self.source)
         self.mobile_page=QWidget(); mob=QVBoxLayout(self.mobile_page); mob.setContentsMargins(0,0,0,0); mob.setSpacing(12)

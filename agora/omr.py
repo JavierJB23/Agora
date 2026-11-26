@@ -97,7 +97,7 @@ def locations(page):
         for row in range(n):
             yield (str(col*n+row+1) if page==0 else 'R'+str(col*n+row+1),[round(2*(x+16.75*j)) for j in range(3)],round(2*(start+19.618*row)))
 
-def grid_positions(im,page):
+def _legacy_grid_positions(im,page):
     """Fit the printed lattice, not the paper edges, and refine local row positions.
     Reject ambiguous geometry instead of silently reading a neighboring row.
     """
@@ -143,6 +143,84 @@ def grid_positions(im,page):
             raise ValueError('Casillas desalineadas. Ajusta las esquinas o repite la foto.')
         groups.append((n,[tuple(map(int,xy)) for xy in np.round(pts)]))
     return groups
+
+def local_circle_positions(im):
+    """Fit each of four printed columns independently, including smooth page curvature.
+    Require evidence for the full 30-row lattice in every column; never infer numbering
+    from an arbitrary subset of circles. Missing individual circles use local interpolation.
+    """
+    g=cv.GaussianBlur(cv.cvtColor(im,cv.COLOR_RGB2GRAY),(3,3),0)
+    lo,hi=250,1580
+    c=cv.HoughCircles(g[lo:hi],cv.HOUGH_GRADIENT,1,19,param1=60,param2=12,minRadius=6,maxRadius=18)
+    if c is None: raise ValueError('No se reconocen los círculos.')
+    found=c[0,:,:2].astype(float); found[:,1]+=lo
+    groups=[]; first_span=None
+    for col in range(4):
+        mid=list(locations(0))[col*30][1][1]
+        p=found[(abs(found[:,0]-mid)<115)]
+        delta=p[:,None,:]-p[None,:,:]
+        left=(delta[:,:,0]>23)&(delta[:,:,0]<47)&(abs(delta[:,:,1])<9)
+        right=(delta[:,:,0]<-23)&(delta[:,:,0]>-47)&(abs(delta[:,:,1])<9)
+        mids=p[left.any(1)&right.any(1)&(abs(p[:,0]-mid)<75)]
+        if len(mids)<21: raise ValueError('No se reconoce una columna completa.')
+        # Candidate first row and pitch. Use all triplets, not a single global paper warp.
+        starts=np.arange(275,571,2.); pitches=np.arange(27,46.1,.5)
+        s,step=np.meshgrid(starts,pitches); s=s.ravel(); step=step.ravel()
+        row=np.arange(30); best_cost=np.inf; fit=None; candidates=[]
+        for bend in np.arange(-.07,.071,.02):
+            py=s[:,None]+step[:,None]*row+bend*row*(row-29)
+            d=abs(py[:,:,None]-mids[None,None,:,1]); near=d.min(2); ids=d.argmin(2)
+            cost=np.minimum(near,step[:,None]*.40).mean(1)+.012*abs(mids[ids,0]-mid).mean(1)
+            valid=((near<step[:,None]*.24).sum(1)>=23)&(near[:,0]<step*.24)&(near[:,-1]<step*.24)
+            if first_span is not None:
+                valid &= (abs(s-first_span[0])<step*.85)&(abs(s+29*step-first_span[1])<step*.85)
+            else:
+                # Prefer a nominally aligned start only to break near-ties.
+                cost -= .15*np.maximum(0,1-abs(s-359)/25)
+            if not valid.any(): continue
+            best=int(np.argmin(np.where(valid,cost,np.inf)))
+            candidates.extend(zip(s[valid],(s+29*step)[valid],cost[valid]))
+            if cost[best]<best_cost:
+                best_cost=cost[best]; fit=(py[best],step[best],near[best],ids[best])
+        if fit is None: raise ValueError('No se reconocen las 30 filas de una columna.')
+        y,pitch,near,ids=fit
+        if first_span is None:
+            first_span=(y[0],y[-1])
+            if any((start-y[0])*(end-y[-1])>0 and abs(start-y[0])>pitch*.6 and abs(end-y[-1])>pitch*.6 and cost<best_cost+.10 for start,end,cost in candidates): raise ValueError('Numeración de filas ambigua.')
+        row=np.arange(30); good=near<pitch*.24; chosen=mids[ids]
+        # Smooth quadratic follows bent pages while remaining monotonic.
+        px=np.polyval(np.polyfit(row[good],chosen[good,0],2),row)
+        yy=np.polyval(np.polyfit(row[good],chosen[good,1],2),row)
+        # Initial horizontal pitch from triplet neighbors.
+        gaps=[]
+        for m in chosen[good]:
+            diff=p-m; cand=abs(diff[:,0][(abs(diff[:,1])<9)&(abs(diff[:,0])>23)&(abs(diff[:,0])<47)])
+            gaps.extend(cand.tolist())
+        gap=float(np.median(gaps))
+        pred=np.stack([np.column_stack([px+gap*j,yy]) for j in (-1,0,1)],axis=1)
+        flat=pred.reshape(-1,2); dist=np.linalg.norm(flat[:,None,:]-p[None,:,:],axis=2); ix=dist.argmin(1); dd=dist.min(1).reshape(30,3)
+        observed=p[ix].reshape(30,3,2); goodcells=dd<min(10,pitch*.30)
+        if goodcells.sum()<64 or (goodcells.sum(1)>=2).sum()<25: raise ValueError('Alineación local insuficiente.')
+        # Fit each option's curvature, then apply observed row offsets where supported.
+        for j in range(3):
+            keep=goodcells[:,j]
+            if keep.sum()<17: raise ValueError('Casillas de una opción insuficientes.')
+            for k in range(2): pred[:,j,k]=np.polyval(np.polyfit(row[keep],observed[keep,j,k],2),row)
+        for i in range(30):
+            ok=goodcells[i]
+            if ok.sum()>=2:
+                shift=np.median(observed[i,ok]-pred[i,ok],axis=0)
+                if np.linalg.norm(shift)<pitch*.24: pred[i]+=shift
+        if np.any(np.diff(pred[:,:,0],axis=1)<22) or np.any(np.diff(pred[:,:,0],axis=1)>48) or np.any(np.diff(pred[:,:,1],axis=0)<pitch*.65): raise ValueError('Separación de casillas no válida.')
+        for i,pts in enumerate(pred): groups.append((str(col*30+i+1),[tuple(map(int,xy)) for xy in np.round(pts)]))
+    return groups
+
+
+def grid_positions(im,page):
+    if page==0:
+        try: return local_circle_positions(im)
+        except ValueError: pass
+    return _legacy_grid_positions(im,page)
 
 def reserve_positions(im): return grid_positions(im,1)
 
