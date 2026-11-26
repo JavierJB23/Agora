@@ -18,6 +18,7 @@ class ImportTests(unittest.TestCase):
     def test_reserves(self):
         self.assertEqual(parse_pages(['1. A\n2. ANULADA\nPreguntas de reserva:\n1 C']).key,['A','X','C'])
         self.assertEqual(parse_pages(['1A 2B R1C R2A']).reserves,('C','A'))
+        self.assertEqual(parse_pages(['1A 2B R-1C R-2A']).reserves,('C','A'))
     def test_missing_and_duplicate_and_prose(self):
         for p in ['1A 3C','1A 1B','1A 2Z','1. A es una respuesta','1A R2B','0A','1A 501B','1. ¿Cuál?','']:
             with self.subTest(p=p),self.assertRaises(ValueError): parse_pages([p])

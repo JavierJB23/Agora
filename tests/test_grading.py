@@ -46,3 +46,11 @@ class GradingTests(unittest.TestCase):
     def test_large_exam(self):
         c=self.config(500,100,options=5); r=evaluate(c,['A']*600,['A']*600)
         self.assertEqual((r.correct,r.grade,len(r.rows)),(500,10,600))
+
+class OptionalReservesTests(unittest.TestCase):
+    def test_missing_reserves_warning(self):
+        from agora.grading import ExamConfig,missing_reserves_message,evaluate
+        c=ExamConfig(questions=2,reserves=2)
+        self.assertIn('No afectarán',missing_reserves_message(c,['A','B','C','A'],['A','B','','']))
+        self.assertIn('pueden afectar',missing_reserves_message(c,['A','X','C','A'],['A','B','','']))
+        self.assertEqual(evaluate(c,['A','B','C','A'],['A','B','-','-']).grade,10)

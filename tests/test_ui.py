@@ -157,11 +157,11 @@ class UITests(unittest.TestCase):
             self.assertTrue(ORIGINAL_ENTER(m)); self.assertFalse(m.active()); self.assertTrue(m.open_saved(aid)); self.assertEqual(m.name.text(),'Guardar al salir')
             w.close(); w.deleteLater(); self.app.processEvents()
 
-    def test_config_structure_only_from_import(self):
+    def test_config_structure_and_import(self):
         from PySide6.QtWidgets import QSpinBox
         with tempfile.TemporaryDirectory() as d:
             w=MainWindow(Storage(d)); w.show(); w.go('manual'); m=w.manual
-            self.assertFalse(m.content.findChildren(QSpinBox))
+            self.assertEqual(len([x for x in m.content.findChildren(QSpinBox) if x.isVisible()]),2)
             m.name.setText('Importado'); m.apply_config(); m.install_key(ImportedKey(('A','B','D'),('A',)),'prueba.pdf',4)
             m.next_entry(); m.choose(0,'A'); m.move_stage(0); m.penalty.setCurrentText('0'); m.apply_config(target=2)
             self.assertEqual((m.config.questions,m.config.reserves,m.config.options),(3,1,4)); self.assertEqual(m.answers[0],'A'); self.assertEqual(m.config.penalty,'0')
@@ -283,7 +283,7 @@ class UITests(unittest.TestCase):
             self.assertEqual(w.library_tabs.tabText(1),'Mis plantillas')
             w.go('manual'); m=w.manual; m.refresh_templates(); self.assertGreaterEqual(m.templates_combo.findText('Biblioteca'),1)
             m.move_stage(1)
-            with patch('agora.template_ui.review_key',return_value=3): m.review_import(ImportedKey(('C','B'),()),'Corrector.pdf',b'original2')
+            with patch('agora.template_ui.review_key',return_value=3), patch('agora.manual.confirm',return_value=True): m.review_import(ImportedKey(('C','B'),()),'Corrector.pdf',b'original2')
             self.assertEqual(len(s.library_entries()),1); self.assertTrue(any(b.text()=='Guardar plantilla' for b in m.findChildren(QPushButton)))
             with patch('agora.template_ui.ask_template_name',return_value=None): m.save_template()
             self.assertEqual(len(s.library_entries()),1)
@@ -307,3 +307,33 @@ class UITests(unittest.TestCase):
                 w.delete_library_template(tid); self.assertIn('1 simulacro',ask.call_args.args[2]); self.assertIsNotNone(s.load_attempt(aid))
             with patch('agora.template_ui.confirm',return_value=True): w.delete_library_template(tid)
             self.assertIsNone(s.load_attempt(aid)); self.assertEqual(s.library_entries(),[]); w.close(); w.deleteLater(); self.app.processEvents()
+
+    def test_missing_reserves_and_invalid_printed_option(self):
+        from unittest.mock import patch
+        from dataclasses import replace
+        from agora import omr
+        from test_omr import sheet
+        with tempfile.TemporaryDirectory() as d:
+            w=MainWindow(Storage(d)); w.show(); w.go('automatic'); m=w.automatic
+            m.install_key(ImportedKey(('A','B'),('C',)),'key.pdf',3); m.next_entry()
+            im=sheet(); marks=omr.scan(im,0)
+            marks[0]=replace(marks[0],suggestion='D',status='Azul detectado',scores=(0,0,0,50),red=(0,0,0,0))
+            m.reader.install(0,im,im,marks); self.assertEqual(m.answers,['','-',''])
+            m.reader.set_choice(0,'A'); m.reader.set_choice(1,'B')
+            with patch('agora.manual.confirm',return_value=False): m.correct_optical()
+            self.assertEqual(m.answers,['A','B','']); self.assertEqual(m.stage,2)
+            with patch('agora.manual.confirm',return_value=True): m.correct_optical()
+            self.assertEqual(m.result.correct,2); self.assertEqual(m.result.reserve_used,0); self.assertEqual(m.stage,3)
+            w.close()
+
+    def test_config_counts_mismatch_requires_confirmation(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as d:
+            w=MainWindow(Storage(d)); w.show(); w.go('manual'); m=w.manual
+            m.question_count.setValue(3); m.reserve_count.setValue(0); m.apply_config()
+            self.assertEqual(m.expected_counts,(3,0))
+            m.install_key(ImportedKey(('A','B'),()),'key.pdf',3,preserve_expected=True); m.next_entry(); m.choose(0,'A'); m.choose(1,'B')
+            with patch('agora.manual.confirm',return_value=False): m.next_entry()
+            self.assertEqual(m.stage,2)
+            with patch('agora.manual.confirm',return_value=True): m.next_entry()
+            self.assertEqual(m.result.correct,2); self.assertEqual(m.expected_counts,(2,0)); w.close()

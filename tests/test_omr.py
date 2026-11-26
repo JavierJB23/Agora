@@ -65,3 +65,40 @@ class OpticalTests(unittest.TestCase):
             self.assertEqual(answers[qidx],'C'); self.assertEqual(answers.count('-'),len(answers)-1)
     def test_manual_grid_invalid_order(self):
         with self.assertRaises(ValueError): omr.align_grid(sheet(),0,omr.grid_anchors(0)[[0,2,1,3]])
+
+
+def square_sheet():
+    im=np.full((omr.HEIGHT,omr.WIDTH,3),250,np.uint8)
+    for bx in (100,350):
+        for j in range(10):
+            y=300+j*30
+            cv.rectangle(im,(bx,y-15),(bx+175,y+15),(40,40,40),2)
+            cv.putText(im,str(j+1),(bx+4,y+4),cv.FONT_HERSHEY_SIMPLEX,.5,(40,40,40),1)
+            for k in range(4):
+                x=bx+45+k*35
+                cv.rectangle(im,(x-10,y-10),(x+10,y+10),(40,40,40),2)
+                if j==0 and k==2:
+                    cv.line(im,(x-6,y-6),(x+6,y+6),(20,40,120),2)
+                    cv.line(im,(x-6,y+6),(x+6,y-6),(20,40,120),2)
+    return im
+
+class FlexibleTests(unittest.TestCase):
+    def test_square_detection_and_same_page_reserves(self):
+        im=square_sheet(); blocks=omr.square_blocks(im)
+        self.assertEqual([(len(m),len(m[0].scores)) for _,m in blocks],[(10,4),(10,4)])
+        marks=omr.number_blocks(blocks,['1','R-1'])
+        self.assertEqual([m.number for m in marks[:11]],list(map(str,range(1,11)))+['R1'])
+        self.assertEqual([omr.proposed(marks[i]) for i in (0,10)],['C','C'])
+        self.assertEqual(sum(omr.proposed(m)=='-' for m in marks),18)
+        with self.assertRaises(ValueError): omr.number_blocks(blocks,['1','5'])
+    def test_guided_block_rectangles_and_archive(self):
+        from agora.optical_archive import record,unpack
+        im=square_sheet(); marks=omr.guided_block(im,[(145,300),(250,300),(250,570),(145,570)],10,4,'21')
+        self.assertEqual(marks[0].number,'21'); self.assertEqual(omr.proposed(marks[0]),'C'); self.assertEqual(marks[-1].number,'30')
+        original,aligned,restored=unpack(record(im,im,marks),4)
+        self.assertTrue(np.array_equal(original,im)); self.assertEqual(marks,restored)
+    def test_many_pdf_pages(self):
+        from pypdf import PdfWriter
+        w=PdfWriter()
+        for i in range(3): w.add_blank_page(595,842)
+        b=BytesIO(); w.write(b); self.assertEqual(len(omr.decode('test.pdf',b.getvalue())),3)
