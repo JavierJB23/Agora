@@ -39,7 +39,7 @@ class GradingTests(unittest.TestCase):
         for kw in ({'questions':0},{'options':6},{'reserves':-1},{'penalty':'1/0'},{'penalty':'-1'},{'maximum':'0'},{'name':' '},{'penalty':'1e999999999'}):
             with self.subTest(kw=kw),self.assertRaises(ValueError): ExamConfig(**kw)
     def test_invalid_entries(self):
-        for k,a in [('A','A'),('ABCA','ABCCX'),('ABCA','ABCX'),('ABCA','ABC'),('ABC','ABCA'),('ABCD','ABCA'),('ABCA',['A','B','C','']),(['A','B','C',''],'ABCA')]:
+        for k,a in [('A','A'),('ABCA','ABCCX'),('ABCA','ABCZ'),('ABCA','ABC'),('ABC','ABCA'),('ABCD','ABCA'),('ABCA',['A','B','C','']),(['A','B','C',''],'ABCA')]:
             with self.subTest(k=k,a=a),self.assertRaises(ValueError): evaluate(self.config(),k,a)
     def test_precision_and_rounding(self):
         self.assertEqual(format_number(Fraction(1,200)),'0,01'); self.assertEqual(format_number(Fraction(-1,200)),'-0,01'); self.assertEqual(format_number(Fraction(-1,1000)),'0,00')
@@ -54,3 +54,26 @@ class OptionalReservesTests(unittest.TestCase):
         self.assertIn('No afectarán',missing_reserves_message(c,['A','B','C','A'],['A','B','','']))
         self.assertIn('pueden afectar',missing_reserves_message(c,['A','X','C','A'],['A','B','','']))
         self.assertEqual(evaluate(c,['A','B','C','A'],['A','B','-','-']).grade,10)
+
+class AttemptAnnulmentTests(unittest.TestCase):
+    def test_three_annulled_use_three_reserves(self):
+        c=ExamConfig(questions=5,reserves=4)
+        key=list('AAAAAAAAA'); before=key.copy()
+        r=evaluate(c,key,list('XAXXAAABA'))
+        self.assertEqual((r.annulled,r.reserve_used,r.effective,r.correct,r.wrong),(3,3,5,4,1))
+        self.assertEqual([x.replaces for x in r.rows[5:]],['1','3','4',''])
+        self.assertEqual(key,before)
+    def test_key_and_attempt_annulment_not_counted_twice_and_skip_reserve(self):
+        c=ExamConfig(questions=3,reserves=3)
+        r=evaluate(c,list('XAAAAA'),list('XXAXAA'))
+        self.assertEqual((r.annulled,r.reserve_used,r.correct),(2,2,3))
+        self.assertEqual(r.rows[3].status,'Reserva anulada')
+    def test_missing_reserve_warning_uses_attempt_annulments(self):
+        from agora.grading import missing_reserves_message
+        c=ExamConfig(questions=2,reserves=2)
+        self.assertIn('1 de las reservas',missing_reserves_message(c,list('AAAA'),['X','A','','']))
+        self.assertIn('No afectarán',missing_reserves_message(c,list('AAAA'),['A','A','','']))
+    def test_annulled_without_reserves(self):
+        c=ExamConfig(questions=2,reserves=0)
+        r=evaluate(c,list('AA'),list('XA'))
+        self.assertEqual((r.annulled,r.reserve_used,r.effective,r.grade),(1,0,1,10))

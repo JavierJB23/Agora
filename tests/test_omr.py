@@ -194,3 +194,13 @@ class SquarePreviewTests(unittest.TestCase):
         values=json.loads(metadata)
         for m in values: m.pop('quad')
         self.assertEqual(unpack((digest,original,view,json.dumps(values)),0)[2],marks)
+
+class GuidedPreviewTests(unittest.TestCase):
+    def test_guided_rows_have_individual_quads(self):
+        im=square_sheet()
+        marks=omr.guided_block(im,[(145,300),(250,300),(250,570),(145,570)],10,4,'1')
+        self.assertTrue(all(len(m.quad)==4 for m in marks))
+        self.assertEqual(omr.proposed(marks[0]),'C')
+        crop=omr.crop_image(im,marks[0]); self.assertGreater(crop.shape[1],crop.shape[0]*3)
+        from agora.optical_archive import record,unpack
+        self.assertEqual(unpack(record(im,im,marks),0)[2],marks)

@@ -242,7 +242,7 @@ class UITests(unittest.TestCase):
             m.reader.install(0,im,im,omr.scan(im,0)); m.reader.install(1,res,res,omr.scan(res,1)); m.optical_changed(); m.reader.set_choice(1,'A'); m.save_progress(); aid=m.attempt_id
             self.assertTrue(m.start_new()); w.close(); w.deleteLater(); self.app.processEvents()
             w=MainWindow(Storage(d)); w.show(); w.open_history(aid); m=w.automatic; self.assertEqual(m.stage,2); self.assertEqual(m.answers,['B','A','C']); self.assertFalse(m.dirty()); self.assertTrue(np.array_equal(m.reader.images[0],im)); self.assertTrue(np.array_equal(m.reader.images[1],res)); self.assertEqual(m.reader.table.rowCount(),2)
-            with patch('agora.omr_ui.OpticalPage.alignment_dialog',side_effect=ValueError('Fallo simulado')),patch('agora.omr_ui.QMessageBox.warning'):
+            with patch('agora.omr_ui.OpticalPage.alignment_workspace',side_effect=ValueError('Fallo simulado')),patch('agora.omr_ui.QMessageBox.warning'):
                 m.reader.adjust()
             self.assertEqual(m.answers,['B','A','C']); self.assertTrue(np.array_equal(m.reader.images[0],im)); self.assertFalse(m.dirty())
             w.close(); w.deleteLater(); self.app.processEvents()
@@ -371,3 +371,47 @@ class UITests(unittest.TestCase):
         with patch.object(QDialog,'exec',exercise):
             marks=OpticalPage.choose_numbering(parent,im,blocks)
         self.assertEqual([m.number for m in marks],list(map(str,range(1,21))))
+
+    def test_alignment_workspace_cancel_and_apply(self):
+        from unittest.mock import patch
+        from PySide6.QtWidgets import QDialog,QPushButton
+        from agora.omr_ui import OpticalPage
+        from agora.grading import ExamConfig
+        from agora import omr
+        from test_omr import square_sheet
+        im=square_sheet(); blocks=omr.square_blocks(im); marks=omr.number_blocks(blocks,['1','11'])
+        cache={}; answers=['']*20; changed=[]
+        page=OpticalPage(ExamConfig(questions=20,reserves=0),answers,cache,lambda:changed.append(True))
+        page.install(0,im,im,marks); page.set_choice(0,'X'); before=list(answers); changed.clear()
+        original_record=page.records[0]
+        def exercise(d):
+            next(b for b in d.findChildren(QPushButton) if b.text()=='Restablecer automática').click()
+            self.assertEqual(page.records[0],original_record); self.assertEqual(answers,before)
+            return QDialog.DialogCode.Rejected
+        with patch.object(page,'automatic_candidate',return_value=(im,marks)) as auto,patch.object(QDialog,'exec',exercise):
+            page.adjust(); auto.assert_called_once()
+        self.assertEqual(answers,before); self.assertFalse(changed)
+        def apply(d):
+            next(b for b in d.findChildren(QPushButton) if b.text()=='Restablecer automática').click()
+            return QDialog.DialogCode.Accepted
+        with patch.object(page,'automatic_candidate',return_value=(im,marks)),patch.object(QDialog,'exec',apply),patch('agora.omr_ui.confirm',return_value=True):
+            page.adjust()
+        self.assertEqual(answers[0],'X'); self.assertEqual(answers,before); self.assertTrue(changed)
+        page.deleteLater(); self.app.processEvents()
+
+    def test_annulment_controls_and_saved_attempt(self):
+        from unittest.mock import patch
+        from agora.grading import ExamConfig
+        from PySide6.QtWidgets import QComboBox
+        with tempfile.TemporaryDirectory() as d:
+            s=Storage(d); w=MainWindow(s); m=w.manual
+            m.install_key(ImportedKey(('A','A','A'),('B','C')),'test.pdf',3); m.next_entry()
+            next(b for v,b in m.grid_rows[0][2] if v=='X').click()
+            for i,v in enumerate('AABC',1): m.choose(i,v)
+            m.next_entry(); self.assertEqual((m.result.annulled,m.result.reserve_used,m.result.correct),(1,1,3)); self.assertEqual(m.key,['A','A','A','B','C'])
+            self.assertTrue(m.save_progress()); aid=m.attempt_id; m.start_new(); self.assertTrue(m.open_saved(aid)); self.assertEqual(m.answers[0],'X'); self.assertEqual(m.result.grade,10)
+            a=w.automatic; a.install_key(ImportedKey(('A','A'),('B',)),'test.pdf',3); a.next_entry()
+            a.reader.filter.setCurrentIndex(1); combo=a.reader.table.cellWidget(0,3); combo.setCurrentText('Anulada'); a.reader.set_choice(1,'A'); a.reader.set_choice(2,'B')
+            with patch('agora.manual.confirm',return_value=True): a.correct_optical()
+            self.assertEqual((a.result.annulled,a.result.reserve_used,a.result.correct),(1,1,2)); self.assertEqual(a.key,['A','A','B'])
+            w.close(); w.deleteLater(); self.app.processEvents()
