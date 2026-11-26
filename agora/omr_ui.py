@@ -1,7 +1,7 @@
 """Optical reader validation workspace; scoring integration belongs to block 06."""
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QImage,QPixmap,QPainter,QPen,QColor
-from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QPushButton,QTableWidget,QTableWidgetItem,QHeaderView,QDialog,QMessageBox,QScrollArea,QLineEdit)
+from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QPushButton,QTableWidget,QTableWidgetItem,QHeaderView,QDialog,QMessageBox,QScrollArea,QLineEdit,QSizePolicy)
 from .controls import SafeComboBox, SafeSpinBox
 from .import_ui import ImportDialog
 from .manual import confirm
@@ -18,6 +18,13 @@ def btn(s,fn,primary=False):
     b=QPushButton(s); b.setCursor(Qt.CursorShape.PointingHandCursor)
     if primary: b.setObjectName('primary')
     b.clicked.connect(fn); return b
+
+def compact_btn(s,fn,primary=False):
+    b=btn(s,fn,primary)
+    if not primary: b.setObjectName('opticalAction')
+    b.setStyleSheet('text-align:center; padding:7px 14px; min-width:100px;')
+    b.setSizePolicy(QSizePolicy.Policy.Fixed,QSizePolicy.Policy.Fixed)
+    return b
 
 class CornerImage(QLabel):
     def __init__(self,im,changed):
@@ -81,7 +88,7 @@ class OpticalPage(QWidget):
         l.addWidget(text('Confirma el número de la primera pregunta de cada bloque. Usa R1, R4… para reservas.'))
         preview=QLabel(); preview.setAlignment(A.AlignCenter); preview.setPixmap(pix(shown).scaled(640,max(200,min(630,self.screen().availableGeometry().height()-300)),Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation)); l.addWidget(preview,1)
         l.addWidget(text(' · '.join(details))); field=QLineEdit(', '.join(defaults)); l.addWidget(field)
-        row=QHBoxLayout(); row.addWidget(btn('Cancelar',d.reject)); row.addWidget(btn('Restablecer',lambda:field.setText(', '.join(defaults)))); row.addWidget(btn('Ajuste por bloques',lambda:d.done(2))); row.addWidget(btn('Confirmar',d.accept,True)); l.addLayout(row)
+        row=QHBoxLayout(); row.addWidget(compact_btn('Cancelar',d.reject)); row.addWidget(compact_btn('Restablecer',lambda:field.setText(', '.join(defaults)))); row.addWidget(compact_btn('Ajuste por bloques',lambda:d.done(2))); row.addWidget(compact_btn('Confirmar',d.accept,True)); l.addLayout(row)
         while True:
             outcome=d.exec()
             if outcome==2:
@@ -98,19 +105,19 @@ class OpticalPage(QWidget):
             fl.addWidget(text('Primera pregunta del bloque (1, 31, R1…)')); number=QLineEdit('1' if not allmarks else ''); fl.addWidget(number)
             fl.addWidget(text('Número de filas del bloque')); rows_box=SafeSpinBox(); rows_box.setRange(2,120); rows_box.setValue(30); fl.addWidget(rows_box)
             fl.addWidget(text('Casillas impresas por fila')); options_box=SafeSpinBox(); options_box.setRange(2,5); options_box.setValue(printed_options or self.config.options); fl.addWidget(options_box)
-            buttons=QHBoxLayout(); buttons.addWidget(btn('Cancelar',form.reject)); buttons.addWidget(btn('Continuar',form.accept,True)); fl.addLayout(buttons)
+            buttons=QHBoxLayout(); buttons.addWidget(compact_btn('Cancelar',form.reject)); buttons.addWidget(compact_btn('Continuar',form.accept,True)); fl.addLayout(buttons)
             if form.exec()!=QDialog.DialogCode.Accepted: return None
             start=number.text(); rows=rows_box.value(); options=options_box.value()
             d=QDialog(self); d.setWindowTitle('Ajustar bloque'); d.resize(720,min(800,self.screen().availableGeometry().height()-80)); l=QVBoxLayout(d)
             l.addWidget(text('Marca los centros de las cuatro casillas exteriores de UNA columna, no de toda la hoja ni los números.'))
-            status=text('','tileTitle'); l.addWidget(status); apply=btn('Vista previa',lambda:None,True)
+            status=text('','tileTitle'); l.addWidget(status); apply=compact_btn('Vista previa',lambda:None,True)
             refs=['Primera fila · A','Primera fila · última opción','Última fila · última opción','Última fila · A']
             def update(n):
                 status.setText(f'{n}/4 · {refs[n]}' if n<4 else '4/4 · Referencias seleccionadas'); apply.setEnabled(n==4)
             im=CornerImage(aligned,update); sc=QScrollArea(); sc.setWidget(im); sc.setAlignment(A.AlignCenter); l.addWidget(sc,1)
-            tools=QHBoxLayout(); tools.addWidget(btn('Deshacer',im.undo)); tools.addWidget(btn('Reiniciar',im.reset)); zoom=SafeComboBox(); zoom.addItems(['Ajustar a ventana','Ampliar ×2','Ampliar ×3']); zoom.currentIndexChanged.connect(lambda j:im.set_zoom(j+1)); tools.addWidget(zoom); l.addLayout(tools)
-            row=QHBoxLayout(); row.addWidget(btn('Cancelar',d.reject));
-            if can_restore: row.addWidget(btn('Restablecer automática',lambda:d.done(2)))
+            tools=QHBoxLayout(); tools.addWidget(compact_btn('Deshacer',im.undo)); tools.addWidget(compact_btn('Reiniciar',im.reset)); zoom=SafeComboBox(); zoom.addItems(['Ajustar a ventana','Ampliar ×2','Ampliar ×3']); zoom.currentIndexChanged.connect(lambda j:im.set_zoom(j+1)); tools.addWidget(zoom); l.addLayout(tools)
+            row=QHBoxLayout(); row.addWidget(compact_btn('Cancelar',d.reject));
+            if can_restore: row.addWidget(compact_btn('Restablecer automática',lambda:d.done(2)))
             apply.setText('Vista previa' if can_restore else 'Aplicar'); apply.clicked.connect(d.accept); row.addWidget(apply); l.addLayout(row)
             outcome=d.exec()
             if can_restore and outcome==2: raise RestoreAutomatic()
@@ -120,25 +127,13 @@ class OpticalPage(QWidget):
             allmarks.extend(marks)
             if not confirm(self,'Añadir bloque','¿Hay otro bloque de preguntas o reservas en esta misma página?'): return allmarks
     def read_page(self,im):
-        aligned=omr.align(im)
         try:
-            slot=omr.identify(aligned); return aligned,omr.scan(aligned,slot)
+            return self.automatic_candidate(im)
         except ValueError as e:
-            circle_error=str(e)
-        try:
-            square_view,blocks=omr.square_page(im,aligned)
-        except ValueError:
-            blocks=None
-        if blocks:
-            marks=self.choose_numbering(square_view,blocks)
-            return (square_view,marks) if marks is not None else None
-        else:
-            box=QMessageBox(self); box.setWindowTitle('Alinear hoja'); box.setText(circle_error); box.setInformativeText('Puedes ajustar la plantilla de círculos conocida o indicar otros bloques de casillas.'); box.setIcon(QMessageBox.Icon.Question)
-            ordinary=box.addButton('Círculos A–C',QMessageBox.ButtonRole.ActionRole); reserve=box.addButton('Reservas A–C',QMessageBox.ButtonRole.ActionRole); generic=box.addButton('Otro diseño',QMessageBox.ButtonRole.ActionRole); cancel=box.addButton('Cancelar',QMessageBox.ButtonRole.RejectRole); box.setEscapeButton(cancel); box.exec()
-            if box.clickedButton() is generic:
-                marks=self.guided_dialog(aligned); return (aligned,marks) if marks else None
-            if box.clickedButton() not in (ordinary,reserve): return None
-            return self.alignment_dialog(im,0 if box.clickedButton() is ordinary else 1)
+            # Same preview and editing tools for every layout; never open the
+            # legacy circle-specific reference or numbering dialog on import.
+            canvas,_=omr.original_canvas(im)
+            return self.alignment_workspace(None,original=im,initial=(canvas,[]),error=str(e))
     def load(self,checked=False,force_guided=False):
         d=ImportDialog(self,omr.EXTENSIONS,multiple=True,max_files=20)
         if d.exec()!=QDialog.DialogCode.Accepted or not d.items: return
@@ -149,16 +144,16 @@ class OpticalPage(QWidget):
                     count+=1
                     if count>20: raise ValueError('Selecciona un máximo de 20 páginas en total.')
                     if force_guided:
-                        aligned=omr.align(im); marks=self.guided_dialog(aligned); result=(aligned,marks) if marks else None
+                        canvas,_=omr.original_canvas(im); result=self.alignment_workspace(None,original=im,initial=(canvas,[]))
                     else: result=self.read_page(im)
                     if result is None: return
                     aligned,marks=result
                     nums={m.number for m in marks if self.target_index(m.number) is not None}
                     if not nums: continue
                     if any(nums&{m.number for m in p[2]} for p in pending.values()):
-                        if not confirm(self,'Numeración repetida','Esta página coincide con otra de la misma importación. ¿Indicar su numeración mediante un ajuste por bloques?'): return
-                        marks=self.guided_dialog(aligned)
-                        if not marks: return
+                        adjusted=self.alignment_workspace(None,original=im,initial=(aligned,marks),error='La numeración coincide con otra página. Redefine los bloques de esta hoja.')
+                        if adjusted is None: return
+                        aligned,marks=adjusted
                         nums={m.number for m in marks if self.target_index(m.number) is not None}
                         if not nums or any(nums&{m.number for m in p[2]} for p in pending.values()): raise ValueError('Hay páginas con numeraciones repetidas o fuera del solucionario.')
                     overlaps=[slot for slot,old in self.marks.items() if nums&{m.number for m in old}]
@@ -208,16 +203,7 @@ class OpticalPage(QWidget):
         row.addWidget(btn('Hoja original',lambda:show(True))); row.addWidget(btn('Casillas leídas',lambda:show(False))); l.addLayout(row)
         sc=QScrollArea(); sc.setWidget(im); sc.setWidgetResizable(True); l.addWidget(sc,1); l.addWidget(btn('Cerrar',d.accept),0,A.AlignCenter); show(True); d.exec()
     def automatic_candidate(self,original):
-        """Run the same automatic detectors as import, without re-importing or fallback dialogs."""
-        aligned=omr.align(original)
-        try:
-            slot=omr.identify(aligned)
-            return aligned,omr.scan(aligned,slot)
-        except ValueError:
-            pass
-        canvas,blocks=omr.square_page(original,aligned)
-        marks=self.choose_numbering(canvas,blocks)
-        return (canvas,marks) if marks is not None else None
+        return omr.automatic_page(original,self.config.questions,self.config.reserves,self.config.options)
 
     def adjust_existing_block(self,canvas,marks):
         """One common editor for circles and squares, starting from the detected columns."""
@@ -226,7 +212,7 @@ class OpticalPage(QWidget):
         l.addWidget(text('Selecciona la columna que quieres ajustar. Las demás se conservarán.'))
         combo=SafeComboBox()
         combo.addItems([f'{ms[0].number} – {ms[-1].number} · {len(ms)} filas · {len(ms[0].scores)} opciones' for ms in blocks]); l.addWidget(combo)
-        row=QHBoxLayout(); row.addWidget(btn('Cancelar',d.reject)); row.addWidget(btn('Restablecer automática',lambda:d.done(2))); row.addWidget(btn('Continuar',d.accept,True)); l.addLayout(row)
+        row=QHBoxLayout(); row.addWidget(compact_btn('Cancelar',d.reject)); row.addWidget(compact_btn('Restablecer automática',lambda:d.done(2))); row.addWidget(compact_btn('Continuar',d.accept,True)); l.addLayout(row)
         outcome=d.exec()
         if outcome==2: raise RestoreAutomatic()
         if outcome!=QDialog.DialogCode.Accepted: return None
@@ -238,31 +224,33 @@ class OpticalPage(QWidget):
         for m in block: omr.draw_mark(shown,m)
         d=QDialog(self); d.setWindowTitle('Ajustar bloque'); d.resize(720,min(800,self.screen().availableGeometry().height()-80)); l=QVBoxLayout(d)
         l.addWidget(text(f'Preguntas {block[0].number}–{block[-1].number}. Marca los centros de las cuatro casillas exteriores de esta columna, no los bordes del papel.'))
-        status=text('','tileTitle'); l.addWidget(status); apply=btn('Vista previa',lambda:None,True)
+        status=text('','tileTitle'); l.addWidget(status); apply=compact_btn('Vista previa',lambda:None,True)
         last='ABCDE'[len(block[0].scores)-1]
         refs=[f'{block[0].number} · A',f'{block[0].number} · {last}',f'{block[-1].number} · {last}',f'{block[-1].number} · A']
         def update(n):
             status.setText(f'{n}/4 · Ahora: {refs[n]}' if n<4 else '4/4 · Referencias seleccionadas'); apply.setEnabled(n==4)
         im=CornerImage(shown,update); sc=QScrollArea(); sc.setWidget(im); sc.setAlignment(A.AlignCenter); l.addWidget(sc,1)
-        tools=QHBoxLayout(); tools.addWidget(btn('Deshacer',im.undo)); tools.addWidget(btn('Reiniciar',im.reset)); zoom=SafeComboBox(); zoom.addItems(['Ajustar a ventana','Ampliar ×2','Ampliar ×3']); zoom.currentIndexChanged.connect(lambda j:im.set_zoom(j+1)); tools.addWidget(zoom); l.addLayout(tools)
-        row=QHBoxLayout(); row.addWidget(btn('Cancelar',d.reject)); row.addWidget(btn('Restablecer automática',lambda:d.done(2))); apply.clicked.connect(d.accept); row.addWidget(apply); l.addLayout(row)
+        tools=QHBoxLayout(); tools.addWidget(compact_btn('Deshacer',im.undo)); tools.addWidget(compact_btn('Reiniciar',im.reset)); zoom=SafeComboBox(); zoom.addItems(['Ajustar a ventana','Ampliar ×2','Ampliar ×3']); zoom.currentIndexChanged.connect(lambda j:im.set_zoom(j+1)); tools.addWidget(zoom); l.addLayout(tools)
+        row=QHBoxLayout(); row.addWidget(compact_btn('Cancelar',d.reject)); row.addWidget(compact_btn('Restablecer automática',lambda:d.done(2))); apply.clicked.connect(d.accept); row.addWidget(apply); l.addLayout(row)
         outcome=d.exec()
         if outcome==2: raise RestoreAutomatic()
         if outcome!=QDialog.DialogCode.Accepted: return None
         replacement=omr.guided_block(canvas,im.corners(),len(block),len(block[0].scores),block[0].number)
         return omr.replace_reading_block(marks,block,replacement)
 
-    def alignment_workspace(self,i):
+    def alignment_workspace(self,i,original=None,initial=None,error=None):
         """All changes stay local to this dialog until Apply is pressed."""
-        original=self.images[i]; old=self.marks[i]
-        current=(self.aligned[i],old); candidate=current
+        if initial is None:
+            original=self.images[i]; initial=(self.aligned[i],self.marks[i])
+        current=initial; candidate=current
         d=QDialog(self); d.setWindowTitle('Ajustar alineación'); d.resize(760,min(820,self.screen().availableGeometry().height()-80)); l=QVBoxLayout(d)
-        message=text('Vista previa de la lectura guardada.'); l.addWidget(message)
+        message=text(error or 'Vista previa de la lectura guardada.'); l.addWidget(message)
         preview=QLabel(); preview.setAlignment(A.AlignCenter); l.addWidget(preview,1)
         def show():
             aligned,marks=candidate; canvas=aligned.copy()
             for m in marks: omr.draw_mark(canvas,m)
             preview.setPixmap(pix(canvas).scaled(680,max(200,min(640,self.screen().availableGeometry().height()-300)),Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation))
+            apply.setEnabled(bool(marks)); adjust_blocks.setEnabled(bool(marks))
         def automatic():
             nonlocal candidate
             result=self.automatic_candidate(original)
@@ -279,7 +267,7 @@ class OpticalPage(QWidget):
                 else:
                     # Explicit full-page rebuild for a previously misidentified layout.
                     canvas,_=omr.original_canvas(original)
-                    replacement=self.guided_dialog(canvas,can_restore=True,printed_options=max(len(m.scores) for m in marks))
+                    replacement=self.guided_dialog(canvas,can_restore=True,printed_options=max((len(m.scores) for m in marks),default=self.config.options))
                     adjusted=(canvas,replacement) if replacement else None
                 if adjusted is not None:
                     candidate=adjusted; message.setText('Vista previa del ajuste. Aplica para conservarlo.'); show()
@@ -287,19 +275,21 @@ class OpticalPage(QWidget):
                 try: automatic()
                 except ValueError as e: QMessageBox.warning(d,'No se pudo alinear',str(e))
             except ValueError as e: QMessageBox.warning(d,'No se pudo alinear',str(e))
-        row=QHBoxLayout(); row.addWidget(btn('Restablecer automática',lambda:action('auto'))); row.addWidget(btn('Ajuste por bloques',lambda:action('blocks')))
-        row.addWidget(btn('Redefinir bloques',lambda:action('rebuild')))
+        row=QHBoxLayout(); row.addStretch(1)
+        row.addWidget(compact_btn('Restablecer automática',lambda:action('auto')))
+        adjust_blocks=compact_btn('Ajuste por bloques',lambda:action('blocks')); row.addWidget(adjust_blocks)
+        row.addWidget(compact_btn('Redefinir bloques',lambda:action('rebuild'))); row.addStretch(1)
         l.addLayout(row)
-        bottom=QHBoxLayout(); bottom.addWidget(btn('Cancelar',d.reject)); bottom.addWidget(btn('Aplicar',d.accept,True)); l.addLayout(bottom)
+        bottom=QHBoxLayout(); bottom.addStretch(1); bottom.addWidget(compact_btn('Cancelar',d.reject)); apply=compact_btn('Aplicar',d.accept,True); bottom.addWidget(apply); bottom.addStretch(1); l.addLayout(bottom)
         show()
-        if d.exec()!=QDialog.DialogCode.Accepted or candidate is current: return None
+        if d.exec()!=QDialog.DialogCode.Accepted or candidate is current or not candidate[1]: return None
         return candidate
 
     def adjust(self):
         i=self.choose_page()
         if i==-1: return
         if i is None:
-            if confirm(self,'Ajustar alineación','No hay imagen para este tipo de preguntas. ¿Importar una hoja mediante el ajuste por bloques?'): self.load(force_guided=True)
+            if confirm(self,'Ajustar alineación','No hay imagen para este tipo de preguntas. ¿Importar una hoja?'): self.load()
             return
         try:
             old=self.marks[i]; adjusted=self.alignment_workspace(i)
@@ -319,23 +309,6 @@ class OpticalPage(QWidget):
             for idx,value in reviewed.items(): self.answers[idx]=value
             self.changed(); self.refresh()
         except Exception as e: QMessageBox.warning(self,'No se pudo alinear',str(e)+'\n\nSe conserva la lectura anterior.')
-    def alignment_dialog(self,original,i):
-        d=QDialog(self); d.setWindowTitle('Ajustar alineación'); d.resize(720,min(800,self.screen().availableGeometry().height()-80)); l=QVBoxLayout(d)
-        refs=['1 · A','91 · C','120 · C','30 · A'] if i==0 else ['R1 · A','R7 · C','R9 · C','R3 · A']
-        guide=text('Marca el CENTRO de los círculos indicados, no los bordes del papel.'); l.addWidget(guide)
-        status=text('','tileTitle'); l.addWidget(status); apply=btn('Vista previa',lambda:None,True)
-        def update(n):
-            status.setText(f'{n}/4 · Ahora: {refs[n]}' if n<4 else '4/4 · Referencias seleccionadas'); apply.setEnabled(n==4)
-        im=CornerImage(original,update); sc=QScrollArea(); sc.setWidget(im); sc.setAlignment(A.AlignCenter); l.addWidget(sc,1)
-        tools=QHBoxLayout(); tools.addWidget(btn('Deshacer punto',im.undo)); tools.addWidget(btn('Reiniciar puntos',im.reset)); zoom=SafeComboBox(); zoom.addItems(['Ajustar a ventana','Ampliar ×2','Ampliar ×3']); zoom.currentIndexChanged.connect(lambda j:im.set_zoom(j+1)); tools.addWidget(zoom); l.addLayout(tools)
-        row=QHBoxLayout(); row.addWidget(btn('Cancelar',d.reject)); row.addWidget(btn('Restablecer automática',lambda:d.done(2))); row.addWidget(btn('Ajuste por bloques',lambda:d.done(3))); apply.clicked.connect(d.accept); row.addWidget(apply); l.addLayout(row)
-        outcome=d.exec()
-        if outcome==3:
-            aligned=omr.align(original); marks=self.guided_dialog(aligned); return (aligned,marks) if marks else None
-        if outcome not in (QDialog.DialogCode.Accepted,2): return None
-        aligned=omr.align(original) if outcome==2 else omr.align_grid(original,i,im.corners())
-        if omr.identify(aligned)!=i: raise ValueError('El tipo de hoja no coincide con el seleccionado.')
-        return aligned,omr.scan(aligned,i)
     def refresh(self,*_):
         slot=self.page.currentIndex(); lookup={m.number:(page,m) for page,marks in self.marks.items() for m in marks}; indices=list(self.indices(slot)); shown=[(j,i) for j,i in enumerate(indices) if self.filter.currentIndex()==1 or not self.answers[i]]
         self.table.setRowCount(0); self.table.setRowCount(len(shown))

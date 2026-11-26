@@ -376,6 +376,39 @@ def identify(im):
     if len(matched)!=1: raise ValueError('No se distingue con seguridad la hoja ordinaria de la de reservas. Fotografía la plantilla completa y nítida.')
     return matched[0]
 
+def geometry_gray(im):
+    """A geometry-only channel: darken saturated printing even on pale paper."""
+    gray=cv.cvtColor(im,cv.COLOR_RGB2GRAY)
+    return np.minimum(gray, im.min(axis=2))
+
+
+def remove_print_ink(im, blue, red, rows, radius):
+    """Exclude a repeated printed hue from mark masks, not the original pixels.
+
+    A genuine single-answer mark cannot occupy most of all printed cells.
+    Preserve substantially darker pixels of the same hue (e.g. dark pen on a
+    pale blue template). Colors indistinguishable from printing remain a limit.
+    """
+    hsv=cv.cvtColor(im,cv.COLOR_RGB2HSV); hue,sat,val=hsv.transpose(2,0,1)
+    cells=[]; h,w=im.shape[:2]
+    for row in rows:
+        for x,y in row:
+            x,y=round(x),round(y)
+            sl=np.s_[max(0,y-radius):min(h,y+radius+1),max(0,x-radius):min(w,x+radius+1)]
+            if hue[sl].size: cells.append(sl)
+    if len(cells)<8: return blue,red
+    for center in range(0,180,10):
+        distance=abs(hue.astype(np.int16)-center); near=(np.minimum(distance,180-distance)<=8)&(sat>=40)
+        counts=np.array([near[sl].sum() for sl in cells]); supported=counts>=max(3,radius*.35)
+        if supported.mean()<.60: continue
+        values=np.concatenate([val[sl][near[sl]] for sl,ok in zip(cells,supported) if ok])
+        if not len(values): continue
+        cutoff=max(0,int(np.percentile(values,12))-35)
+        printed=near&(val>=cutoff)
+        blue=blue&~printed; red=red&~printed
+    return blue,red
+
+
 def red_strike(im, mark):
     """Detect a long red stroke across a row, not an isolated red correction X.
     Work in the same horizontal row crop shown to the user, including gaps.
@@ -384,7 +417,12 @@ def red_strike(im, mark):
     h,w=a.shape[:2]
     if h<6 or w<20: return False
     r,g,b=a.transpose(2,0,1)
-    mask=((r-g>=9)&(r-b>=8)&(g<225)&(r<252)).astype(np.uint8)
+    # Reject pink/magenta printing and broad tinted backgrounds; a pen stroke
+    # must be locally darker than its surroundings.
+    gray=cv.cvtColor(a.astype(np.uint8),cv.COLOR_RGB2GRAY).astype(np.int16)
+    k=max(5, min(15, (h//3)|1))
+    background=cv.medianBlur(gray.astype(np.uint8),k).astype(np.int16)
+    mask=((r-g>=9)&(r-b>=8)&(g<225)&(r<252)&(r-b>=1.25*np.maximum(b-g,0))&((background-gray)>=5)).astype(np.uint8)
     # A stroke may be interrupted by dark printed outlines. Vote along near-horizontal lines.
     yy,xx=np.nonzero(mask)
     if len(xx)<w*.35: return False
@@ -408,14 +446,16 @@ def proposed(mark):
     if not mark.suggestion and max(mark.scores)<5 and max(mark.red)<=20: return '-'
     return ''
 
-def scan(im,page):
+def scan(im,page,positions=None):
     if page not in (0,1) or im.shape[:2]!=(HEIGHT,WIDTH): raise ValueError('Página no válida.')
     a=im.astype(np.int16); R,G,B=a.transpose(2,0,1)
     blue=(B-R>5)&(B-G>7)&(B<220)&(R<180)
     red=(R-B>18)&(R-G>18)&(G<180)&(B-G<35)&(R<205)
-    gray=cv.cvtColor(im,cv.COLOR_RGB2GRAY)
+    gray=geometry_gray(im)
     out=[]; present=0
-    for number,points in centers(im,page):
+    positions=centers(im,page) if positions is None else positions
+    blue,red=remove_print_ink(im,blue,red,[pts for _,pts in positions],14)
+    for number,points in positions:
         scores=[]; reds=[]; dark=[]
         for x,y in points:
             r=14; sl=np.s_[y-r:y+r+1,x-r:x+r+1]; scores.append(int(blue[sl].sum())); reds.append(int(red[sl].sum())); g=gray[sl]; dark.append(int((g<min(190,int(np.median(g))-22)).sum()))
@@ -448,7 +488,7 @@ def square_blocks(im):
     """Detect connected printed grids, independently of paper size/position.
     Return one block per column of questions. Numbering must be confirmed externally.
     """
-    g=cv.cvtColor(im,cv.COLOR_RGB2GRAY)
+    g=geometry_gray(im)
     mask=cv.adaptiveThreshold(g,255,cv.ADAPTIVE_THRESH_GAUSSIAN_C,cv.THRESH_BINARY_INV,31,9)
     contours,_=cv.findContours(mask,cv.RETR_LIST,cv.CHAIN_APPROX_SIMPLE)
     blocks=[]
@@ -461,7 +501,7 @@ def square_blocks(im):
         q=q[np.argsort(q[:,1])]; q=np.vstack((q[:2][np.argsort(q[:2,0])],q[2:][np.argsort(q[2:,0])[::-1]]))
         dst=np.float32([[0,0],[w-1,0],[w-1,h-1],[0,h-1]])
         mat=cv.getPerspectiveTransform(q,dst); inv=cv.getPerspectiveTransform(dst,q)
-        a=cv.warpPerspective(im,mat,(w,h)); gray=cv.cvtColor(a,cv.COLOR_RGB2GRAY)
+        a=cv.warpPerspective(im,mat,(w,h)); gray=geometry_gray(a)
         b=cv.adaptiveThreshold(gray,255,cv.ADAPTIVE_THRESH_GAUSSIAN_C,cv.THRESH_BINARY_INV,31,9)
         cs,_=cv.findContours(b,cv.RETR_LIST,cv.CHAIN_APPROX_SIMPLE); pts=[]
         for s in cs:
@@ -498,6 +538,7 @@ def square_blocks(im):
             rows.append(local)
         marks=[]; rgb=a.astype(np.int16); R,G,B=rgb.transpose(2,0,1)
         blue=(B-R>5)&(B-G>7)&(B<225)&(R<190); red=(R-B>18)&(R-G>18)&(G<180)&(B-G<35)&(R<205)
+        blue,red=remove_print_ink(a,blue,red,rows,max(3,round(size*.32)))
         for row in rows:
             scores=[]; reds=[]; dark=[]
             for xx,yy in row:
@@ -604,6 +645,140 @@ def number_blocks(blocks, starts):
     return result
 
 
+def flexible_outline_blocks(im, minimum_options=2):
+    """Fallback for unboxed regular rows of circles or squares at new positions.
+
+    Find repeated closed outlines, then group tracks with similar horizontal
+    spacing and shared row heights. Only accept a complete, regular lattice.
+    """
+    gray=geometry_gray(im)
+    mask=cv.adaptiveThreshold(gray,255,cv.ADAPTIVE_THRESH_GAUSSIAN_C,cv.THRESH_BINARY_INV,31,7)
+    contours,_=cv.findContours(mask,cv.RETR_LIST,cv.CHAIN_APPROX_SIMPLE)
+    pts=[]
+    for c in contours:
+        x,y,w,h=cv.boundingRect(c); area=cv.contourArea(c); perimeter=cv.arcLength(c,True)
+        if not (10<=w<=43 and 10<=h<=43 and .72<=w/h<=1.39 and .50<=area/(w*h)<=1 and perimeter>0 and 4*np.pi*area/perimeter**2>.55): continue
+        pts.append((x+w/2,y+h/2,(w+h)/2))
+    if len(pts)<12: raise ValueError('No se encuentran suficientes contornos impresos.')
+    # Deduplicate inner and outer contours, keeping the larger outline.
+    keep=[]
+    for p in sorted(pts,key=lambda v:-v[2]):
+        if not any(abs(p[0]-q[0])<5 and abs(p[1]-q[1])<5 for q in keep): keep.append(p)
+    p=np.array(keep); size=float(np.median(p[:,2])); tol=max(4,size*.40)
+    peaks=[(x,n) for x,n in _clusters(p[:,0],tol) if n>=max(3,min(8,len(p)*.025))]
+    if len(peaks)<minimum_options: raise ValueError('No se reconocen columnas repetidas.')
+    # Partition x tracks where a large gap separates columns of answers.
+    tracks=[]
+    for x,n in peaks:
+        if not tracks or x-tracks[-1][-1]>size*2.9: tracks.append([x])
+        else: tracks[-1].append(x)
+    blocks=[]
+    for xs in tracks:
+        if not minimum_options<=len(xs)<=5: continue
+        gaps=np.diff(xs); step=float(np.median(gaps))
+        if not size*.85<=step<=size*2.9 or np.max(abs(gaps-step))>step*.24: continue
+        ys=[]; columns=[]
+        for x in xs:
+            col=p[abs(p[:,0]-x)<tol*1.5]; columns.append(col)
+            ys.extend(col[:,1])
+        rows=[]
+        for y,n in _clusters(ys,max(4,size*.48)):
+            row=[]
+            for x,col in zip(xs,columns):
+                near=col[abs(col[:,1]-y)<size*.48]
+                if len(near):
+                    v=near[np.argmin(abs(near[:,1]-y)+abs(near[:,0]-x))]; row.append((v[0],v[1]))
+                else: row.append(None)
+            if sum(v is not None for v in row)>=max(2,len(xs)-1): rows.append((y,row))
+        if not 3<=len(rows)<=120: continue
+        # Split separate vertically stacked blocks by gaps; reject missing internal rows.
+        pitch=float(np.median(np.diff([y for y,_ in rows])))
+        if not size*.85<=pitch<=size*3.5: continue
+        runs=[]
+        for y,row in rows:
+            if not runs or y-runs[-1][-1][0]>pitch*1.7: runs.append([])
+            runs[-1].append((y,row))
+        for run in runs:
+            if len(run)<3 or np.any(abs(np.diff([y for y,_ in run])-pitch)>pitch*.32): continue
+            if sum(v is not None for _,row in run for v in row)<len(run)*len(xs)*.85: continue
+            # Sample each row independently; use actual centers where available.
+            marks=[]; radius=max(3,min(14,round(min(step,pitch)*.29)))
+            centers=[[(x,y) if v is None else v for x,v in zip(xs,row)] for y,row in run]
+            rgb=im.astype(np.int16); R,G,B=rgb.transpose(2,0,1)
+            blue=(B-R>5)&(B-G>7)&(B<225)&(R<190); red=(R-B>18)&(R-G>18)&(G<180)&(B-G<35)&(R<205)
+            blue,red=remove_print_ink(im,blue,red,centers,radius)
+            for row in centers:
+                scores=[]; reds=[]
+                for x,y in row:
+                    x,y=round(x),round(y); sl=np.s_[max(0,y-radius):y+radius+1,max(0,x-radius):x+radius+1]
+                    scores.append(int(blue[sl].sum())); reds.append(int(red[sl].sum()))
+                high,second=sorted(range(len(xs)),key=lambda j:scores[j],reverse=True)[:2]; score=scores[high]
+                minimum=max(5,round(radius*.9)); strong=max(12,round(radius*2))
+                suggestion='ABCDE'[high] if score>=minimum and scores[second]<max(minimum,.35*score) else ''
+                status='Azul detectado' if suggestion else 'Doble o dudosa' if score>=minimum else 'Sin azul: revisar blanco u otra tinta'
+                if suggestion and score<strong: status='Azul débil: revisar'
+                if max(reds)>8: status+=' · posible rojo'
+                x1,y1=row[0]; x2,y2=row[-1]; margin=size*.65
+                crop,quad=row_geometry([(x1-margin,y1-pitch*.43),(x2+margin,y2-pitch*.43),(x2+margin,y2+pitch*.43),(x1-margin,y1+pitch*.43)])
+                marks.append(Mark('',suggestion,status,tuple(scores),tuple(reds),crop,quad))
+            x1=min(m.crop[0] for m in marks); y1=min(m.crop[1] for m in marks); x2=max(m.crop[2] for m in marks); y2=max(m.crop[3] for m in marks)
+            blocks.append(((x1,y1,x2-x1,y2-y1),flag_strikes(im,marks)))
+    if not blocks: raise ValueError('No se reconoce una cuadrícula regular de casillas.')
+    return sorted(blocks,key=lambda b:(b[0][0],b[0][1]))
+
+
+def automatic_numbering(blocks, questions, reserves=0, previous=None):
+    """Use saved numbering if geometry matches; otherwise standard column order.
+
+    A complete ordinary page may have unused trailing printed rows. Never infer
+    reserve labels merely from those extra rows. Distinct reserve blocks are
+    recognized only when the configured counts match their separate geometry.
+    """
+    sizes=[len(ms) for _,ms in blocks]
+    if not sizes or any(n<1 for n in sizes): raise ValueError('No hay bloques completos.')
+    if previous:
+        old=reading_blocks(previous)
+        if [(len(b),len(b[0].scores)) for b in old]==[(len(ms),len(ms[0].scores)) for _,ms in blocks]:
+            return number_blocks(blocks,[b[0].number for b in old])
+    if sum(sizes)<questions:
+        raise ValueError('La hoja no cubre todas las preguntas ordinarias. Si es una página parcial o de reservas, indica su numeración en Ajustar alineación.')
+    starts=[]; n=1; r=1
+    # Infer reserves only when separate blocks start exactly at the configured
+    # boundary and their sizes are clearly distinct from the ordinary columns.
+    split=next((i for i in range(1,len(sizes)) if sum(sizes[:i])==questions and sum(sizes[i:])==reserves and max(sizes[i:])<max(sizes[:i])),None) if reserves else None
+    for i,size in enumerate(sizes):
+        if split is not None and i>=split: starts.append('R'+str(r)); r+=size
+        else: starts.append(str(n)); n+=size
+    return number_blocks(blocks,starts)
+
+
+def automatic_page(im, questions, reserves=0, options=3, previous=None):
+    """Common no-dialog reader. The image is always kept for explicit adjustment."""
+    aligned=align(im)
+    # Known template remains the preferred route, with a color-contrast fallback.
+    for candidate in (aligned,):
+        try:
+            slot=identify(candidate)
+            if options>3 or (slot==0 and questions>120): raise ValueError('Geometría distinta de la plantilla conocida.')
+            return candidate,scan(candidate,slot)
+        except ValueError: pass
+    # Repeated geometry can be much clearer in a saturated color channel.
+    contrast=geometry_gray(aligned); gray=cv.cvtColor(aligned,cv.COLOR_RGB2GRAY)
+    if float(np.mean(abs(contrast.astype(float)-gray)))>1.5 and options<=3 and questions<=120:
+        geom=np.repeat(contrast[...,None],3,axis=2)
+        try:
+            slot=identify(geom); return aligned,scan(aligned,slot,grid_positions(geom,slot))
+        except ValueError: pass
+    errors=[]
+    for detector in (lambda:square_page(im,aligned),lambda:(aligned,flexible_outline_blocks(aligned,options)),lambda:(original_canvas(im)[0],flexible_outline_blocks(original_canvas(im)[0],options))):
+        try:
+            canvas,blocks=detector()
+            if any(len(ms[0].scores)<options for _,ms in blocks): raise ValueError('Faltan opciones impresas.')
+            return canvas,automatic_numbering(blocks,questions,reserves,previous)
+        except ValueError as e: errors.append(str(e))
+    raise ValueError(errors[0] if errors else 'No se reconoce la estructura de la hoja.')
+
+
 def guided_block(im, points, rows, options, start):
     """Read a regular grid from its four outer answer-cell centers."""
     if not 2<=rows<=120 or not 2<=options<=5: raise ValueError('Bloque: 2–120 filas y 2–5 opciones.')
@@ -623,6 +798,7 @@ def guided_block(im, points, rows, options, start):
     r=max(3,min(15,round(min(dx,dy)*.29)))
     a=im.astype(np.int16); R,G,B=a.transpose(2,0,1)
     blue=(B-R>5)&(B-G>7)&(B<225)&(R<190); red=(R-B>18)&(R-G>18)&(G<180)&(B-G<35)&(R<205)
+    blue,red=remove_print_ink(im,blue,red,centers,r)
     marks=[]
     for jrow,row in enumerate(centers):
         scores=[]; reds=[]
