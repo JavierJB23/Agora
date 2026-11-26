@@ -302,3 +302,32 @@ class RepeatedPrintedRowsTests(unittest.TestCase):
         self.assertEqual([m.number for m in marks],list(map(str,range(1,121))))
         self.assertEqual([m.number for m in marks if 'Posible anulada' in m.status],['5','35','65','95'])
         self.assertEqual(omr.proposed(marks[0]),'A'); self.assertEqual(omr.proposed(marks[1]),'B'); self.assertEqual(omr.proposed(marks[2]),'C')
+
+class VerifiedNumberingTests(unittest.TestCase):
+    def test_header_cannot_be_accepted_as_answer(self):
+        im=np.full((omr.HEIGHT,omr.WIDTH,3),240,np.uint8)
+        cv.rectangle(im,(100,300),(220,325),(130,40,90),-1)
+        m=omr.Mark('1','A','Azul detectado',(30,0,0),(0,0,0),(100,300,220,325))
+        with self.assertRaisesRegex(ValueError,'cabecera'):
+            omr.verify_numbered_rows(im,[m])
+
+    def test_header_anchors_allow_column_specific_heights(self):
+        im=np.full((omr.HEIGHT,omr.WIDTH,3),240,np.uint8)
+        for col in range(4):
+            bx=260+col*200; y0=390+col*19
+            cv.rectangle(im,(bx-70,y0-28),(bx+68,y0-12),(135,60,100),-1)
+            for r in range(30):
+                y=y0+r*30; x=bx
+                if r%2: cv.rectangle(im,(x-70,y-12),(x+65,y+12),(238,217,225),-1)
+                cv.putText(im,str(col*30+r+1),(x-65,y+4),cv.FONT_HERSHEY_SIMPLEX,.4,(135,60,100),1,cv.LINE_AA)
+                for j in range(3):
+                    cx=x+j*26; cv.circle(im,(cx,y),8,(135,60,100),2)
+                    cv.putText(im,'ABC'[j],(cx-3,y+3),cv.FONT_HERSHEY_SIMPLEX,.25,(135,60,100),1)
+                    if j==r%3:
+                        cv.line(im,(cx-5,y-5),(cx+5,y+5),(30,40,105),2); cv.line(im,(cx+5,y-5),(cx-5,y+5),(30,40,105),2)
+                if r in (4,23): cv.line(im,(x-65,y),(x+62,y+2),(40,55,125),2)
+        pos=omr.repeated_circle_rows(im); ms=omr.scan_repeated_rows(im,pos)
+        omr.verify_numbered_rows(im,ms)
+        self.assertEqual([m.number for m in ms],list(map(str,range(1,121))))
+        self.assertEqual([m.number for m in ms if 'Posible anulada' in m.status],['5','24','35','54','65','84','95','114'])
+        self.assertTrue(all(omr.proposed(m)=='ABC'[i%30%3] for i,m in enumerate(ms) if i%30 not in (4,23)))

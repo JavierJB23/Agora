@@ -434,7 +434,7 @@ class UITests(unittest.TestCase):
                 self.assertIsNone(page.alignment_workspace(0))
             page.deleteLater(); self.app.processEvents()
         self.assertEqual(menus[0],menus[1])
-        self.assertIn('Ajuste por bloques',menus[0]); self.assertIn('Redefinir bloques',menus[0])
+        self.assertNotIn('Ajuste por bloques',menus[0]); self.assertNotIn('Redefinir bloques',menus[0])
         self.assertIn('Restablecer automática',menus[0]); self.assertNotIn('Ajuste por referencias',menus[0])
 
     def test_successful_import_and_reset_never_open_numbering(self):
@@ -449,6 +449,6 @@ class UITests(unittest.TestCase):
             self.assertEqual(page.read_page(im)[1],marks)
             self.assertEqual(page.automatic_candidate(im)[1],marks)
             self.assertEqual(detect.call_count,2)
-        with patch.object(omr,'automatic_page',side_effect=ValueError('Lectura incierta')),patch.object(page,'alignment_workspace',return_value=None) as fallback:
-            self.assertIsNone(page.read_page(im)); fallback.assert_called_once()
+        with patch.object(omr,'automatic_page',side_effect=ValueError('Lectura incierta')),patch.object(page,'alignment_workspace') as fallback,patch('agora.omr_ui.QMessageBox.warning') as warning:
+            self.assertIsNone(page.read_page(im)); fallback.assert_not_called(); warning.assert_called_once()
         page.deleteLater(); self.app.processEvents()
