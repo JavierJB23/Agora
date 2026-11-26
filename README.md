@@ -1,3 +1,12 @@
+# Ágora v0.6.16 — BLOCK 06 — FIX16
+
+- Conserva las páginas de reserva incluso cuando el solucionario tiene cero reservas; las casillas sin solución aparecen en Reservas / Todas las preguntas y no participan en la nota. Cuando sí existe clave de reserva, se conserva el comportamiento de puntuación anterior. Importación parcial advertida explícitamente; no se descartan otras páginas válidas sin ofrecer conservarlas.
+- Barra rosa bajo la tabla durante la lectura de archivos procedentes del PC o QR; procesamiento óptico en un hilo, porcentaje aproximado por etapas y páginas, tiempo estimado tras observar avance. Transferencia móvil conserva su indicador de envío. No se altera el algoritmo óptico, salvo notificaciones de progreso.
+- Prueba local: página de reservas del ZIP con 112 ordinarias y 0/9 reservas configuradas: R1–R9 y recuperación de los nueve recortes en ambos casos. Prueba sintética automática de reservas y 59 pruebas no gráficas de otros módulos superadas. Suite GUI y compilación Windows pendientes; no se incluyen fotografías privadas.
+- Compilación manual: no cambiar windows.yml.
+
+## Histórico (FIX16 prevalece)
+
 # Ágora v0.6.15 — BLOCK 06 — FIX15
 
 - Verificación de cabeceras y secuencias de filas; detección por columnas con alturas independientes y preferencia por la foto sin deformar.
