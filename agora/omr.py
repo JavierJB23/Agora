@@ -961,17 +961,21 @@ def verify_numbered_rows(im, marks):
     return marks
 
 
-def automatic_page(im, questions, reserves=0, options=3, previous=None):
+def automatic_page(im, questions, reserves=0, options=3, previous=None, progress=None):
     """Try independent normalizations; only install a verified row sequence."""
+    report=progress or (lambda *_:None)
+    report(.05,"Preparando imagen")
     aligned=align(im)
     raw=original_canvas(im)[0]
     errors=[]
+    report(.18,"Localizando casillas")
     if options<=3 and questions<=120:
         # Preserve the actual camera aspect ratio first; a global paper warp
         # can introduce artifacts when the photographed page is curved.
         for candidate in (raw,aligned):
             try:
                 positions=repeated_circle_rows(candidate)
+                report(.60,"Interpretando marcas")
                 marks=scan_repeated_rows(candidate,positions)
                 return candidate,verify_numbered_rows(candidate,marks)
             except ValueError as e: errors.append(str(e))
@@ -980,6 +984,7 @@ def automatic_page(im, questions, reserves=0, options=3, previous=None):
             slot=identify(candidate)
             if options>3 or (slot==0 and questions>120): raise ValueError('Geometría distinta de la plantilla conocida.')
             positions=grid_positions(candidate,slot)
+            report(.60,"Interpretando marcas")
             marks=scan_repeated_rows(candidate,positions) if slot==0 else scan(candidate,slot,positions)
             return candidate,verify_numbered_rows(candidate,marks)
         except ValueError as e: errors.append(str(e))
@@ -988,9 +993,11 @@ def automatic_page(im, questions, reserves=0, options=3, previous=None):
             geom=np.repeat(contrast[...,None],3,axis=2)
             try:
                 slot=identify(geom); positions=grid_positions(geom,slot)
+                report(.60,"Interpretando marcas")
                 marks=scan_repeated_rows(candidate,positions) if slot==0 else scan(candidate,slot,positions)
                 return candidate,verify_numbered_rows(candidate,marks)
             except ValueError as e: errors.append(str(e))
+    report(.65,"Comprobando geometría alternativa")
     for detector in (lambda:square_page(im,aligned),lambda:(aligned,flexible_outline_blocks(aligned,options)),lambda:(raw,flexible_outline_blocks(raw,options))):
         try:
             canvas,blocks=detector()

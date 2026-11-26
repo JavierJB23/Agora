@@ -1,7 +1,8 @@
 """Optical reader validation workspace; scoring integration belongs to block 06."""
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt,QThread,Signal,QEventLoop,QTimer
+from time import monotonic
 from PySide6.QtGui import QImage,QPixmap,QPainter,QPen,QColor
-from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QPushButton,QTableWidget,QTableWidgetItem,QHeaderView,QDialog,QMessageBox,QScrollArea,QLineEdit,QSizePolicy)
+from PySide6.QtWidgets import (QWidget,QVBoxLayout,QHBoxLayout,QLabel,QPushButton,QTableWidget,QTableWidgetItem,QHeaderView,QDialog,QMessageBox,QScrollArea,QLineEdit,QSizePolicy,QProgressBar)
 from .controls import SafeComboBox, SafeSpinBox
 from .import_ui import ImportDialog
 from .manual import confirm
@@ -49,6 +50,32 @@ class CornerImage(QLabel):
 class RestoreAutomatic(Exception):
     """Return from a manual editor to the automatic preview."""
 
+class ReadWorker(QThread):
+    progress=Signal(int,str)
+    def __init__(self,items,config,parent=None):
+        super().__init__(parent); self.items=items; self.config=config; self.results=[]; self.errors=[]; self.failure=None
+    def run(self):
+        try:
+            pages=[]
+            for j,(name,data) in enumerate(self.items):
+                self.progress.emit(round(20*j/len(self.items)),f'Abriendo archivo {j+1} de {len(self.items)}')
+                try: decoded=omr.decode(name,data)
+                except Exception as e:
+                    self.errors.append(f'{name}: {e}'); continue
+                if len(pages)+len(decoded)>20: raise ValueError('Selecciona un máximo de 20 páginas en total.')
+                pages.extend((name,k+1,im) for k,im in enumerate(decoded))
+            for j,(name,k,im) in enumerate(pages):
+                self.progress.emit(20+round(75*j/len(pages)),f'Leyendo hoja {j+1} de {len(pages)}')
+                try:
+                    def stage(fraction,label):
+                        self.progress.emit(20+round(75*(j+fraction)/len(pages)),f'Hoja {j+1} de {len(pages)} · {label}')
+                    aligned,marks=omr.automatic_page(im,self.config.questions,self.config.reserves,self.config.options,progress=stage)
+                    stage(.90,'Conservando imagen')
+                    self.results.append((im,aligned,marks,record(im,aligned,marks)))
+                except Exception as e: self.errors.append(f'{name} · página {k}: {e}')
+            self.progress.emit(95,'Comprobando páginas')
+        except Exception as e: self.failure=str(e)
+
 class OpticalPage(QWidget):
     def __init__(self,config,answers,cache,changed):
         super().__init__(); self.config=config; self.answers=answers; self.changed=changed
@@ -58,6 +85,9 @@ class OpticalPage(QWidget):
         row=QHBoxLayout(); self.page=SafeComboBox(); self.page.addItems(['Preguntas ordinarias','Reservas']); self.page.currentIndexChanged.connect(self.refresh); row.addWidget(self.page); self.filter=SafeComboBox(); self.filter.addItems(['Solo pendientes','Todas las preguntas']); self.filter.currentIndexChanged.connect(self.refresh); row.addWidget(self.filter); row.addWidget(btn('Ver hoja y casillas',self.preview)); row.addWidget(btn('Releer hoja',self.adjust)); l.addLayout(row)
         self.count=text(''); self.count.setToolTip('Las lecturas claras se rellenan automáticamente; revisa las dudosas y las posibles anuladas.'); l.addWidget(self.count)
         self.table=QTableWidget(0,4); self.table.setHorizontalHeaderLabels(['Pregunta','Recorte original','Estado de lectura','Respuesta']); self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch); self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers); self.table.setAlternatingRowColors(True); self.table.verticalHeader().hide(); self.table.setMinimumHeight(260); l.addWidget(self.table)
+        self.progress_info=text(''); self.progress_bar=QProgressBar(); self.progress_bar.setRange(0,100); self.progress_bar.setFixedHeight(12); self.progress_bar.setTextVisible(False); self.progress_bar.setAlignment(A.AlignCenter)
+        self.progress_bar.setStyleSheet('QProgressBar {background:#F4D6E3;border:1px solid #E8CEDB;border-radius:8px;text-align:center;color:#75405B;} QProgressBar::chunk {background:#A55379;border-radius:7px;}')
+        l.addWidget(self.progress_info); l.addWidget(self.progress_bar); self.progress_info.hide(); self.progress_bar.hide()
         if self.images:
             self.page.setCurrentIndex(1 if '' not in self.answers[:self.config.questions] and '' in self.answers[self.config.questions:] else 0 if any(not m.number.startswith('R') for marks in self.marks.values() for m in marks) else 1)
             if all(self.answers): self.filter.setCurrentIndex(1)
@@ -132,39 +162,69 @@ class OpticalPage(QWidget):
         except ValueError as e:
             QMessageBox.warning(self,'Lectura no verificada',str(e))
             return None
+    def run_import(self,items):
+        # Worker touches only arrays and files. All widget and storage changes stay on GUI thread.
+        worker=ReadWorker(items,self.config,self); loop=QEventLoop(); timer=QTimer(self); timer.setInterval(250)
+        state=[0,'Preparando archivos']; reading=[None,None]
+        def update():
+            value,phase=state
+            eta='Calculando tiempo restante…'
+            if reading[1] is not None and 20<value<95:
+                eta=f'Quedan aprox. {max(1,round(reading[1]-monotonic()))} s'
+            if value>=95: eta='Finalizando…'
+            self.progress_info.setText(f'{value} % · {phase} · {eta}'); self.progress_bar.setValue(value)
+        def advance(value,phase):
+            if value>=20 and reading[0] is None: reading[0]=monotonic()
+            value=max(state[0],value)
+            if reading[0] is not None and 20<value<95:
+                now=monotonic(); reading[1]=now+(now-reading[0])*(95-value)/(value-20)
+            state[:]=[value,phase]; update()
+        worker.progress.connect(advance,Qt.ConnectionType.QueuedConnection); worker.finished.connect(loop.quit,Qt.ConnectionType.QueuedConnection); timer.timeout.connect(update)
+        self.progress_info.show(); self.progress_bar.show(); update()
+        window=self.window(); window.setEnabled(False); timer.start()
+        try:
+            worker.start(); loop.exec(); worker.wait()
+            if worker.failure: raise ValueError(worker.failure)
+            return worker.results,worker.errors
+        finally:
+            timer.stop(); timer.deleteLater(); window.setEnabled(True); worker.deleteLater()
+    def page_numbers(self,marks):
+        # Keep physical reserve sheets even if the key has no reserve solutions.
+        return {m.number for m in marks if self.target_index(m.number) is not None or m.number.startswith('R')}
     def load(self,checked=False,force_guided=False):
         d=ImportDialog(self,omr.EXTENSIONS,multiple=True,max_files=20)
         if d.exec()!=QDialog.DialogCode.Accepted or not d.items: return
         try:
-            pending={}; count=0; occupied=set(self.marks)
-            for name,data in d.items:
-                for im in omr.decode(name,data):
-                    count+=1
-                    if count>20: raise ValueError('Selecciona un máximo de 20 páginas en total.')
-                    result=self.read_page(im)
-                    if result is None: return
-                    aligned,marks=result
-                    nums={m.number for m in marks if self.target_index(m.number) is not None}
-                    if not nums: continue
-                    if any(nums&{m.number for m in p[2]} for p in pending.values()):
-                        raise ValueError('Hay páginas con numeraciones repetidas. Comprueba las hojas seleccionadas.')
-                    overlaps=[slot for slot,old in self.marks.items() if nums&{m.number for m in old}]
-                    if len(overlaps)>1: raise ValueError('La página se solapa con varias lecturas guardadas. Reinicia la lectura para sustituirlas.')
-                    if overlaps:
-                        slot=overlaps[0]
-                        oldnums={m.number for m in self.marks[slot] if self.target_index(m.number) is not None}
-                        if not oldnums<=nums: raise ValueError('La página solo sustituye parte de una lectura previa. Reinicia la lectura para cambiar la distribución.')
-                    else:
-                        preferred=1 if all(n.startswith('R') for n in nums) else 0
-                        slot=preferred if preferred not in occupied else next((i for i in range(2,100) if i not in occupied),None)
-                        if slot is None: raise ValueError('Demasiadas páginas guardadas.')
-                    occupied.add(slot); pending[slot]=(im,aligned,marks)
-            if not pending: raise ValueError('No se han localizado preguntas del solucionario en las hojas importadas.')
-            if any(self.answers[i] for p in pending.values() for m in p[2] if (i:=self.target_index(m.number)) is not None) and not confirm(self,'Sustituir lectura','Se sustituirán las respuestas de las páginas importadas. ¿Continuar?'): return
-            snapshots={slot:record(im,aligned,marks) for slot,(im,aligned,marks) in pending.items()}
-            for slot,(im,aligned,marks) in pending.items(): self.install(slot,im,aligned,marks,snapshots[slot])
+            results,errors=self.run_import(d.items)
+            pending={}; occupied=set(self.marks)
+            for im,aligned,marks,snapshot in results:
+                nums=self.page_numbers(marks)
+                if not nums:
+                    errors.append('Una página no contiene preguntas del examen.'); continue
+                if any(nums&self.page_numbers(p[2]) for p in pending.values()):
+                    raise ValueError('Hay páginas con numeraciones repetidas. Comprueba las hojas seleccionadas.')
+                overlaps=[slot for slot,old in self.marks.items() if nums&self.page_numbers(old)]
+                if len(overlaps)>1: raise ValueError('La página se solapa con varias lecturas guardadas. Reinicia la lectura para sustituirlas.')
+                if overlaps:
+                    slot=overlaps[0]
+                    if not self.page_numbers(self.marks[slot])<=nums: raise ValueError('La página solo sustituye parte de una lectura previa. Reinicia la lectura para cambiar la distribución.')
+                else:
+                    preferred=1 if all(n.startswith('R') for n in nums) else 0
+                    slot=preferred if preferred not in occupied else next((i for i in range(2,100) if i not in occupied),None)
+                    if slot is None: raise ValueError('Demasiadas páginas guardadas.')
+                occupied.add(slot); pending[slot]=(im,aligned,marks,snapshot)
+            if not pending: raise ValueError('No se han localizado preguntas en las hojas importadas.\n'+'\n'.join(errors))
+            if errors and not confirm(self,'Importación parcial','No se pudieron leer todas las páginas:\n'+'\n'.join(errors)+'\n¿Conservar las hojas reconocidas?'): return
+            if any(slot in self.marks for slot in pending) or any(self.answers[i] for p in pending.values() for m in p[2] if (i:=self.target_index(m.number)) is not None):
+                if not confirm(self,'Sustituir lectura','Se sustituirán las respuestas de las páginas importadas. ¿Continuar?'): return
+            for slot,(im,aligned,marks,snapshot) in pending.items(): self.install(slot,im,aligned,marks,snapshot)
             self.page.setCurrentIndex(1 if '' not in self.answers[:self.config.questions] and '' in self.answers[self.config.questions:] else 0 if any(not m.number.startswith('R') for p in pending.values() for m in p[2]) else 1); self.filter.setCurrentIndex(1 if all(self.answers) else 0); self.changed(); self.refresh()
+            self.progress_bar.setValue(100); self.progress_info.setText('100 % · Lectura completada'); self.progress_bar.repaint()
+            if any(m.number.startswith('R') and self.target_index(m.number) is None for p in pending.values() for m in p[2]):
+                QMessageBox.information(self,'Reservas sin solucionario','Se ha conservado la hoja de reservas. Las preguntas que no tienen solución en el solucionario se pueden consultar, pero no puntúan.');
         except Exception as e: QMessageBox.warning(self,'No se pudo leer',str(e))
+        finally:
+            self.progress_bar.hide(); self.progress_info.hide()
     def install(self,slot,im,aligned,marks,snapshot=None):
         if snapshot is None: snapshot=record(im,aligned,marks)
         self.images[slot]=im; self.aligned[slot]=aligned; self.marks[slot]=marks; self.records[slot]=snapshot
@@ -182,7 +242,7 @@ class OpticalPage(QWidget):
     def preview(self):
         i=self.choose_page()
         if i==-1: return
-        if i is None: QMessageBox.information(self,'Ver hoja','No hay imagen conservada para esta página. Los simulacros antiguos pueden contener solo las respuestas.'); return
+        if i is None: QMessageBox.information(self,'Ver hoja','No hay hoja reconocida de este tipo en el simulacro.'); return
         import cv2 as cv
         d=QDialog(self); d.setWindowTitle('Hoja de respuestas'); d.resize(690,780); l=QVBoxLayout(d)
         row=QHBoxLayout(); im=QLabel(); im.setAlignment(A.AlignCenter)
@@ -270,7 +330,7 @@ class OpticalPage(QWidget):
             old=self.marks[i]; adjusted=self.alignment_workspace(i)
             if adjusted is None: return
             aligned,marks=adjusted
-            newnums={m.number for m in marks if self.target_index(m.number) is not None}
+            newnums=self.page_numbers(marks)
             if not newnums or any(newnums&{m.number for m in ms} for slot,ms in self.marks.items() if slot!=i): raise ValueError('El ajuste se solapa con otra hoja o no contiene preguntas del examen.')
             if not confirm(self,'Aplicar lectura','Se volverán a interpretar las respuestas de esta página. Se conservarán las anuladas y las respuestas modificadas manualmente que sigan en ella. ¿Continuar?'): return
             snapshot=record(self.images[i],aligned,marks)
@@ -286,7 +346,8 @@ class OpticalPage(QWidget):
         except Exception as e: QMessageBox.warning(self,'No se pudo alinear',str(e)+'\n\nSe conserva la lectura anterior.')
     def refresh(self,*_):
         slot=self.page.currentIndex(); lookup={m.number:(page,m) for page,marks in self.marks.items() for m in marks}; indices=list(self.indices(slot)); shown=[(j,i) for j,i in enumerate(indices) if self.filter.currentIndex()==1 or not self.answers[i]]
-        self.table.setRowCount(0); self.table.setRowCount(len(shown))
+        extra=sorted((n for n in lookup if slot==1 and n.startswith('R') and self.target_index(n) is None),key=lambda n:int(n[1:])) if self.filter.currentIndex()==1 else []
+        self.table.setRowCount(0); self.table.setRowCount(len(shown)+len(extra))
         for row,(j,i) in enumerate(shown):
             self.table.setRowHeight(row,48); page,m=lookup.get(self.config.number(i),(None,None))
             status=m.status if m else ('Respuesta conservada · sin recorte' if self.answers[i] else 'Hoja no cargada')
@@ -301,6 +362,11 @@ class OpticalPage(QWidget):
             if m:
                 crop=QLabel(); crop.setAlignment(A.AlignCenter); crop.setPixmap(pix(omr.crop_image(self.aligned[page],m)).scaled(155,43,Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation)); self.table.setCellWidget(row,1,crop)
             combo=SafeComboBox(); vals=['',*self.config.letters,'-','X']; combo.addItems(['Pendiente',*self.config.letters,'En blanco','Anulada']); combo.setCurrentIndex(vals.index(self.answers[i])); combo.currentIndexChanged.connect(lambda k,n=i,v=vals:self.set_choice(n,v[k])); self.table.setCellWidget(row,3,combo)
+        for row,n in enumerate(extra,start=len(shown)):
+            page,m=lookup[n]; self.table.setRowHeight(row,48)
+            for col,value in ((0,n),(2,m.status+' · Sin solución'),(3,self.proposal(m) or 'Pendiente')):
+                item=QTableWidgetItem(value); item.setTextAlignment(A.AlignCenter); self.table.setItem(row,col,item)
+            crop=QLabel(); crop.setAlignment(A.AlignCenter); crop.setPixmap(pix(omr.crop_image(self.aligned[page],m)).scaled(155,43,Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation)); self.table.setCellWidget(row,1,crop)
         self.update_count()
     def set_choice(self,i,value):
         self.answers[i]=value; self.changed(); self.update_count()
@@ -313,7 +379,7 @@ class OpticalPage(QWidget):
                 elif self.table.item(row,2).text()=='Anulada manualmente': self.table.item(row,2).setText(mark.status if mark else 'Respuesta revisada')
                 break
     def update_count(self):
-        n=self.answers.count(''); suffix=' · Sin imagen guardada' if not self.images and any(self.answers[i] for i in self.indices(self.page.currentIndex())) else ''; self.count.setText(f'{len(self.answers)-n}/{len(self.answers)} respuestas · {n} pendientes'+suffix)
+        n=self.answers.count(''); suffix=' · Sin imagen guardada' if not self.images and any(self.answers[i] for i in self.indices(self.page.currentIndex())) else ''; extra=sum(m.number.startswith('R') and self.target_index(m.number) is None for ms in self.marks.values() for m in ms); self.count.setText(f'{len(self.answers)-n}/{len(self.answers)} respuestas · {n} pendientes'+suffix+(f' · {extra} reservas sin solución (no puntúan)' if extra else ''))
     def reset(self):
         if any(self.answers) and not confirm(self,'Reiniciar lectura','Se descartarán las respuestas y revisiones actuales. ¿Continuar?'): return
         self.images.clear(); self.aligned.clear(); self.marks.clear(); self.records.clear(); self.answers[:]=['']*len(self.answers); self.changed(); self.refresh()
