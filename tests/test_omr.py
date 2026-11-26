@@ -283,3 +283,22 @@ class AutomaticColorTests(unittest.TestCase):
         # Only a separate short block at the configured boundary is inferred as reserves.
         reserves=[blocks[0],(blocks[1][0],blocks[1][1][:3])]
         self.assertEqual(omr.automatic_numbering(reserves,10,3)[-1].number,'R3')
+
+class RepeatedPrintedRowsTests(unittest.TestCase):
+    def test_scaled_colored_rows_preserve_crossed_row_indices(self):
+        im=np.full((omr.HEIGHT,omr.WIDTH,3),240,np.uint8)
+        for col in range(4):
+            bx=280+col*200
+            for r in range(30):
+                x=bx-round(r*.35); y=420+r*30+round(.003*r*r)+col%2*4
+                if r%2: cv.rectangle(im,(x-70,y-13),(x+65,y+13),(238,217,225),-1)
+                cv.putText(im,str(col*30+r+1),(x-65,y+4),cv.FONT_HERSHEY_SIMPLEX,.4,(135,60,100),1,cv.LINE_AA)
+                for j in range(3):
+                    cx=x+j*26; cv.circle(im,(cx,y),8,(135,60,100),2); cv.putText(im,'ABC'[j],(cx-3,y+3),cv.FONT_HERSHEY_SIMPLEX,.25,(135,60,100),1)
+                    if j==r%3: cv.line(im,(cx-5,y-5),(cx+5,y+5),(30,40,105),2); cv.line(im,(cx+5,y-5),(cx-5,y+5),(30,40,105),2)
+                if r==4: cv.line(im,(x-65,y),(x+62,y+2),(40,55,125),2)
+            cv.rectangle(im,(bx-70,390+col%2*4),(bx+70,407+col%2*4),(135,60,100),-1)
+        pts=omr.repeated_circle_rows(im); marks=omr.scan_repeated_rows(im,pts)
+        self.assertEqual([m.number for m in marks],list(map(str,range(1,121))))
+        self.assertEqual([m.number for m in marks if 'Posible anulada' in m.status],['5','35','65','95'])
+        self.assertEqual(omr.proposed(marks[0]),'A'); self.assertEqual(omr.proposed(marks[1]),'B'); self.assertEqual(omr.proposed(marks[2]),'C')

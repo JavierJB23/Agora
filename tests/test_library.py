@@ -72,3 +72,12 @@ class LibraryTests(unittest.TestCase):
             with s.connection() as db: db.execute('PRAGMA user_version=7')
             s=Storage(d); self.assertNotIn('template_id',s.load_attempt(x)); self.assertEqual(s.load_attempt(y)['template_id'],tid)
             self.assertEqual(s.template_attempts(tid),[(y,p['config']['name'])]); s.delete_template(tid,confirmed_attempts=[y]); self.assertIsNotNone(s.load_attempt(x))
+
+    def test_rename_preserves_id_document_and_attempt(self):
+        with tempfile.TemporaryDirectory() as d:
+            s=Storage(d); ref=s.archive_solution_document('A.pdf',b'original'); p=self.payload(ref=ref); tid=s.save_template('Antes',p); other=s.save_template('Otra',p)
+            aid=s.save_attempt(dict(p,template_id=tid,answers=['A','B','-'])); entry=next(x for x in s.library_entries() if x['id']==tid)
+            s.rename_template(tid,'Después'); now=next(x for x in s.library_entries() if x['id']==tid)
+            self.assertEqual(now['name'],'Después'); self.assertEqual(now['created'],entry['created']); self.assertEqual(now['ref'],ref); self.assertEqual(now['payload']['key'],p['key']); self.assertEqual(s.load_attempt(aid)['template_id'],tid); self.assertEqual(s.load_attempt(aid)['config'],p['config'])
+            with self.assertRaises(ValueError): s.rename_template(tid,'OTRA')
+            with self.assertRaises(ValueError): s.rename_template(tid,'   ')

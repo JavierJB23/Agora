@@ -52,3 +52,12 @@ class TransferTests(unittest.TestCase):
             with self.assertRaises(HTTPError) as e: urlopen(req([['a.png',1]],b'x'),timeout=3)
             self.assertEqual(e.exception.code,409)
         finally: s.close()
+
+    def test_mobile_large_file_selector_and_brand(self):
+        for multi in (False,True):
+            s=UploadSession(host='127.0.0.1',multiple=multi); url=s.url('127.0.0.1')
+            try:
+                with urlopen(url,timeout=3) as r: page=r.read().decode()
+                self.assertIn('class="pick"',page); self.assertIn('Seleccionar archivos',page); self.assertIn('<svg ',page); self.assertIn('padding:14px;width:100%;font:inherit',page); self.assertIn('id="file"',page)
+                self.assertEqual('type="file" multiple' in page,multi)
+            finally: s.close()
