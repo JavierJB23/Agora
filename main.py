@@ -60,8 +60,7 @@ def smoke_test(report):
                     if j==0 and k==2:
                         cv.line(sq,(x-6,y-6),(x+6,y+6),(20,40,120),2)
                         cv.line(sq,(x-6,y+6),(x+6,y-6),(20,40,120),2)
-            square_view,blocks=omr.square_page(sq)
-            newmarks=omr.number_blocks(blocks,['1'])
+            square_view,newmarks=omr.automatic_page(sq,10,0,3)
             if len(newmarks)!=10 or len(newmarks[0].scores)!=4 or omr.proposed(newmarks[0])!='C':
                 raise RuntimeError('Prueba del lector de cuadrados incorrecta')
             from agora.optical_archive import record,unpack

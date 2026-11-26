@@ -69,3 +69,13 @@ FIX11 (v0.6.11): espacio de ajuste de alineación común, restauración automát
 - Se rechazan encuadres desproporcionados y bloques que se solapan con otras preguntas.
 - Una raya roja que atraviesa la fila deja la respuesta pendiente con «Posible anulada · tachadura roja · revisar». Una cruz roja aislada sigue siendo informativa. La anulación requiere confirmación del usuario; no se modifica el motor de notas.
 - Las cuatro pruebas de regresión añadidas pasan localmente. La prueba gráfica común queda pendiente de GitHub.
+
+
+# ÁGORA v0.6.13 — BLOCK 06 — FIX13
+
+- Círculos, cuadrados y diseños regulares alternativos: una ruta automática común tanto al importar como al restablecer. Los cuadrados ya no abren el diálogo de numeración. Si no se reconoce la hoja con suficiente seguridad, se ofrece la misma ventana de ajuste (sin seleccionar previamente el tipo de plantilla), conservando la imagen mientras se ajusta.
+- Numeración automática por orden de columnas en hojas regulares completas, usando la configuración del examen; se ignoran casillas físicas sobrantes al trasladar respuestas al examen. No se presupone numeración fiable de páginas parciales o arbitrarias: ajustar manualmente si no se puede identificar. El lector no incorpora aún OCR general de numeración impresa.
+- Mejora de color: canal de contraste para contornos coloreados, eliminación de tinta impresa repetida de las máscaras de marcas y distinción de rayas rojas frente a fondos rosas o magenta. Detector geométrico adicional para cuadrículas regulares sin marco y con posiciones diferentes de la plantilla conocida. La imagen original se conserva; no se promete identificar tinta indistinguible de la impresión ni diseños arbitrarios.
+- Botones de ajuste compactos, texto centrado; se conserva la vista previa y aplicación explícita. No cambia el motor de puntuación, las anulaciones, las reservas, la base de datos ni el QR. No modificar windows.yml; compilación manual.
+- Pruebas locales: 27 pruebas OMR anteriores + 4 nuevas + 57 de otros módulos = 88 superadas por grupos. 27 pruebas GUI pendientes en Windows. Comprobaciones adicionales con los archivos de referencia externos: plantilla rosa en blanco (120 ordinarias, 9 reservas, sin falsas anulaciones), TEST 10 (103 propuestas, 8 blancos, 1 duda en 112 preguntas) y plantilla corregida original (106 propuestas, 1 duda en 107 preguntas). Las nuevas fotografías de color que fallaron en el ordenador del usuario no están adjuntas, por lo que no se han reproducido directamente. No se distribuye material privado.
+

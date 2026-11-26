@@ -259,3 +259,11 @@ OK
 - Se rechazan encuadres desproporcionados y bloques que se solapan con otras preguntas.
 - Una raya roja que atraviesa la fila deja la respuesta pendiente con «Posible anulada · tachadura roja · revisar». Una cruz roja aislada sigue siendo informativa. La anulación requiere confirmación del usuario; no se modifica el motor de notas.
 - Las cuatro pruebas de regresión añadidas pasan localmente. La prueba gráfica común queda pendiente de GitHub.
+
+
+FIX13 (v0.6.13):
+- Importar TEST 10 sin ventana de numeración; comprobar lectura, abrir ajuste y restablecer sin nueva importación.
+- Probar hojas circulares rosa y otras hojas de color, también con tinta azul y raya roja real; los fondos impresos no deben generar anuladas.
+- Probar nuevas distribuciones y un ajuste fallido: mismo diálogo para cualquier forma, no aceptar una numeración parcial incierta.
+- Verificar que los botones se muestran centrados y compactos y que las anuladas/reservas siguen funcionando.
+- 88 pruebas no gráficas superadas por grupos; 27 GUI pendientes, incluida la prueba de no abrir numeración durante la detección automática.
