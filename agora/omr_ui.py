@@ -49,7 +49,7 @@ class OpticalPage(QWidget):
         l=QVBoxLayout(self); l.setContentsMargins(0,0,0,0); l.setSpacing(7)
         l.addWidget(btn('Importar hojas de respuestas (PDF o fotos)',self.load,True))
         row=QHBoxLayout(); self.page=SafeComboBox(); self.page.addItems(['Preguntas ordinarias','Reservas']); self.page.currentIndexChanged.connect(self.refresh); row.addWidget(self.page); self.filter=SafeComboBox(); self.filter.addItems(['Solo pendientes','Todas las preguntas']); self.filter.currentIndexChanged.connect(self.refresh); row.addWidget(self.filter); row.addWidget(btn('Ver hoja y casillas',self.preview)); row.addWidget(btn('Ajustar alineación',self.adjust)); l.addLayout(row)
-        self.count=text(''); self.count.setToolTip('Las lecturas claras se rellenan automáticamente; revisa las dudosas. La tinta roja solo es informativa.'); l.addWidget(self.count)
+        self.count=text(''); self.count.setToolTip('Las lecturas claras se rellenan automáticamente; revisa las dudosas y las posibles anuladas.'); l.addWidget(self.count)
         self.table=QTableWidget(0,4); self.table.setHorizontalHeaderLabels(['Pregunta','Recorte original','Estado de lectura','Respuesta']); self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch); self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers); self.table.setAlternatingRowColors(True); self.table.verticalHeader().hide(); self.table.setMinimumHeight(260); l.addWidget(self.table)
         if self.images:
             self.page.setCurrentIndex(1 if '' not in self.answers[:self.config.questions] and '' in self.answers[self.config.questions:] else 0 if any(not m.number.startswith('R') for marks in self.marks.values() for m in marks) else 1)
@@ -102,7 +102,7 @@ class OpticalPage(QWidget):
             if form.exec()!=QDialog.DialogCode.Accepted: return None
             start=number.text(); rows=rows_box.value(); options=options_box.value()
             d=QDialog(self); d.setWindowTitle('Ajustar bloque'); d.resize(720,min(800,self.screen().availableGeometry().height()-80)); l=QVBoxLayout(d)
-            l.addWidget(text('Señala los centros de las casillas exteriores del bloque, no los números.'))
+            l.addWidget(text('Marca los centros de las cuatro casillas exteriores de UNA columna, no de toda la hoja ni los números.'))
             status=text('','tileTitle'); l.addWidget(status); apply=btn('Vista previa',lambda:None,True)
             refs=['Primera fila · A','Primera fila · última opción','Última fila · última opción','Última fila · A']
             def update(n):
@@ -219,11 +219,43 @@ class OpticalPage(QWidget):
         marks=self.choose_numbering(canvas,blocks)
         return (canvas,marks) if marks is not None else None
 
+    def adjust_existing_block(self,canvas,marks):
+        """One common editor for circles and squares, starting from the detected columns."""
+        blocks=omr.reading_blocks(marks)
+        d=QDialog(self); d.setWindowTitle('Elegir bloque'); l=QVBoxLayout(d)
+        l.addWidget(text('Selecciona la columna que quieres ajustar. Las demás se conservarán.'))
+        combo=SafeComboBox()
+        combo.addItems([f'{ms[0].number} – {ms[-1].number} · {len(ms)} filas · {len(ms[0].scores)} opciones' for ms in blocks]); l.addWidget(combo)
+        row=QHBoxLayout(); row.addWidget(btn('Cancelar',d.reject)); row.addWidget(btn('Restablecer automática',lambda:d.done(2))); row.addWidget(btn('Continuar',d.accept,True)); l.addLayout(row)
+        outcome=d.exec()
+        if outcome==2: raise RestoreAutomatic()
+        if outcome!=QDialog.DialogCode.Accepted: return None
+        block=blocks[combo.currentIndex()]
+        if len(block)<2: raise ValueError('Este bloque solo tiene una fila. Usa la detección automática.')
+        # Show the existing block boundaries as a visual guide, without painting on the data read.
+        import cv2 as cv
+        shown=canvas.copy()
+        for m in block: omr.draw_mark(shown,m)
+        d=QDialog(self); d.setWindowTitle('Ajustar bloque'); d.resize(720,min(800,self.screen().availableGeometry().height()-80)); l=QVBoxLayout(d)
+        l.addWidget(text(f'Preguntas {block[0].number}–{block[-1].number}. Marca los centros de las cuatro casillas exteriores de esta columna, no los bordes del papel.'))
+        status=text('','tileTitle'); l.addWidget(status); apply=btn('Vista previa',lambda:None,True)
+        last='ABCDE'[len(block[0].scores)-1]
+        refs=[f'{block[0].number} · A',f'{block[0].number} · {last}',f'{block[-1].number} · {last}',f'{block[-1].number} · A']
+        def update(n):
+            status.setText(f'{n}/4 · Ahora: {refs[n]}' if n<4 else '4/4 · Referencias seleccionadas'); apply.setEnabled(n==4)
+        im=CornerImage(shown,update); sc=QScrollArea(); sc.setWidget(im); sc.setAlignment(A.AlignCenter); l.addWidget(sc,1)
+        tools=QHBoxLayout(); tools.addWidget(btn('Deshacer',im.undo)); tools.addWidget(btn('Reiniciar',im.reset)); zoom=SafeComboBox(); zoom.addItems(['Ajustar a ventana','Ampliar ×2','Ampliar ×3']); zoom.currentIndexChanged.connect(lambda j:im.set_zoom(j+1)); tools.addWidget(zoom); l.addLayout(tools)
+        row=QHBoxLayout(); row.addWidget(btn('Cancelar',d.reject)); row.addWidget(btn('Restablecer automática',lambda:d.done(2))); apply.clicked.connect(d.accept); row.addWidget(apply); l.addLayout(row)
+        outcome=d.exec()
+        if outcome==2: raise RestoreAutomatic()
+        if outcome!=QDialog.DialogCode.Accepted: return None
+        replacement=omr.guided_block(canvas,im.corners(),len(block),len(block[0].scores),block[0].number)
+        return omr.replace_reading_block(marks,block,replacement)
+
     def alignment_workspace(self,i):
         """All changes stay local to this dialog until Apply is pressed."""
         original=self.images[i]; old=self.marks[i]
         current=(self.aligned[i],old); candidate=current
-        legacy=next((j for j in (0,1) if [m.number for m in old]==[n for n,_,_ in omr.locations(j)] and all(len(m.scores)==3 for m in old)),None)
         d=QDialog(self); d.setWindowTitle('Ajustar alineación'); d.resize(760,min(820,self.screen().availableGeometry().height()-80)); l=QVBoxLayout(d)
         message=text('Vista previa de la lectura guardada.'); l.addWidget(message)
         preview=QLabel(); preview.setAlignment(A.AlignCenter); l.addWidget(preview,1)
@@ -240,12 +272,15 @@ class OpticalPage(QWidget):
             nonlocal candidate
             try:
                 if kind=='auto': automatic(); return
-                if kind=='refs': adjusted=self.alignment_dialog(original,legacy)
+                canvas,marks=candidate
+                if kind=='blocks':
+                    replacement=self.adjust_existing_block(canvas,marks)
+                    adjusted=(canvas,replacement) if replacement is not None else None
                 else:
-                    # Use the original photo orientation, not a previously warped preview.
+                    # Explicit full-page rebuild for a previously misidentified layout.
                     canvas,_=omr.original_canvas(original)
-                    marks=self.guided_dialog(canvas,can_restore=True,printed_options=max(len(m.scores) for m in candidate[1]))
-                    adjusted=(canvas,marks) if marks else None
+                    replacement=self.guided_dialog(canvas,can_restore=True,printed_options=max(len(m.scores) for m in marks))
+                    adjusted=(canvas,replacement) if replacement else None
                 if adjusted is not None:
                     candidate=adjusted; message.setText('Vista previa del ajuste. Aplica para conservarlo.'); show()
             except RestoreAutomatic:
@@ -253,7 +288,7 @@ class OpticalPage(QWidget):
                 except ValueError as e: QMessageBox.warning(d,'No se pudo alinear',str(e))
             except ValueError as e: QMessageBox.warning(d,'No se pudo alinear',str(e))
         row=QHBoxLayout(); row.addWidget(btn('Restablecer automática',lambda:action('auto'))); row.addWidget(btn('Ajuste por bloques',lambda:action('blocks')))
-        if legacy is not None: row.addWidget(btn('Ajuste por referencias',lambda:action('refs')))
+        row.addWidget(btn('Redefinir bloques',lambda:action('rebuild')))
         l.addLayout(row)
         bottom=QHBoxLayout(); bottom.addWidget(btn('Cancelar',d.reject)); bottom.addWidget(btn('Aplicar',d.accept,True)); l.addLayout(bottom)
         show()
@@ -309,6 +344,7 @@ class OpticalPage(QWidget):
             status=m.status if m else ('Respuesta conservada · sin recorte' if self.answers[i] else 'Hoja no cargada')
             if self.answers[i]=='X': status='Anulada manualmente'
             elif m and len(m.scores)<self.config.options: status='Faltan opciones impresas · revisar'
+            elif m and 'Posible anulada' in m.status: status=m.status
             elif m and self.proposal(m)=='-': status='Sin azul · blanco propuesto'
             elif m and m.suggestion and m.suggestion not in self.config.letters: status=f'Opción {m.suggestion} no válida · revisar'
             elif m and m.suggestion and not self.proposal(m): status+=f' · posible {m.suggestion}'

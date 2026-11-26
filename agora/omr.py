@@ -376,7 +376,34 @@ def identify(im):
     if len(matched)!=1: raise ValueError('No se distingue con seguridad la hoja ordinaria de la de reservas. Fotografía la plantilla completa y nítida.')
     return matched[0]
 
+def red_strike(im, mark):
+    """Detect a long red stroke across a row, not an isolated red correction X.
+    Work in the same horizontal row crop shown to the user, including gaps.
+    """
+    a=crop_image(im,mark).astype(np.int16)
+    h,w=a.shape[:2]
+    if h<6 or w<20: return False
+    r,g,b=a.transpose(2,0,1)
+    mask=((r-g>=9)&(r-b>=8)&(g<225)&(r<252)).astype(np.uint8)
+    # A stroke may be interrupted by dark printed outlines. Vote along near-horizontal lines.
+    yy,xx=np.nonzero(mask)
+    if len(xx)<w*.35: return False
+    for slope in np.linspace(-.20,.20,17):
+        intercept=np.round(yy-slope*(xx-w/2)).astype(int)
+        for center in range(round(h*.20),round(h*.80)+1):
+            take=np.abs(intercept-center)<=max(1,round(h*.065))
+            cols=np.unique(xx[take]); bins=np.unique(np.minimum(9,cols*10//w))
+            if len(cols)>=w*.48 and len(bins)>=8 and bins[0]<=1 and bins[-1]>=8:
+                return True
+    return False
+
+
+def flag_strikes(im, marks):
+    return [replace(m,status='Posible anulada · tachadura roja · revisar') if red_strike(im,m) else m for m in marks]
+
+
 def proposed(mark):
+    if 'Posible anulada' in mark.status: return ''
     if mark.suggestion and 'débil' not in mark.status: return mark.suggestion
     if not mark.suggestion and max(mark.scores)<5 and max(mark.red)<=20: return '-'
     return ''
@@ -400,7 +427,7 @@ def scan(im,page):
         if suggestion and max(reds)>20: status+=' · posible rojo'
         out.append(Mark(number,suggestion,status,tuple(scores),tuple(reds),(min(x for x,y in points)-19,min(y for x,y in points)-17,max(x for x,y in points)+19,max(y for x,y in points)+18)))
     if present < len(out)*3*.45: raise ValueError('No se reconoce la distribución de casillas. Comprueba la página y ajusta las cuatro esquinas.')
-    return out
+    return flag_strikes(im,out)
 
 def overlay(im,page):
     result=im.copy()
@@ -486,7 +513,7 @@ def square_blocks(im):
             xy=cv.perspectiveTransform(bounds,inv)[0]
             crop,quad=row_geometry(xy)
             marks.append(Mark('',suggestion,status,tuple(scores),tuple(reds),crop,quad))
-        blocks.append(((x,y,w,h),marks))
+        blocks.append(((x,y,w,h),flag_strikes(im,marks)))
     if not blocks: raise ValueError('No se reconocen bloques de casillas cuadradas con suficiente seguridad.')
     # Sort groups left to right, then top to bottom for groups sharing the same column.
     blocks.sort(key=lambda b:(b[0][0]//35,b[0][1]))
@@ -587,6 +614,11 @@ def guided_block(im, points, rows, options, start):
     mat=cv.getPerspectiveTransform(np.float32([[0,0],[options-1,0],[options-1,rows-1],[0,rows-1]]),q)
     centers=cv.perspectiveTransform(np.float32([[(j,i) for i in range(rows) for j in range(options)]]),mat)[0].reshape(rows,options,2)
     dx=np.linalg.norm(np.diff(centers,axis=1),axis=2).min(); dy=np.linalg.norm(np.diff(centers,axis=0),axis=2).min()
+    horizontal=np.linalg.norm(np.diff(centers,axis=1),axis=2)
+    vertical=np.linalg.norm(np.diff(centers,axis=0),axis=2)
+    ratio=float(np.median(horizontal)/max(1.,np.median(vertical)))
+    if not .45<=ratio<=2.6:
+        raise ValueError('El encuadre no corresponde a una sola columna. Marca únicamente las casillas de un bloque de preguntas.')
     if min(dx,dy)<10: raise ValueError('Las casillas son demasiado pequeñas o la cantidad de filas es incorrecta.')
     r=max(3,min(15,round(min(dx,dy)*.29)))
     a=im.astype(np.int16); R,G,B=a.transpose(2,0,1)
@@ -604,4 +636,36 @@ def guided_block(im, points, rows, options, start):
         bounds=np.float32([[[-.46,jrow-.46],[options-1+.46,jrow-.46],[options-1+.46,jrow+.46],[-.46,jrow+.46]]])
         crop,quad=row_geometry(cv.perspectiveTransform(bounds,mat)[0])
         marks.append(Mark('',suggestion,status,tuple(scores),tuple(reds),crop,quad))
-    return number_blocks([((0,0,0,0),marks)],[start])
+    return number_blocks([((0,0,0,0),flag_strikes(im,marks))],[start])
+
+
+def reading_blocks(marks):
+    """Split numbered rows into contiguous vertical columns on the saved canvas."""
+    blocks=[]
+    for m in marks:
+        if not blocks: blocks.append([m]); continue
+        prev=blocks[-1][-1]
+        x,y,x2,y2=m.crop; a,b,a2,b2=prev.crop
+        height=max(y2-y,b2-b); width=max(x2-x,a2-a)
+        consecutive=(m.number.startswith('R')==prev.number.startswith('R') and int(m.number.lstrip('R'))==int(prev.number.lstrip('R'))+1)
+        if (consecutive and len(m.scores)==len(prev.scores) and abs((x+x2-a-a2)/2)<width*.45 and 0<(y+y2-b-b2)/2<height*2.5):
+            blocks[-1].append(m)
+        else: blocks.append([m])
+    return blocks
+
+
+def replace_reading_block(marks, old, new):
+    """Adjust just the chosen block; other columns keep their exact readings."""
+    if [m.number for m in old]!=[m.number for m in new]: raise ValueError('La numeración del bloque ha cambiado.')
+    if any(len(a.scores)!=len(b.scores) for a,b in zip(old,new)): raise ValueError('Las opciones impresas no coinciden.')
+    replacements={m.number:m for m in new}
+    # Reject a block drawn across other columns, even if its aspect ratio looks plausible.
+    others=[m for m in marks if m.number not in replacements]
+    for m in new:
+        x,y,x2,y2=m.crop
+        for n in others:
+            a,b,a2,b2=n.crop
+            area=max(0,min(x2,a2)-max(x,a))*max(0,min(y2,b2)-max(y,b))
+            if area>.25*min((x2-x)*(y2-y),(a2-a)*(b2-b)):
+                raise ValueError('El bloque se solapa con otras preguntas. Selecciona solo su columna.')
+    return [replacements.get(m.number,m) for m in marks]
