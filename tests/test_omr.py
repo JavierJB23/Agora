@@ -119,3 +119,44 @@ class CurvedCircleTests(unittest.TestCase):
         ans=[omr.proposed(m) for m in omr.scan(im,0)]
         self.assertEqual([i for i,v in enumerate(ans) if v=='B'],[0,32,75,91,119])
         self.assertEqual(ans.count('-'),115)
+
+class OutlineAlignmentTests(unittest.TestCase):
+    def test_fourth_column_shift_and_different_pitch(self):
+        """Four complete columns, but the last is displaced and the page is curved."""
+        im=np.full((omr.HEIGHT,omr.WIDTH,3),225,np.uint8)
+        expected=[]; marked={0:'A',28:'C',30:'B',60:'A',90:'A',91:'C',94:'B',103:'A',119:'C'}
+        for i,(_,xs,y) in enumerate(omr.locations(0)):
+            c,r=divmod(i,30)
+            center=xs[1]+(7,12,16,24)[c]+(0,3,7,5)[c]*r/29
+            start=(373,382,380,371)[c]; end=(1546,1544,1542,1545)[c]
+            yy=start+(end-start)*r/29+(.025,-.03,-.04,.035)[c]*r*(r-29)
+            pts=[(round(center+(j-1)*35),round(yy+(j-1)*(-1.5 if c==3 else .5))) for j in range(3)]
+            expected.append(pts)
+            cv.line(im,(pts[0][0]-75,round(yy+19)),(pts[-1][0]+20,round(yy+19)),(170,170,170),1)
+            for j,(x,y0) in enumerate(pts):
+                cv.circle(im,(x,y0),10,(65,65,65),2)
+                cv.putText(im,'ABC'[j],(x-4,y0+4),cv.FONT_HERSHEY_SIMPLEX,.30,(70,70,70),1,cv.LINE_AA)
+            if i in marked:
+                x,y0=pts['ABC'.index(marked[i])]
+                cv.line(im,(x-7,y0-7),(x+7,y0+7),(20,40,120),3)
+                cv.line(im,(x-7,y0+7),(x+7,y0-7),(20,40,120),3)
+        fitted=omr.grid_positions(im,0)
+        self.assertLessEqual(np.max(abs(np.array([p for _,p in fitted])-np.array(expected))),5)
+        ans=[omr.proposed(m) for m in omr.scan(im,0)]
+        self.assertEqual({i:v for i,v in enumerate(ans) if v!='-'},marked)
+
+    def test_missing_column_is_not_a_valid_main_sheet(self):
+        im=sheet(); im[:,900:]=250
+        with self.assertRaises(ValueError): omr.grid_positions(im,0)
+
+    def test_four_columns_of_squares_not_mistaken_for_circles(self):
+        im=np.full((omr.HEIGHT,omr.WIDTH,3),250,np.uint8)
+        for x0 in (125,385,645,905):
+            for r in range(30):
+                y=350+r*36
+                cv.rectangle(im,(x0,y-17),(x0+180,y+17),(60,60,60),2)
+                for j in range(4):
+                    x=x0+45+j*35
+                    cv.rectangle(im,(x-10,y-10),(x+10,y+10),(50,50,50),2)
+        with self.assertRaises(ValueError): omr.grid_positions(im,0)
+        self.assertEqual([(len(m),len(m[0].scores)) for _,m in omr.square_blocks(im)],[(30,4)]*4)
