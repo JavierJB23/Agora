@@ -498,3 +498,64 @@ class UITests(unittest.TestCase):
             self.assertIn('2',dlg.finish_button.text()); dlg.finish_upload()
             self.assertEqual(dlg.result(),QDialog.DialogCode.Accepted); self.assertIsNone(dlg.session)
         finally: dlg.cleanup(); dlg.deleteLater(); self.app.processEvents()
+
+    def test_mobile_connection_routes_and_keeps_link(self):
+        from unittest.mock import patch
+        from agora.import_ui import ImportDialog
+        from urllib.request import urlopen,Request
+        from urllib.parse import quote
+        import json
+        with tempfile.TemporaryDirectory() as d:
+            w=MainWindow(Storage(d)); w.show(); self.app.processEvents(); w.go('automatic'); m=w.automatic; m.apply_config(); m.install_key(ImportedKey(('B',),()),'prueba.pdf',3); m.next_entry()
+            conn=w.mobile_connection; dlg=ImportDialog(m.reader,('.jpg',),multiple=True,max_files=20); dlg.show(); self.app.processEvents()
+            try:
+                with patch('agora.import_ui.local_addresses',return_value=['127.0.0.1']): dlg.mobile()
+                url=conn.session.url('127.0.0.1')
+                def send(name):
+                    conn.update_route(); token=conn.session.status()['token']; self.assertTrue(token)
+                    req=Request(url+'batch',data=b'abc',headers={'X-Destination':token,'X-Files':quote(json.dumps([[name,3]]))})
+                    with urlopen(req,timeout=3) as r: self.assertEqual(r.status,200)
+                    conn.poll()
+                send('hoja.jpg'); self.assertEqual(dlg.items,[('hoja.jpg',b'abc')]); self.assertEqual(dlg.result(),1); self.assertIsNotNone(conn.session)
+                self.app.processEvents()
+                with patch.object(m.reader,'import_items') as imp:
+                    send('reserva.jpg'); imp.assert_called_once_with([('reserva.jpg',b'abc')])
+                w.go('library'); w.select_library_tab(1)
+                with patch.object(w,'receive_library_items') as imp:
+                    send('plantilla.pdf'); imp.assert_called_once_with([('plantilla.pdf',b'abc')])
+                w.go('home'); conn.update_route(); self.assertIsNone(conn.session.status()['token']); self.assertEqual(conn.session.url('127.0.0.1'),url)
+                w.go('automatic'); m.move_stage(1)
+                with patch.object(m,'receive_mobile_key') as imp:
+                    send('clave.pdf'); imp.assert_called_once_with([('clave.pdf',b'abc')])
+                w.close(); self.assertIsNone(conn.session)
+            finally: dlg.cleanup(); conn.close(); dlg.deleteLater(); w.deleteLater(); self.app.processEvents()
+
+    def test_mobile_solution_replace_cancel_preserves_key(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as d:
+            w=MainWindow(Storage(d)); m=w.manual; m.install_key(ImportedKey(('B',),()),'original.pdf',3)
+            with patch('agora.manual.confirm',return_value=False) as ask,patch('agora.manual.extract_key') as read:
+                m.receive_mobile_key([('otra.pdf',b'abc')]); ask.assert_called_once(); read.assert_not_called()
+            self.assertEqual(m.key,['B']); self.assertEqual(m.key_source,'original.pdf'); w.close(); w.deleteLater(); self.app.processEvents()
+
+    def test_mobile_optical_replacement_cancel_and_new_reserve(self):
+        from unittest.mock import patch
+        from agora.omr_ui import OpticalPage
+        from agora.grading import ExamConfig
+        from agora.optical_archive import record
+        from agora import omr
+        from test_omr import sheet,mark
+        a=sheet(); mark(a,0,0,0,(20,40,120)); b=sheet(); mark(b,0,0,1,(20,40,120)); r=sheet(1); mark(r,1,0,2,(20,40,120))
+        def result(im,slot):
+            marks=omr.scan(im,slot); return (im,im,marks,record(im,im,marks))
+        old=result(a,0); new=result(b,0); reserve=result(r,1)
+        page=OpticalPage(ExamConfig(questions=120,reserves=9),['']*129,{},lambda:None)
+        try:
+            page.install(0,*old); self.assertEqual(page.answers[0],'A')
+            with patch.object(page,'run_import',return_value=([new],[])),patch('agora.omr_ui.confirm',return_value=False) as ask:
+                page.import_items([('replacement.png',b'abc')]); ask.assert_called_once()
+            self.assertEqual(page.answers[0],'A'); self.assertIs(page.images[0],a)
+            with patch.object(page,'run_import',return_value=([reserve],[])),patch('agora.omr_ui.confirm') as ask:
+                page.import_items([('reserve.png',b'abc')]); ask.assert_not_called()
+            self.assertEqual(page.answers[120],'C'); self.assertEqual(page.answers[0],'A')
+        finally: page.deleteLater(); self.app.processEvents()
