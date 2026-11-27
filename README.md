@@ -1,3 +1,12 @@
+# Ágora v0.6.18 — BLOCK 06B — FIX01
+
+- Sesión móvil global: el QR dura 15 minutos desde su creación, sin reiniciarse con cada envío. La ventana del PC acepta la primera tanda automáticamente; la página del móvil sigue disponible y muestra el destino y la cuenta atrás. Conservar el navegador abierto, navegar a Soluciones (manual o automático), Respuestas del automático o Mis plantillas y enviar otra tanda sin escanear. El destino debe estar disponible y no ocupado; en Inicio y otros apartados se bloquea el envío. Los envíos que cambien de destino se rechazan, sin reasignación silenciosa. Límite de 20 archivos / 100 MiB por tanda (1 archivo para Soluciones). Desconectar móvil en el lateral o cerrar Ágora finaliza la sesión. Se mantiene la revisión de solucionarios y las confirmaciones de sustitución de respuestas solapadas; no se exige confirmación de sustitución para una hoja adicional sin solapamientos. Las duplicidades en biblioteca siguen su flujo normal.
+- El resumen/tooltip del OCR se oculta, pero la comprobación de numeración, los avisos importantes y el lector OMR se conservan. No se modifican las fórmulas, la base de datos ni la configuración del compilador RC1.
+- Pruebas de HTTP nuevas: sesiones, cambio de destino durante la transferencia, caducidad y formatos; pruebas gráficas añadidas para enrutamiento y cancelación de sustitución. Validación Windows/iPhone pendiente. No se incluyen documentos privados.
+- Compilación manual: conservar el windows.yml del RC1.
+
+## Histórico (06B FIX01 prevalece)
+
 # Ágora v0.6.17 — BLOCK 06B — RC1
 
 - OCR local de numeración impresa con Tesseract, añadido como comprobación del lector OMR estable (FIX16). Extrae el área a la izquierda de cada fila, elimina marcos y agrupa caracteres. Contrasta anclas fiables de cada columna; solo remapea con evidencia consistente y rechaza numeraciones duplicadas o secuencias contradictorias repetidas. Si no hay OCR fiable conserva la numeración geométrica, identificándola como tal. No cambia detección de marcas, anulaciones, puntuación o reservas. No es todavía un lector universal ni reconoce cualquier formato, y el OCR de letras de opciones queda pendiente.

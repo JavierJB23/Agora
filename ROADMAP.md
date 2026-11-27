@@ -1,3 +1,6 @@
+# BLOCK 06B — FIX01 v0.6.18 (pendiente de validación)
+QR global con envío automático y cuenta atrás de 15 minutos. Destinos actualmente disponibles: Soluciones de ambos correctores, Respuestas del automático y Mis plantillas. Extender esta misma conexión al importar temas y modelos en bloques futuros. Ocultar anotación OCR sin retirar avisos de errores. RC1 validado por el usuario en lector y pendiente de ajustar QR; FIX16 permanece punto de restauración estable. No avanzar a 06C hasta validar FIX01.
+
 # BLOCK 06B — RC1 v0.6.17 (pendiente de validación)
 FIX16 es el punto estable anterior. RC1 incorpora OCR de números y prefijo R como complemento del OMR, con verificación por secuencia y QR reutilizable. Queda mejorar OCR en reservas pequeñas, letras de opciones, formatos desconocidos y páginas parciales; preservar el lector estable. 06C Mis modelos / generador PDF, 06D modelos externos, 06E reconocimiento combinado siguen pendientes.
 

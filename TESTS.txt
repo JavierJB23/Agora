@@ -1,3 +1,13 @@
+06B FIX01 (v0.6.18):
+- Iniciar QR desde Respuestas, enviar una foto; el PC comienza lectura sin pulsar Importar archivos.
+- Dejar Safari abierto; enviar reservas desde la misma sesión. El original no se pierde y no hay aviso de sustitución si no se solapa.
+- Enviar otra hoja para las mismas preguntas: cancelar la confirmación conserva imagen, respuestas y resultado anterior; confirmar sustituye la lectura.
+- Guardar simulacro, salir y abrir Mis plantillas: comprobar destino actualizado en móvil; enviar PDF sin escanear de nuevo y seguir revisión/nombre de plantilla habitual.
+- Abrir Soluciones en otro simulacro; primer archivo no pide sustitución; con solucionario existente sí. Cancelar no altera la clave.
+- En Inicio no se admite envío; cambiar de destino mientras se envía no reasigna archivos. Comprobar cuenta atrás, caducidad a 15 min desde creación y Desconectar móvil.
+- Verificar OCR sin resumen visible, conserva avisos de numeración y lectura original; repetir PC, QR y reservas.
+- Compilar manualmente con el workflow del RC1; confirmar nombre v0.6.18 BLOCK06B FIX01 y que se conservan los datos.
+
 06B RC1: comprobar compilación manual con windows.yml actualizado; EXE v0.6.17 BLOCK 06B; OCR en hojas conocidas y numeración real, reservas, casos de OCR no concluyente, archivo y recuperación. QR: enviar hoja ordinaria desde el móvil, seleccionar otras fotos en la misma página web, enviar segunda tanda sin escanear, comprobar contador, Importar archivos (N), conservación de todas las hojas; comprobar cancelación y caducidad. No se requiere instalar Python ni OCR en PC.
 
 FIX16 — Reservas reales R1–R9 con 0 y 9 configuradas; archivo y recuperación OK. Prueba sintética ReserveImportRegression OK; 59 pruebas no gráficas de importación, puntuación, biblioteca, almacenamiento y QR OK. GUI y compilación pendientes. Verificar barra durante lectura PC/QR, reserva sin clave consultable sin puntuar, reserva con clave puntúa solo si sustituye una anulada.
