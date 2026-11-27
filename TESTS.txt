@@ -1,3 +1,9 @@
+# BLOCK 06D — RC1
+
+Importar PDF rosa en blanco 120+9/3 opciones desde PC y QR; revisar la vista previa de ambas páginas, verificar numeración y guardar. Importar modelo de cuadrados, probar modelo con reservas en la misma página, comprobar duplicados, consulta, renombrado, descarga, eliminación y reapertura. Importar desde corrector y comprobar que no cambia el simulacro. Probar QR persistente desde Mis modelos, cancelar importación, comprobar generador y corrector anterior. La detección automática de modelos durante la corrección pertenece al 06E.
+
+---
+
 06C FIX01 (v0.6.20): eliminar una hoja ordinaria/reserva, cancelar borrado, conservar las otras imágenes y revisiones, guardar y reabrir, reimportar por QR aún conectado. Probar hojas mixtas y múltiples. Verificar tarjetas 2x2 con miniaturas, color real/nombre, consulta sin flechas, PDF con observaciones vacías y logo original. No se cambia el lector ni el flujo QR. Pruebas gráficas requieren Windows.
 
 Resultado 06C RC1 local: 113 pruebas correctas, 33 omitidas (Qt no disponible), 0 fallos. 5 pruebas del generador y 5 de MobileSession incluidas. JavaScript: 3 estados simulados correctos. QR impreso decodificado en ambas páginas.

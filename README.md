@@ -1,3 +1,9 @@
+# Ágora v0.6.21 — BLOCK 06D — RC1
+
+Base: v0.6.20 06C FIX01 validada por el usuario. Importar modelo en blanco desde Mis modelos o Corrector automático; PDF/JPG/PNG, PC, arrastre o QR global. Seleccionar número de preguntas, reservas y opciones impresas; revisar las casillas y los inicios de cada bloque, corregir o añadir bloques si hace falta, confirmar y guardar. Se conserva el original, la imagen de referencia y la geometría normalizada en external_models.sqlite3. Biblioteca con consulta, descarga, renombrado y eliminación. La lectura de hojas respondidas NO usa aún esta biblioteca: integración prevista en 06E. No se modifica el lector estable ni el flujo de compilación.
+
+---
+
 # Ágora v0.6.20 — BLOCK 06C — FIX01
 
 Base: 06C RC1 v0.6.19 validado por usuario. Pulido visual y eliminación selectiva de páginas. Se conservan el solucionario, las revisiones, imágenes y respuestas de las demás páginas. Si ordinarias y reservas comparten página, se elimina solo la categoría seleccionada y se conserva la foto para la restante. Si hay varias hojas de un tipo, se permite elegir una. Guardar progreso actualiza el simulacro. La sesión QR permanece abierta. Releer conserva el tipo de preguntas de la lectura seleccionada.

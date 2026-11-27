@@ -1,3 +1,9 @@
+# BLOCK 06D — RC1 v0.6.21 (pendiente de validación)
+
+06C FIX01 STABLE. Nuevo aprendizaje geométrico de modelos externos en blanco. La numeración se propone por orden de bloques y se confirma explícitamente. 06E: asociar y reconocer automáticamente modelos externos/propios; registro geométrico de foto respondida contra referencia, diferencia de tinta, QR impreso y fallback al lector universal. No incluir documentos personales en el repositorio.
+
+---
+
 # BLOCK 06C — FIX01 v0.6.20 (pendiente de validación)
 06C RC1 validado por usuario. Pulido de biblioteca, editor, PDF y eliminación selectiva de páginas. Siguiente 06D: importar modelos en blanco desde PC o QR, biblioteca y corrector; 06E integración de lectura de modelos propios/externos. Mantener compilación manual.
 
