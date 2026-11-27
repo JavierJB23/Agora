@@ -4,7 +4,7 @@ from dataclasses import asdict, replace
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QShortcut, QKeySequence
 from PySide6.QtWidgets import (QWidget,QLabel,QPushButton,QVBoxLayout,QHBoxLayout,QGridLayout,QFrame,
- QLineEdit,QCheckBox,QMessageBox,QInputDialog,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,QApplication,QDialog)
+ QLineEdit,QCheckBox,QMessageBox,QInputDialog,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,QApplication,QDialog,QMenu)
 from .grading import ExamConfig, evaluate, format_number
 from .controls import SafeComboBox, SafeSpinBox
 from .answer_import import extract_key
@@ -372,7 +372,16 @@ class ManualPage(QWidget):
         from .omr_ui import OpticalPage
         self.reader=OpticalPage(self.config,self.answers,self.optical_cache,self.optical_changed)
         self.body.addWidget(self.reader)
-        bar=QWidget(); actions=QHBoxLayout(bar); actions.setContentsMargins(0,0,0,0); actions.addWidget(btn('Reiniciar lectura',self.reader.reset)); actions.addStretch(); actions.addWidget(btn('Corregir examen',self.correct_optical,'primary')); self.body.addWidget(bar)
+        bar=QWidget(); actions=QHBoxLayout(bar); actions.setContentsMargins(0,4,0,0); actions.setSpacing(14); actions.addStretch()
+        from .omr_ui import compact_btn
+        manage=QVBoxLayout(); manage.setSpacing(5)
+        reset=compact_btn('Reiniciar lectura',self.reader.reset); reset.setFixedWidth(174); manage.addWidget(reset)
+        delete=compact_btn('Eliminar página',lambda:None); delete.setFixedWidth(174); menu=QMenu(delete)
+        menu.setStyleSheet('QMenu {background:#FFFFFF;border:1px solid #E8CEDB;padding:5px;border-radius:7px;} QMenu::item {padding:8px 16px;} QMenu::item:selected {background:#F4D6E3;color:#75405B;}')
+        for kind,name in enumerate(('Preguntas ordinarias','Reservas')):
+            item=menu.addAction(name); item.triggered.connect(lambda checked=False,k=kind:self.reader.delete_page(k))
+        delete.setMenu(menu); manage.addWidget(delete); actions.addLayout(manage)
+        correct=compact_btn('Corregir examen',self.correct_optical,True); correct.setFixedWidth(174); actions.addWidget(correct,0,ALIGN.AlignVCenter); actions.addStretch(); self.body.addWidget(bar)
     def correct_optical(self): self.open_stage(3)
     def optical_changed(self):
         self.result=None; self.persist()

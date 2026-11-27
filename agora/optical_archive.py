@@ -39,3 +39,25 @@ def unpack(row,slot):
         if m.number_check not in ('','OCR','sequence','geometry','unavailable'): raise ValueError('Verificación OCR guardada no válida.')
         seen.add(m.number)
     return original,normalized,marks
+
+
+def remove_page_kind(cache, answers, config, slot, reserve):
+    """Discard one category of marks on one page, keeping other pages and reviews.
+
+    Prepare the new archive before mutating cache or answers. In a mixed page,
+    preserve the source photo and the exact crops for the remaining category.
+    """
+    marks=cache['marks']; old=marks[slot]
+    removed=[m for m in old if m.number.startswith('R')==reserve]
+    kept=[m for m in old if m.number.startswith('R')!=reserve]
+    if not removed: return False
+    snapshot=record(cache['images'][slot],cache['aligned'][slot],kept) if kept else None
+    for m in removed:
+        n=int(m.number[1:] if reserve else m.number)
+        if 1<=n<=(config.reserves if reserve else config.questions):
+            answers[(config.questions if reserve else 0)+n-1]=''
+    if kept:
+        marks[slot]=kept; cache['records'][slot]=snapshot
+    else:
+        for name in ('images','aligned','marks','records'): cache[name].pop(slot,None)
+    return True

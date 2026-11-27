@@ -7,7 +7,7 @@ from .controls import SafeComboBox, SafeSpinBox
 from .import_ui import ImportDialog
 from .manual import confirm
 from . import omr
-from .optical_archive import record
+from .optical_archive import record,remove_page_kind
 A=Qt.AlignmentFlag
 
 def pix(im):
@@ -235,8 +235,8 @@ class OpticalPage(QWidget):
         for m in marks:
             i=self.target_index(m.number)
             if i is not None: self.answers[i]=self.proposal(m)
-    def choose_page(self):
-        reserve=self.page.currentIndex()==1
+    def choose_page(self,kind=None):
+        reserve=(self.page.currentIndex() if kind is None else kind)==1
         slots=[i for i,marks in self.marks.items() if any(m.number.startswith('R')==reserve for m in marks)]
         if not slots: return None
         if len(slots)==1: return slots[0]
@@ -311,7 +311,8 @@ class OpticalPage(QWidget):
             nonlocal candidate
             result=self.automatic_candidate(original)
             if result is not None:
-                candidate=result; message.setText('Vista previa automática. Aplica para conservarla.'); show()
+                kinds={m.number.startswith('R') for m in current[1]}
+                candidate=(result[0],[m for m in result[1] if m.number.startswith('R') in kinds]); message.setText('Vista previa automática. Aplica para conservarla.'); show()
         def retry():
             try: automatic()
             except ValueError as e: QMessageBox.warning(d,'Lectura no verificada',str(e))
@@ -385,6 +386,20 @@ class OpticalPage(QWidget):
                 break
     def update_count(self):
         n=self.answers.count(''); suffix=' · Sin imagen guardada' if not self.images and any(self.answers[i] for i in self.indices(self.page.currentIndex())) else ''; extra=sum(m.number.startswith('R') and self.target_index(m.number) is None for ms in self.marks.values() for m in ms); self.count.setText(f'{len(self.answers)-n}/{len(self.answers)} respuestas · {n} pendientes'+suffix+(f' · {extra} reservas sin solución (no puntúan)' if extra else ''))
+    def delete_page(self,kind):
+        """Remove only the selected kind on one physical page, preserving the other kind."""
+        slot=self.choose_page(kind)
+        if slot==-1: return
+        if slot is None:
+            QMessageBox.information(self,'Eliminar página','No hay una hoja cargada de este tipo.'); return
+        reserve=kind==1; title='reservas' if reserve else 'preguntas ordinarias'
+        msg=f'Se eliminarán las {title} de esta hoja y sus respuestas revisadas. Las demás hojas y respuestas se conservarán. ¿Continuar?'
+        if not confirm(self,'Eliminar página',msg): return
+        try:
+            remove_page_kind(dict(images=self.images,aligned=self.aligned,marks=self.marks,records=self.records),self.answers,self.config,slot,reserve)
+        except Exception as e:
+            QMessageBox.warning(self,'No se pudo eliminar la página',str(e)); return
+        self.page.setCurrentIndex(kind); self.changed(); self.refresh()
     def reset(self):
-        if any(self.answers) and not confirm(self,'Reiniciar lectura','Se descartarán las respuestas y revisiones actuales. ¿Continuar?'): return
+        if (any(self.answers) or self.marks) and not confirm(self,'Reiniciar lectura','Se descartarán las respuestas y revisiones actuales. ¿Continuar?'): return
         self.images.clear(); self.aligned.clear(); self.marks.clear(); self.records.clear(); self.answers[:]=['']*len(self.answers); self.changed(); self.refresh()

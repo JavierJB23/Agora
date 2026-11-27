@@ -1,4 +1,4 @@
 """Ágora: asistente de estudio local."""
-VERSION = "0.6.19"
+VERSION = "0.6.20"
 BLOCK = "06C"
-BUILD_LABEL = "RC1"
+BUILD_LABEL = "FIX01"

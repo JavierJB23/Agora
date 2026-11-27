@@ -3,7 +3,7 @@ from dataclasses import dataclass, asdict, replace
 from pathlib import Path
 from io import BytesIO
 from datetime import datetime
-import json, re, sqlite3, uuid, hashlib, math
+import json, re, sqlite3, uuid, hashlib, math, colorsys
 from contextlib import closing
 from reportlab.pdfgen import canvas
 from reportlab.lib.colors import HexColor, Color, black, white
@@ -39,6 +39,34 @@ class Model:
     def letters(self): return 'ABCDE'[:self.options]
 
 PRESETS=(Model('Ágora Clásico',separate=True),Model('Ágora Compacto',50,5,4,2,'square','#333333'),Model('Ágora Estándar',100,5,4,3,'oval','#315C83'),Model('Ágora Repaso',20,0,3,1,'circle','#333333'))
+
+# Exact names for the built-in colours, and descriptive names for arbitrary RGB.
+COLOR_NAMES={'#A55379':'Rosa Ágora','#333333':'Gris carbón','#315C83':'Azul acero',
+             '#7034A5':'Morado amatista','#FFFFFF':'Blanco puro','#000000':'Negro',
+             '#F8F5EC':'Blanco roto','#EDE4D3':'Blanco hueso','#F4A6A6':'Rojo pastel',
+             '#F28C45':'Naranja atardecer'}
+def color_name(value):
+    value=value.upper()
+    if value in COLOR_NAMES: return COLOR_NAMES[value]
+    r,g,b=(int(value[i:i+2],16)/255 for i in (1,3,5)); h,s,v=colorsys.rgb_to_hsv(r,g,b); h*=360
+    if v<.13: return 'Negro suave'
+    if s<.10:
+        return 'Blanco roto' if v>.93 else 'Gris perla' if v>.72 else 'Gris medio' if v>.40 else 'Gris oscuro'
+    if v>.87 and s<.22: return 'Blanco hueso' if 25<=h<75 else 'Blanco cálido' if h<25 else 'Blanco frío'
+    hue=next(n for limit,n in [(15,'Rojo'),(43,'Naranja'),(68,'Amarillo'),(155,'Verde'),(195,'Turquesa'),(255,'Azul'),(290,'Morado'),(330,'Rosa'),(361,'Rojo')] if h<limit)
+    if 15<=h<55 and v<.65: return 'Marrón oscuro' if v<.38 else 'Marrón tierra'
+    shade='oscuro' if v<.46 else 'pastel' if s<.48 and v>.73 else 'suave' if s<.48 else 'intenso' if s>.76 else 'medio'
+    if hue in ('Rosa','Turquesa','Naranja'): shade={'oscuro':'oscuro','intenso':'intenso','medio':'medio'}.get(shade,shade)
+    return f'{hue} {shade}'
+
+def draw_logo(c,x,y,size,ink):
+    # The exact linework of assets/logo.svg, without its pink rounded background.
+    c.saveState(); c.translate(x,y+size); c.scale(size/100,-size/100)
+    c.setStrokeColor(ink); c.setLineWidth(4); c.setLineCap(1); c.setLineJoin(1)
+    path=c.beginPath(); path.moveTo(19,35); path.lineTo(50,18); path.lineTo(81,35); path.close()
+    for px in (26,42,58,74): path.moveTo(px,43); path.lineTo(px,69)
+    path.moveTo(20,77); path.lineTo(80,77); path.moveTo(15,84); path.lineTo(85,84)
+    c.drawPath(path,stroke=1,fill=0); c.restoreState()
 
 def layout(m):
     """Exact printable geometry in PDF points; each page includes independent IDs."""
@@ -85,10 +113,8 @@ def pdf_bytes(m):
             for y in (ma-5*mm,h-ma+1*mm): c.rect(x,y,4*mm,4*mm,stroke=0,fill=1)
         c.setFillColor(ink); tx=ma
         if m.logo:
-            c.setStrokeColor(ink); c.setLineWidth(1); x=ma; y=h-ma-9*mm
-            path=c.beginPath(); path.moveTo(x,y+7*mm); path.lineTo(x+7*mm,y+11*mm); path.lineTo(x+14*mm,y+7*mm); path.close(); c.drawPath(path)
-            for i in (2,5,9,12): c.line(x+i*mm,y+1*mm,x+i*mm,y+6*mm)
-            c.line(x,y,x+14*mm,y); c.setFont('Times-Bold',19); c.drawString(x+17*mm,y+1*mm,'ÁGORA'); tx=ma+49*mm
+            draw_logo(c,ma-2.5*mm,h-ma-13*mm,19*mm,ink)
+            c.setFont('Times-Bold',19); c.drawString(ma+16*mm,h-ma-7*mm,'ÁGORA'); tx=ma+49*mm
         title=m.title+(' · RESERVAS' if all(r['number'].startswith('R') for b in p['blocks'] for r in b['rows']) else '')
         text_fit(c,title,tx,h-ma-7*mm,w-ma-tx, size=14)
         if m.header:
@@ -110,7 +136,6 @@ def pdf_bytes(m):
                     else: c.ellipse(cx-cell/2,y-cell*.36,cx+cell/2,y+cell*.36,stroke=1,fill=0)
         if m.notes:
             c.setFillColor(ink); c.setFont('Helvetica-Bold',8); c.drawString(ma,ma+39*mm,'OBSERVACIONES'); c.setStrokeColor(ink); c.setLineWidth(.5); c.rect(ma,ma+19*mm,w-2*ma,18*mm)
-            for i in (1,2): c.line(ma,ma+(19+6*i)*mm,w-ma,ma+(13+6*i)*mm)
         # Compact machine-readable ID; future recognition uses exact geometry.
         qr=qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M,box_size=1,border=4); qr.add_data(f'AGORA1:{identifier(m)}:{page_index}:{len(pages)}'); qr.make(fit=True); matrix=qr.get_matrix(); scale=19*mm/len(matrix); qx=w-ma-19*mm; qy=ma-2*mm
         # QR sits in footer; reserve its full height in layout when necessary.
