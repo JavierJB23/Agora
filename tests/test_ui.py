@@ -570,3 +570,38 @@ class UITests(unittest.TestCase):
             dlg=ModelEditor(w,PRESETS[0]); dlg.show(); self.app.processEvents(); self.assertTrue(dlg.data); self.assertEqual(len(dlg.pages),2)
             dlg.change_page(1); self.assertEqual(dlg.counter.text(),'2 / 2'); dlg.fields['questions'].setValue(40); dlg.fields['reserves'].setValue(0); dlg.refresh(); self.assertEqual(len(dlg.pages),1)
             dlg.reject(); dlg.deleteLater(); w.close(); w.deleteLater(); self.app.processEvents()
+
+    def test_delete_one_optical_page_and_preserve_other(self):
+        from unittest.mock import patch
+        from agora.omr_ui import OpticalPage
+        from agora.grading import ExamConfig
+        from agora.omr import Mark, WIDTH, HEIGHT
+        from agora.optical_archive import unpack
+        import numpy as np
+        im=np.full((HEIGHT,WIDTH,3),255,np.uint8)
+        def mark(n): return Mark(n,'A','Azul detectado',(100,0,0),(0,0,0),(10,10,70,30))
+        for mixed in (False,True):
+            answers=['']*4; cache={}; changed=[]; page=OpticalPage(ExamConfig(questions=2,reserves=2),answers,cache,lambda:changed.append(True))
+            ordinary=[mark('1'),mark('2')]; reserves=[mark('R1'),mark('R2')]
+            page.install(0,im,im,ordinary+reserves if mixed else ordinary)
+            if not mixed: page.install(1,im,im,reserves)
+            answers[:]=['B','X','C','A']; before=dict(page.records)
+            with patch('agora.omr_ui.confirm',return_value=False): page.delete_page(1)
+            self.assertEqual(page.records,before); self.assertEqual(answers,['B','X','C','A']); self.assertFalse(changed)
+            with patch('agora.omr_ui.confirm',return_value=True): page.delete_page(1)
+            self.assertEqual(answers,['B','X','','']); self.assertEqual(list(page.marks),[0]); self.assertEqual([m.number for m in unpack(page.records[0],0)[2]],['1','2']); self.assertEqual(len(changed),1)
+            page.install(1,im,im,reserves); answers[2:]=['B','C']
+            with patch('agora.omr_ui.confirm',return_value=True): page.delete_page(0)
+            self.assertEqual(answers,['','','B','C']); self.assertEqual(list(page.images),[1]); self.assertEqual(list(page.aligned),[1]); self.assertEqual(list(page.records),[1]); page.deleteLater()
+        self.app.processEvents()
+
+    def test_model_consult_is_read_only_and_named_color(self):
+        from agora.models import PRESETS
+        from agora.models_ui import ModelEditor
+        from PySide6.QtWidgets import QLineEdit,QSpinBox,QComboBox
+        dlg=ModelEditor(None,PRESETS[0],read_only=True)
+        self.assertTrue(dlg.data); self.assertEqual(dlg.model(),PRESETS[0]); self.assertFalse(dlg.findChildren(QSpinBox)); self.assertFalse(dlg.findChildren(QComboBox))
+        for k in ('name','title','questions','reserves','options','columns','size','margin','shape','orientation'):
+            self.assertIsInstance(dlg.fields[k],QLineEdit); self.assertTrue(dlg.fields[k].isReadOnly())
+        for k in ('header','logo','stripe','notes','separate'): self.assertFalse(dlg.fields[k].isEnabled())
+        self.assertEqual(dlg.color_button.text(),'Rosa Ágora'); self.assertIn('#A55379',dlg.color_button.styleSheet()); self.assertTrue(dlg.export_button.isEnabled()); dlg.deleteLater(); self.app.processEvents()

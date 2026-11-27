@@ -33,3 +33,19 @@ class ModelTests(unittest.TestCase):
         doc=pdfium.PdfDocument(pdf_bytes(PRESETS[0])); page=doc[0]; bitmap=page.render(scale=1)
         try: self.assertGreater(bitmap.width,500); self.assertGreater(bitmap.height,800)
         finally: bitmap.close(); page.close(); doc.close()
+    def test_color_names_and_empty_observations(self):
+        from agora.models import color_name
+        self.assertEqual(color_name('#a55379'),'Rosa Ágora')
+        self.assertEqual(color_name('#7034A5'),'Morado amatista')
+        self.assertEqual(color_name('#F8F5EC'),'Blanco roto')
+        self.assertNotIn('#',color_name('#123456'))
+        # The inside of the notes rectangle is white: no diagonal or ruled lines.
+        import pypdfium2 as pdfium
+        from reportlab.lib.units import mm
+        m=replace(PRESETS[0],notes=True); geometry=layout(m)[0]
+        doc=pdfium.PdfDocument(pdf_bytes(m)); page=doc[0]; bitmap=page.render(scale=2)
+        try:
+            im=bitmap.to_pil().convert('RGB'); ma=geometry['margin']; h=geometry['height']; w=geometry['width']
+            crop=im.crop((int((ma+mm)*2),int((h-ma-36*mm)*2),int((w-ma-mm)*2),int((h-ma-20*mm)*2)))
+            self.assertEqual(crop.getextrema(),((255,255),(255,255),(255,255)))
+        finally: bitmap.close(); page.close(); doc.close()
