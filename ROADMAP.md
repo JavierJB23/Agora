@@ -1,3 +1,6 @@
+# BLOCK 06C — FIX01 v0.6.20 (pendiente de validación)
+06C RC1 validado por usuario. Pulido de biblioteca, editor, PDF y eliminación selectiva de páginas. Siguiente 06D: importar modelos en blanco desde PC o QR, biblioteca y corrector; 06E integración de lectura de modelos propios/externos. Mantener compilación manual.
+
 # BLOCK 06C — RC1 v0.6.19 (pendiente de validación)
 06B FIX01 v0.6.18 validado por usuario. Nueva pantalla Mis modelos, generador, biblioteca y PDF. Ajuste visual y cierre QR. No avanzar hasta validar. Siguiente: 06D importar modelo en blanco (PC/QR), detectar geometría, conservar original y registro opcional, acceso desde corrector y biblioteca. Después 06E lectura específica de modelos propios/externos y pruebas generalistas; continuar 07, 08, 09–13. OCR de opciones y formatos desconocidos sigue pendiente. Mantener compilación manual.
 

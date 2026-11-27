@@ -1,3 +1,12 @@
+# Ágora v0.6.20 — BLOCK 06C — FIX01
+
+Base: 06C RC1 v0.6.19 validado por usuario. Pulido visual y eliminación selectiva de páginas. Se conservan el solucionario, las revisiones, imágenes y respuestas de las demás páginas. Si ordinarias y reservas comparten página, se elimina solo la categoría seleccionada y se conserva la foto para la restante. Si hay varias hojas de un tipo, se permite elegir una. Guardar progreso actualiza el simulacro. La sesión QR permanece abierta. Releer conserva el tipo de preguntas de la lectura seleccionada.
+- Mis modelos: miniaturas del PDF real, cuadrícula de dos columnas y botones compactos. Consulta con campos de solo lectura sin flechas, casillas deshabilitadas y color con nombre descriptivo y muestra del RGB elegido.
+- PDF: observaciones sin líneas interiores, símbolo vectorial del logotipo original sin fondo, en el color de impresión legible. Sin cambios de geometría de casillas ni identificador. Los colores muy claros conservan la protección de contraste del RC1.
+- No se modifica el motor OMR/OCR, la puntuación, la sesión QR, ni el esquema de almacenamiento. Compilar manualmente con el windows.yml existente. Próximo 06D después de validar este FIX.
+
+## Histórico (06C FIX01 prevalece)
+
 # Ágora v0.6.19 — BLOCK 06C — RC1
 
 Base: 06B FIX01 validado por el usuario. Copia estable: conservar ZIP v0.6.18 y copia de datos.
