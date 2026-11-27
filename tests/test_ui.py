@@ -605,3 +605,29 @@ class UITests(unittest.TestCase):
             self.assertIsInstance(dlg.fields[k],QLineEdit); self.assertTrue(dlg.fields[k].isReadOnly())
         for k in ('header','logo','stripe','notes','separate'): self.assertFalse(dlg.fields[k].isEnabled())
         self.assertEqual(dlg.color_button.text(),'Rosa Ágora'); self.assertIn('#A55379',dlg.color_button.styleSheet()); self.assertTrue(dlg.export_button.isEnabled()); dlg.deleteLater(); self.app.processEvents()
+
+    def test_external_library_review_and_mobile_destination(self):
+        from agora.external_models import ExternalLibrary,learn_items,propose_starts
+        from agora.external_ui import ReviewDialog
+        from agora.models import PRESETS,pdf_bytes
+        from PySide6.QtCore import Qt
+        m=PRESETS[-1]; items=[('blank.pdf',pdf_bytes(m))]; pages=learn_items(items,m.options); propose_starts(pages,m.questions)
+        with tempfile.TemporaryDirectory() as d:
+            w=MainWindow(Storage(d)); w.show(); w.go('library'); w.select_library_tab(2); self.app.processEvents()
+            dest=w.mobile_connection.destination(); self.assertEqual(dest[0],('library',2)); self.assertIn('.png',dest[2]); self.assertEqual(dest[3],20)
+            lib=ExternalLibrary(d); dlg=ReviewDialog(w,'Modelo externo',pages,m.questions,m.reserves,m.options,items,lib); dlg.show(); self.app.processEvents()
+            self.assertEqual(dlg.table.rowCount(),1); self.assertEqual(dlg.table.item(0,1).text(),'1'); dlg.checked.setChecked(True); dlg.save(); self.assertIsNotNone(dlg.saved_id)
+            w.models_page.refresh(); self.assertEqual(w.models_page.external.count(),1); self.assertEqual(w.models_page.presets.count(),4)
+            view=ReviewDialog(w,'Modelo externo',pages,m.questions,m.reserves,m.options,[],lib,True); self.assertFalse(bool(view.table.item(0,1).flags() & Qt.ItemFlag.ItemIsEditable)); view.reject(); dlg.deleteLater(); view.deleteLater(); w.close(); w.deleteLater(); self.app.processEvents()
+
+    def test_import_model_button_does_not_change_exam(self):
+        from unittest.mock import patch
+        from PySide6.QtWidgets import QPushButton
+        with tempfile.TemporaryDirectory() as d:
+            w=MainWindow(Storage(d)); w.show(); w.go('automatic'); p=w.automatic
+            p.install_key(ImportedKey(tuple('ABC'),()),'prueba.pdf',3); p.move_stage(2); self.app.processEvents()
+            before=list(p.answers); key=list(p.key); target=next(b for b in p.content.findChildren(QPushButton) if b.text()=='Importar modelo en blanco')
+            # The callback is bound when the stage is rendered; re-render after patching.
+            with patch('agora.external_ui.import_model',return_value=None) as imp:
+                p.render(); self.app.processEvents(); target=next(b for b in p.content.findChildren(QPushButton) if b.text()=='Importar modelo en blanco' and b.isVisible()); target.click(); imp.assert_called_once_with(p)
+            self.assertEqual(p.answers,before); self.assertEqual(p.key,key); self.assertEqual(p.stage,2); w.close(); w.deleteLater(); self.app.processEvents()
