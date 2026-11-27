@@ -2,7 +2,7 @@ import tempfile,unittest
 from dataclasses import replace
 import numpy as np
 import cv2 as cv
-from agora.external_models import (ExternalLibrary,learn_items,metadata,propose_starts,manual_block,Page,Block,detect_blocks,preview)
+from agora.external_models import (ExternalLibrary,learn_items,metadata,propose_starts,manual_block,Page,Block,detect_blocks,preview,suggest_numbering,detected_options,reorder_pages,page_kind,pdf_labels)
 from agora.models import PRESETS,pdf_bytes
 
 class ExternalTests(unittest.TestCase):
@@ -48,3 +48,20 @@ class ExternalTests(unittest.TestCase):
     def test_preview_nonmutating(self):
         im=np.full((500,500,3),255,np.uint8); a=manual_block([(40,50),(120,50)],1,3,'1'); p=Page(im,[a],'test')
         self.assertFalse(np.array_equal(preview(p),im)); self.assertTrue(np.all(im==255))
+
+    def test_hints_not_authoritative(self):
+        m=PRESETS[0]; items=[('blank.pdf',pdf_bytes(m))]
+        for q,r,o in [(120,0,3),(120,9,3),(10,1,4)]:
+            pages=learn_items(items,o); actual=suggest_numbering(pages,q,r)
+            self.assertEqual(actual,(120,9)); self.assertEqual(detected_options(pages,o),3)
+            metadata(pages,*actual,3)
+            self.assertEqual([b.start for b in pages[1].blocks],['R1','R4','R7'])
+    def test_mixed_and_reversed_pages(self):
+        m=PRESETS[1]; p=learn_items([('mixed.pdf',pdf_bytes(m))],4); self.assertEqual(suggest_numbering(p,120,0),(50,5)); self.assertEqual(page_kind(p[0]),'mixed'); metadata(p,50,5,4)
+        m=PRESETS[0]; p=learn_items([('blank.pdf',pdf_bytes(m))],3); p.reverse(); self.assertEqual(suggest_numbering(p,120,0),(120,9)); self.assertEqual(page_kind(p[0]),'reserve'); metadata(p,120,9,3)
+        p=reorder_pages(p,[1,0],['ordinary','reserve']); self.assertEqual([page_kind(x) for x in p],['ordinary','reserve']); metadata(p,120,9,3)
+    def test_pdf_labels_ignore_footer_and_headers(self):
+        self.assertEqual(pdf_labels('RESERVAS\nR-1 A B C\nR-2 A B C\nPágina 2 de 2'),('R1','R2'))
+    def test_mismatch_printed_rows_rejected(self):
+        im=np.full((500,500,3),255,np.uint8); b=manual_block([(40,50),(120,50),(120,150),(40,150)],5,3,'1'); p=Page(im,[b],'test',('1','2','3','4','5','6'))
+        with self.assertRaises(ValueError): metadata([p],5,0,3)

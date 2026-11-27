@@ -616,9 +616,12 @@ class UITests(unittest.TestCase):
             w=MainWindow(Storage(d)); w.show(); w.go('library'); w.select_library_tab(2); self.app.processEvents()
             dest=w.mobile_connection.destination(); self.assertEqual(dest[0],('library',2)); self.assertIn('.png',dest[2]); self.assertEqual(dest[3],20)
             lib=ExternalLibrary(d); dlg=ReviewDialog(w,'Modelo externo',pages,m.questions,m.reserves,m.options,items,lib); dlg.show(); self.app.processEvents()
-            self.assertEqual(dlg.table.rowCount(),1); self.assertEqual(dlg.table.item(0,1).text(),'1'); dlg.checked.setChecked(True); dlg.save(); self.assertIsNotNone(dlg.saved_id)
+            self.assertEqual(dlg.table.rowCount(),1); self.assertEqual(dlg.table.item(0,3).text(),'1'); dlg.checked.setChecked(True); dlg.save(); self.assertIsNotNone(dlg.saved_id)
             w.models_page.refresh(); self.assertEqual(w.models_page.external.count(),1); self.assertEqual(w.models_page.presets.count(),4)
-            view=ReviewDialog(w,'Modelo externo',pages,m.questions,m.reserves,m.options,[],lib,True); self.assertFalse(bool(view.table.item(0,1).flags() & Qt.ItemFlag.ItemIsEditable)); view.reject(); dlg.deleteLater(); view.deleteLater(); w.close(); w.deleteLater(); self.app.processEvents()
+            from agora.external_ui import get_library
+            self.assertEqual(get_library(w.models_page).entries()[0][0],dlg.saved_id)
+            section=w.models_page.external_section; self.assertFalse(section.expanded); section.header.click(); section.anim.setCurrentTime(section.anim.duration()); self.assertTrue(section.expanded); self.assertGreater(section.viewport.height(),0); section.header.click(); section.anim.setCurrentTime(section.anim.duration()); self.assertFalse(section.expanded); self.assertEqual(section.viewport.height(),0)
+            view=ReviewDialog(w,'Modelo externo',pages,m.questions,m.reserves,m.options,[],lib,True); self.assertFalse(bool(view.table.item(0,3).flags() & Qt.ItemFlag.ItemIsEditable)); view.reject(); dlg.deleteLater(); view.deleteLater(); w.close(); w.deleteLater(); self.app.processEvents()
 
     def test_import_model_button_does_not_change_exam(self):
         from unittest.mock import patch
