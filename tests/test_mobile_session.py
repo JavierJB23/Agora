@@ -24,7 +24,7 @@ class MobileSessionTests(unittest.TestCase):
         self.assertEqual(self.s.items.get(timeout=1),('two',[('plantilla.pdf',b'pdf')]))
         self.assertEqual(self.s.deadline,deadline); self.assertGreater(self.status()['remaining'],0)
         with urlopen(self.url,timeout=3) as r:
-            page=r.read().decode(); self.assertIn('Caduca en',page); self.assertIn('Puedes enviar más',page); self.assertIn('X-Destination',page)
+            page=r.read().decode(); self.assertIn('Tiempo agotado',page); self.assertNotIn('Puedes enviar más',page); self.assertIn('X-Destination',page)
     def test_wrong_screen_and_wrong_format(self):
         self.assertIsNone(self.status()['token'])
         with self.assertRaises(HTTPError) as e: self.send('old',[('a.pdf',b'a')])
@@ -39,7 +39,7 @@ class MobileSessionTests(unittest.TestCase):
         self.assertEqual(e.exception.code,409)
     def test_expiry(self):
         self.s.set_route(('one','Respuestas',('.jpg',),20)); self.s.deadline=time.monotonic()-1
-        self.assertIsNone(self.status()['token'])
+        self.assertIsNone(self.status()['token']); self.assertEqual(self.status()['state'],'expired')
         with self.assertRaises(HTTPError) as e: self.send('one',[('a.jpg',b'a')])
         self.assertEqual(e.exception.code,410)
     def test_changed_destination_while_uploading(self):
@@ -54,3 +54,9 @@ class MobileSessionTests(unittest.TestCase):
             self.s.set_route(('two','Mis plantillas',('.pdf',),20)); c.send(b'bcd')
             r=c.getresponse(); self.assertEqual(r.status,409); r.read(); self.assertTrue(self.s.items.empty())
         finally: c.close()
+
+    def test_disconnect_reports_terminal_state_and_blocks_upload(self):
+        self.s.set_route(('one','Respuestas',('.jpg',),20)); self.s.retire()
+        v=self.status(); self.assertEqual(v['state'],'disconnected'); self.assertEqual(v['remaining'],0); self.assertIsNone(v['token'])
+        with self.assertRaises(HTTPError) as e: self.send('one',[('a.jpg',b'a')])
+        self.assertEqual(e.exception.code,410); self.assertTrue(self.s.items.empty())

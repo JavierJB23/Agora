@@ -559,3 +559,14 @@ class UITests(unittest.TestCase):
                 page.import_items([('reserve.png',b'abc')]); ask.assert_not_called()
             self.assertEqual(page.answers[120],'C'); self.assertEqual(page.answers[0],'A')
         finally: page.deleteLater(); self.app.processEvents()
+
+    def test_models_library_and_editor(self):
+        from agora.models import PRESETS,ModelLibrary
+        from agora.models_ui import ModelEditor
+        with tempfile.TemporaryDirectory() as d:
+            w=MainWindow(Storage(d)); w.show(); w.go('library'); w.library_buttons[2].click(); self.app.processEvents()
+            self.assertEqual(w.library_tabs.currentIndex(),2); self.assertEqual(w.models_page.presets.count(),4)
+            lib=ModelLibrary(d); mid=lib.save(PRESETS[0]); w.models_page.refresh(); self.assertEqual(w.models_page.custom.count(),1)
+            dlg=ModelEditor(w,PRESETS[0]); dlg.show(); self.app.processEvents(); self.assertTrue(dlg.data); self.assertEqual(len(dlg.pages),2)
+            dlg.change_page(1); self.assertEqual(dlg.counter.text(),'2 / 2'); dlg.fields['questions'].setValue(40); dlg.fields['reserves'].setValue(0); dlg.refresh(); self.assertEqual(len(dlg.pages),1)
+            dlg.reject(); dlg.deleteLater(); w.close(); w.deleteLater(); self.app.processEvents()
