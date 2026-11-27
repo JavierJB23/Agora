@@ -208,8 +208,8 @@ class MainWindow(QMainWindow):
         root=QWidget(); rl=vertical(root,spacing=16); self.library_stack.addWidget(root)
         back=button('Volver al inicio','home'); back.clicked.connect(lambda:self.go('home')); rl.addWidget(back,0,Qt.AlignmentFlag.AlignLeft)
         rl.addWidget(label('Mi temario','heading')); tiles=QHBoxLayout(); self.library_buttons=[]
-        for i,(name,symbol) in enumerate((('Mis temas','books'),('Mis plantillas','template'))):
-            b=CenteredTile(name,icon(symbol)); b.setFixedSize(220,220); b.clicked.connect(lambda checked=False,j=i:self.select_library_tab(j)); tiles.addWidget(b); self.library_buttons.append(b)
+        for i,(name,symbol) in enumerate((('Mis temas','books'),('Mis plantillas','template'),('Mis modelos','model'))):
+            b=CenteredTile(name,icon(symbol)); b.setMinimumSize(125,180); b.setMaximumSize(220,220); b.setSizePolicy(QSizePolicy.Policy.Expanding,QSizePolicy.Policy.Fixed); b.setFixedHeight(200); b.clicked.connect(lambda checked=False,j=i:self.select_library_tab(j)); tiles.addWidget(b,1); self.library_buttons.append(b)
         tiles.addStretch(); rl.addLayout(tiles); rl.addStretch()
         tabs=QTabWidget(); tabs.setObjectName('libraryTabs'); tabs.tabBar().hide(); self.library_tabs=tabs; tabs.currentChanged.connect(self.mobile_connection.invalidate); self.library_stack.addWidget(tabs)
         themes=QWidget(); tl=vertical(themes,spacing=16); back=button('Volver a Mi temario','book'); back.clicked.connect(lambda:self.library_stack.setCurrentIndex(0)); tl.addWidget(back,0,Qt.AlignmentFlag.AlignLeft); tl.addWidget(label('Mis temas','heading')); tl.addWidget(label('Temario de estudio','tileTitle')); tl.addStretch(); tabs.addTab(themes,'Mis temas')
@@ -221,10 +221,13 @@ class MainWindow(QMainWindow):
         toolbar.addWidget(self.library_sort); pl.addLayout(toolbar)
         items=QWidget(); self.library_layout=vertical(items,spacing=10); pl.addWidget(items); al.addStretch()
         self.library_sort.currentIndexChanged.connect(lambda *_:self.refresh_library())
+        from .models_ui import ModelsPage
+        self.models_page=ModelsPage(self); tabs.addTab(self.models_page,'Mis modelos')
 
     def select_library_tab(self,index):
         self.library_tabs.setCurrentIndex(index); self.library_stack.setCurrentIndex(1)
         if index==1: self.refresh_library()
+        if index==2: self.models_page.refresh()
 
     def import_library(self):
         from .import_ui import ImportDialog

@@ -12,13 +12,14 @@ class MobileConnection(QObject):
         self.route_key=None; self.route_token=None
         if self.session: self.session.set_route(None)
     def start(self,dialog):
-        if self.session and self.session.remaining()<=0: self.close()
+        if self.session and self.session.remaining()<=0: self.close(expired=True)
         if not self.session: self.session=MobileSession()
         self.dialog=dialog; self.invalidate(); self.update_route(); return self.session
     def detach(self,dialog):
         if self.dialog is dialog: self.dialog=None; self.invalidate()
-    def close(self):
-        if self.session: self.session.close(); self.session=None
+    def close(self,checked=False,expired=False):
+        if self.session:
+            self.session.retire("expired" if expired else "disconnected"); self.session=None
         self.invalidate(); self.window.mobile_status.hide(); self.window.mobile_stop.hide()
     def destination(self):
         w=self.window
@@ -58,7 +59,7 @@ class MobileConnection(QObject):
         try:
             left=math.ceil(self.session.remaining()); self.window.mobile_status.show(); self.window.mobile_stop.show(); self.window.mobile_status.setText(f'Móvil conectado · {left//60}:{left%60:02d}')
             if not left:
-                d=self.dialog; self.close()
+                d=self.dialog; self.close(expired=True)
                 if d is not None: d.mobile_expired()
                 return
             d=self.update_route()

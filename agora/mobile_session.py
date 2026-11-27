@@ -7,21 +7,25 @@ from .transfer import PAGE
 from .answer_import import MAX_BYTES
 
 MOBILE_JS = r'''const f=document.querySelector('#file'),b=document.querySelector('#send'),s=document.querySelector('#status'),p=document.querySelector('#progress'),dest=document.querySelector('#destination'),clock=document.querySelector('#clock');
-let target=null,selectedFor=null,sending=false,expires=0,limit=20,sequence=0;
+let target=null,selectedFor=null,sending=false,expires=0,limit=20,sequence=0,ended=false,offline=false,polling=false;
+const controls=document.querySelector('#controls'),terminal=document.querySelector('#terminal');
 f.addEventListener('change',()=>{selectedFor=target;});
-function render(){let left=Math.max(0,Math.ceil((expires-Date.now())/1000));clock.textContent=expires?'Caduca en '+Math.floor(left/60)+':'+String(left%60).padStart(2,'0')+' · 15 min de conexión':'Conectando…';b.disabled=sending||!target||!left;f.disabled=sending||!target||!left;}
-async function status(){const seq=++sequence;try{const r=await fetch(location.pathname+'status',{cache:'no-store'});if(!r.ok)throw Error();const v=await r.json();if(seq!==sequence)return;expires=Date.now()+v.remaining*1000;target=v.token;limit=v.max_files;dest.textContent=v.label;f.accept=v.extensions.join(',');f.multiple=limit>1;render();}catch(e){if(seq!==sequence)return;target=null;dest.textContent='Conexión no disponible. Abre Ágora o escanea un nuevo QR.';render();}}
-b.onclick=()=>{const files=Array.from(f.files),token=target;if(!token||sending)return;if(files.length&&selectedFor!==token){f.value='';document.querySelector('#filename').textContent='Ningún archivo seleccionado';s.textContent='El destino ha cambiado. Selecciona de nuevo los archivos.';return}if(!files.length||files.length>limit){s.textContent='Selecciona entre 1 y '+limit+' archivo(s).';return}if(files.reduce((n,v)=>n+v.size,0)>104857600||files.some(v=>!v.size)){s.textContent='Máximo 100 MB por envío.';return}sending=true;render();p.value=0;s.textContent='Enviando…';const x=new XMLHttpRequest();x.open('POST',location.pathname+'batch');x.setRequestHeader('X-Destination',token);x.setRequestHeader('X-Files',encodeURIComponent(JSON.stringify(files.map(v=>[v.name,v.size]))));x.upload.onprogress=e=>{if(e.lengthComputable)p.value=e.loaded/e.total*100};x.onload=()=>{sending=false;s.textContent=x.status===200?'Archivos recibidos. Consulta Ágora para ver el resultado o confirmar una sustitución. Puedes enviar más.':(x.responseText||'No se pudo enviar.');if(x.status===200){f.value='';document.querySelector('#filename').textContent='Ningún archivo seleccionado';p.value=100}status();render()};x.onerror=()=>{sending=false;s.textContent='Conexión interrumpida. Comprueba el Wi-Fi.';status();render()};x.send(new Blob(files));};
+function finish(message){ended=true;target=null;controls.hidden=true;terminal.textContent=message;terminal.hidden=false;}
+function render(){if(ended)return;let left=Math.max(0,Math.ceil((expires-Date.now())/1000));if(expires&&!left){finish('Tiempo agotado');return}clock.textContent=expires?Math.floor(left/60)+':'+String(left%60).padStart(2,'0'):'—:—';b.disabled=sending||offline||!target||!left;f.disabled=sending||offline||!target||!left;}
+async function status(){if(ended||polling)return;polling=true;const seq=++sequence;const controller=new AbortController();const timeout=setTimeout(()=>controller.abort(),3500);try{const r=await fetch(location.pathname+'status',{cache:'no-store',signal:controller.signal});if(!r.ok)throw Error();const v=await r.json();if(ended||seq!==sequence)return;if(v.state==='disconnected'){finish('Móvil desconectado');return}if(v.state==='expired'){finish('Tiempo agotado');return}offline=false;expires=Date.now()+v.remaining*1000;target=v.token;limit=v.max_files;dest.textContent=v.label;f.accept=v.extensions.join(',');f.multiple=limit>1;render();}catch(e){if(ended||seq!==sequence)return;offline=true;target=null;dest.textContent='Conexión interrumpida';render();}finally{clearTimeout(timeout);polling=false;}}
+b.onclick=()=>{const files=Array.from(f.files),token=target;if(ended||!token||sending)return;if(files.length&&selectedFor!==token){f.value='';document.querySelector('#filename').textContent='Ningún archivo seleccionado';s.textContent='El destino ha cambiado. Selecciona de nuevo los archivos.';return}if(!files.length||files.length>limit){s.textContent='Selecciona entre 1 y '+limit+' archivo(s).';return}if(files.reduce((n,v)=>n+v.size,0)>104857600||files.some(v=>!v.size)){s.textContent='Máximo 100 MB por envío.';return}sending=true;render();p.value=0;s.textContent='Enviando…';const x=new XMLHttpRequest();x.open('POST',location.pathname+'batch');x.setRequestHeader('X-Destination',token);x.setRequestHeader('X-Files',encodeURIComponent(JSON.stringify(files.map(v=>[v.name,v.size]))));x.upload.onprogress=e=>{if(e.lengthComputable)p.value=e.loaded/e.total*100};x.onload=()=>{sending=false;s.textContent=x.status===200?'Archivos recibidos':(x.responseText||'No se pudo enviar.');if(x.status===200){f.value='';document.querySelector('#filename').textContent='Ningún archivo seleccionado';p.value=100}status();render()};x.onerror=()=>{sending=false;s.textContent='Conexión interrumpida. Comprueba el Wi-Fi.';status();render()};x.send(new Blob(files));};
 status();setInterval(status,1000);setInterval(render,250);'''
 
 def mobile_page():
-    return (PAGE.split('<script>')[0].replace('Enviar documento al ordenador','<span id="clock">Conectando…</span><br><strong id="destination">Buscando destino…</strong>').replace('type="file"','type="file" multiple').replace('Enviar documento','Enviar archivos')+'<script>'+MOBILE_JS+'</script></html>')
+    page=PAGE.split('<script>')[0].replace('</style>','#clock{font-size:48px;font-weight:700;font-variant-numeric:tabular-nums;display:block;text-align:center;margin:8px 0 16px}#terminal{font-size:25px;font-weight:650;text-align:center;padding:28px 0}#destination{display:block;text-align:center;font-size:15px}button:disabled,.pick:has(input:disabled){opacity:.45}[hidden]{display:none!important}</style>')
+    page=page.replace('<p>Enviar documento al ordenador</p>','<section id="controls"><span id="clock">—:—</span><strong id="destination"></strong>').replace('type="file"','type="file" multiple').replace('Enviar documento','Enviar archivos').replace('</main>','</section><p id="terminal" role="status" hidden></p></main>')
+    return page+'<script>'+MOBILE_JS+'</script></html>'
 
 class MobileSession:
     def __init__(self,host='0.0.0.0',duration=900):
         self.token=secrets.token_urlsafe(24); self.deadline=time.monotonic()+duration
         self.lock=threading.Lock(); self.closed=threading.Event(); self.items=queue.Queue(maxsize=1)
-        self.route=None; self.receiving=False; owner=self
+        self.route=None; self.receiving=False; self.end_state=None; self.stop_lock=threading.Lock(); self.stopped=False; owner=self
         class Handler(BaseHTTPRequestHandler):
             def setup(self): super().setup(); self.connection.settimeout(30)
             def log_message(self,*args): pass
@@ -33,7 +37,7 @@ class MobileSession:
                 self.reply(200,json.dumps(owner.status()),'application/json; charset=utf-8')
             def do_POST(self):
                 if self.path!=f'/{owner.token}/batch': self.reply(404,'No disponible'); return
-                if owner.remaining()<=0: self.reply(410,'El QR ha caducado.'); return
+                if owner.remaining()<=0: self.reply(410,'Móvil desconectado' if owner.end_state=='disconnected' else 'Tiempo agotado'); return
                 with owner.lock:
                     route=owner.route
                     if not route or route[0]!=self.headers.get('X-Destination') or owner.receiving or owner.items.full(): self.reply(409,'El destino ha cambiado o Ágora está ocupado. Comprueba la pantalla y vuelve a enviar.'); return
@@ -57,7 +61,7 @@ class MobileSession:
                             items.append((name,data))
                     except OSError: return
                     with owner.lock:
-                        if owner.remaining()<=0: self.reply(410,'El QR ha caducado.'); return
+                        if owner.remaining()<=0: self.reply(410,'Móvil desconectado' if owner.end_state=='disconnected' else 'Tiempo agotado'); return
                         if owner.route!=route: self.reply(409,'El destino cambió durante el envío. Vuelve a enviar desde la pantalla correcta.'); return
                         owner.items.put_nowait((route[0],items))
                     self.reply(200,'Recibido')
@@ -69,10 +73,22 @@ class MobileSession:
     def status(self):
         with self.lock:
             r=self.route; left=self.remaining(); ready=bool(r and left>0 and not self.receiving and self.items.empty())
-            return dict(token=r[0] if ready else None,label=r[1] if ready else ('Ágora está ocupado; espera a que termine.' if self.receiving or not self.items.empty() else 'Abre Soluciones, Respuestas automáticas o Mis plantillas en Ágora.' if left else 'Conexión caducada.'),extensions=list(r[2]) if r else [],max_files=r[3] if r else 1,remaining=left)
+            state=self.end_state or ('expired' if not left else 'active')
+            return dict(token=r[0] if ready else None,label=r[1] if ready else ('Procesando archivos…' if self.receiving or not self.items.empty() else 'Sin destino activo' if left else ''),extensions=list(r[2]) if r else [],max_files=r[3] if r else 1,remaining=left,state=state)
     def set_route(self,route):
         with self.lock: self.route=route
     def url(self,address): return f'http://{address}:{self.server.server_port}/{self.token}/'
+    def retire(self,reason='disconnected'):
+        # Status-only grace period: no uploads accepted after disconnect.
+        with self.lock:
+            if self.closed.is_set(): return
+            self.end_state=reason; self.closed.set(); self.route=None
+            while not self.items.empty():
+                try: self.items.get_nowait()
+                except queue.Empty: break
+        timer=threading.Timer(max(60,self.deadline-time.monotonic()+60),self.close); timer.daemon=True; timer.start()
     def close(self):
-        if self.closed.is_set(): return
-        self.closed.set(); self.server.shutdown(); self.server.server_close(); self.thread.join(timeout=1)
+        with self.stop_lock:
+            if self.stopped: return
+            self.stopped=True; self.closed.set()
+            self.server.shutdown(); self.server.server_close(); self.thread.join(timeout=1)
