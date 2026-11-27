@@ -372,6 +372,8 @@ class ManualPage(QWidget):
         from .omr_ui import OpticalPage
         self.reader=OpticalPage(self.config,self.answers,self.optical_cache,self.optical_changed)
         self.body.addWidget(self.reader)
+        from .external_ui import import_model
+        model_button=btn('Importar modelo en blanco',lambda:import_model(self),'softAction'); self.body.addWidget(model_button,0,ALIGN.AlignHCenter)
         bar=QWidget(); actions=QHBoxLayout(bar); actions.setContentsMargins(0,4,0,0); actions.setSpacing(14); actions.addStretch()
         from .omr_ui import compact_btn
         manage=QVBoxLayout(); manage.setSpacing(5)

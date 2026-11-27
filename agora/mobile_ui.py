@@ -26,7 +26,7 @@ class MobileConnection(QObject):
         if self.busy or not w.isEnabled(): return None
         modal=QApplication.activeModalWidget()
         if self.dialog is not None and (modal is None or modal is self.dialog) and self.dialog.isVisible():
-            d=self.dialog; return (('dialog',id(d)),self.screen_label(),tuple(d.extensions),d.max_files,d.receive_mobile)
+            d=self.dialog; return (('dialog',id(d)),getattr(d,'destination_label',None) or self.screen_label(),tuple(d.extensions),d.max_files,d.receive_mobile)
         if modal is not None: return None
         current=w.stack.currentWidget()
         for mode in ('manual','automatic'):
@@ -38,6 +38,9 @@ class MobileConnection(QObject):
                     return ((mode,2,id(p.reader),p.attempt_id),'Corrector automático · Respuestas · '+p.config.name,EXTENSIONS,20,p.reader.import_items)
         if current is w.pages.get('library') and w.library_stack.currentIndex()==1 and w.library_tabs.currentIndex()==1:
             return (('library',1),'Mi temario · Mis plantillas',('.pdf','.docx'),20,w.receive_library_items)
+        if current is w.pages.get('library') and w.library_stack.currentIndex()==1 and w.library_tabs.currentIndex()==2:
+            from .omr import EXTENSIONS
+            return (('library',2),'Mi temario · Mis modelos · Modelo en blanco',EXTENSIONS,20,w.models_page.receive_external)
         return None
     def screen_label(self):
         w=self.window

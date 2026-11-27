@@ -127,8 +127,8 @@ class ModelEditor(QDialog):
 class ModelsPage(QWidget):
     def __init__(self,window):
         super().__init__(); self.window=window; self.library=None; self.thumbnails={}; l=vertical(self,spacing=16); back=button('Volver a Mi temario','book'); back.clicked.connect(lambda:window.library_stack.setCurrentIndex(0)); l.addWidget(back,0,Qt.AlignmentFlag.AlignLeft); l.addWidget(label('Mis modelos','heading'))
-        row=QHBoxLayout(); create=button('Crear modelo',role='primary'); create.clicked.connect(lambda:self.edit(Model())); row.addWidget(create); row.addStretch(); l.addLayout(row)
-        l.addWidget(label('Modelos de Ágora','tileTitle')); self.presets=QGridLayout(); l.addLayout(self.presets); l.addWidget(label('Mis modelos personalizados','tileTitle')); self.custom=QGridLayout(); l.addLayout(self.custom); l.addStretch()
+        row=QHBoxLayout(); create=button('Crear modelo',role='primary'); create.clicked.connect(lambda:self.edit(Model())); row.addWidget(create); imp=button('Importar modelo en blanco',role='softAction'); imp.clicked.connect(self.import_external); row.addWidget(imp); row.addStretch(); l.addLayout(row)
+        l.addWidget(label('Modelos de Ágora','tileTitle')); self.presets=QGridLayout(); l.addLayout(self.presets); l.addWidget(label('Mis modelos personalizados','tileTitle')); self.custom=QGridLayout(); l.addLayout(self.custom); l.addWidget(label('Modelos externos aprendidos','tileTitle')); self.external=QGridLayout(); l.addLayout(self.external); l.addStretch()
         for m in PRESETS: self.add_card(self.presets,m)
     def refresh(self):
         while self.custom.count():
@@ -141,6 +141,44 @@ class ModelsPage(QWidget):
             if not entries: self.custom.addWidget(label('Todavía no hay modelos personalizados.','muted'),0,0,1,2)
             for mid,m,date in entries: self.add_card(self.custom,m,mid,date)
         except Exception as e: self.custom.addWidget(label(str(e),wrap=True),0,0,1,2)
+        self.refresh_external()
+    def import_external(self):
+        from .external_ui import import_model
+        import_model(self); self.refresh_external()
+    def receive_external(self,items):
+        from .external_ui import receive_items
+        receive_items(self,items); self.refresh_external()
+    def refresh_external(self):
+        from .external_ui import get_library,consult,export_original
+        from .omr_ui import pix
+        from PIL import Image
+        from io import BytesIO
+        import numpy as np
+        while self.external.count():
+            w=self.external.takeAt(0).widget()
+            if w: w.hide(); w.deleteLater()
+        try:
+            lib=get_library(self); entries=lib.entries()
+            if not entries: self.external.addWidget(label('Todavía no hay modelos externos.','muted'),0,0,1,2)
+            for i,(mid,name,date,meta) in enumerate(entries):
+                card=frame('tile'); h=QHBoxLayout(card); thumb=QLabel(); thumb.setFixedSize(88,118); thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                refs=lib.files(mid,'reference')
+                if refs: thumb.setPixmap(pix(np.array(Image.open(BytesIO(refs[0][1])).convert('RGB'))).scaled(80,110,Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation))
+                h.addWidget(thumb); info=QVBoxLayout(); h.addLayout(info,1); info.addWidget(label(name,'tileTitle',True)); info.addWidget(label(f'{meta["questions"]} preguntas · {meta["reserves"]} reservas · {meta["options"]} opciones · {len(meta["pages"])} pág.','muted',True)); info.addWidget(label(date.replace('T',' '),'muted'))
+                grid=QGridLayout(); info.addLayout(grid)
+                for j,(title,fn) in enumerate([('Consultar',lambda checked=False,m=mid,n=name,d=meta:consult(self,m,n,d,lib)),('Descargar original',lambda checked=False,m=mid:export_original(self,m,lib)),('Renombrar',lambda checked=False,m=mid,n=name:self.rename_external(lib,m,n)),('Eliminar',lambda checked=False,m=mid,n=name:self.remove_external(lib,m,n))]):
+                    b=button(title,role='softAction'); b.setSizePolicy(QSizePolicy.Policy.Fixed,QSizePolicy.Policy.Fixed); b.setStyleSheet('text-align:center;padding:6px 8px;'); b.clicked.connect(fn); grid.addWidget(b,j//2,j%2,Qt.AlignmentFlag.AlignLeft)
+                self.external.addWidget(card,i//2,i%2)
+            self.external.setColumnStretch(0,1); self.external.setColumnStretch(1,1)
+        except Exception as e: self.external.addWidget(label(str(e),wrap=True),0,0,1,2)
+    def rename_external(self,lib,mid,name):
+        new,ok=QInputDialog.getText(self,'Renombrar modelo','Nombre del modelo',text=name)
+        if ok:
+            try: lib.rename(mid,new); self.refresh_external()
+            except Exception as e: QMessageBox.warning(self,'No se pudo renombrar',str(e))
+    def remove_external(self,lib,mid,name):
+        if confirm(self,'Eliminar modelo',f'Se eliminará «{name}». No se puede deshacer. ¿Continuar?'):
+            lib.delete(mid); self.refresh_external()
     def add_card(self,l,m,mid=None,date=None):
         card=frame('tile'); h=QHBoxLayout(card); h.setContentsMargins(12,12,12,12); h.setSpacing(12)
         thumbnail=QLabel(); thumbnail.setFixedSize(88,118); thumbnail.setAlignment(Qt.AlignmentFlag.AlignCenter); thumbnail.setStyleSheet('background:#F7EDF2;border:1px solid #E8CEDB;border-radius:6px;')
