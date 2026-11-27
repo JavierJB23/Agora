@@ -1,3 +1,12 @@
+# BLOCK 06D — FIX01 (v0.6.22)
+
+- Mis modelos: tres secciones plegadas; abrir/cerrar por cabecera y Ocultar, animación fluida, todas independientes. Importar desde PC y QR; guardar, consultar, renombrar y eliminar; no debe aparecer MainWindow object is not callable.
+- Rosa PDF: probar 120+0, 120+9 y una configuración distinta, detectar 120+9 / 3 opciones. Guardar y reabrir. Probar imágenes de ambas páginas en orden invertido, tabla global y Ordenar páginas; las reservas deben identificarse por R. Probar modelo mixto, cancelar orden, no volver a marcar las esquinas. Comprobar que la tabla no corta encabezados.
+- Conservar correctores, simulacros y modelos anteriores; no se integra lectura de exámenes por modelo aprendido hasta 06E.
+- Pruebas locales: 10/10 específicas, además PDF rosa real con 3 configuraciones de entrada y guardado, PNG separados invertidos y guardado. Windows/Qt pendiente.
+
+---
+
 # BLOCK 06D — RC1
 
 Importar PDF rosa en blanco 120+9/3 opciones desde PC y QR; revisar la vista previa de ambas páginas, verificar numeración y guardar. Importar modelo de cuadrados, probar modelo con reservas en la misma página, comprobar duplicados, consulta, renombrado, descarga, eliminación y reapertura. Importar desde corrector y comprobar que no cambia el simulacro. Probar QR persistente desde Mis modelos, cancelar importación, comprobar generador y corrector anterior. La detección automática de modelos durante la corrección pertenece al 06E.

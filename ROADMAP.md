@@ -1,3 +1,9 @@
+# Actualización 06D FIX01 — v0.6.22
+
+Validar biblioteca externa, cantidades reales, numeración y orden multipágina, animación de secciones. Mantener 06C como estable. Siguiente 06E: integrar modelos aprendidos en el corrector tras validación de 06D.
+
+---
+
 # BLOCK 06D — RC1 v0.6.21 (pendiente de validación)
 
 06C FIX01 STABLE. Nuevo aprendizaje geométrico de modelos externos en blanco. La numeración se propone por orden de bloques y se confirma explícitamente. 06E: asociar y reconocer automáticamente modelos externos/propios; registro geométrico de foto respondida contra referencia, diferencia de tinta, QR impreso y fallback al lector universal. No incluir documentos personales en el repositorio.

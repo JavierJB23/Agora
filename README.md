@@ -1,3 +1,11 @@
+# Ágora v0.6.22 — BLOCK 06D — FIX01
+
+Base: 06D RC1. Corrige la colisión entre el atributo ModelsPage.window y QWidget.window(), que impedía abrir la importación y la biblioteca de modelos externos. La biblioteca usa la ventana principal real, tanto desde PC como desde el QR y el corrector. Las cantidades iniciales son orientativas: se priorizan los identificadores impresos del PDF y el OCR local en imágenes, con numeración geométrica propuesta cuando no hay evidencia suficiente. El detector descarta columnas solapadas y no guarda si la numeración impresa y la geometría discrepan. La revisión muestra todas las páginas, columnas, filas, primera y última pregunta; la selección muestra su página. Ordenar páginas permite subir/bajar y clasificar ordinarias/reservas o conservar una página mixta; renumera según el orden elegido. Se elimina el ajuste geométrico manual del aprendizaje. Los tres apartados de Mis modelos se abren y cierran con una animación de 280 ms. No se alteran el lector de exámenes, las notas, los datos anteriores, la transferencia QR ni el generador.
+
+Límites: hasta 200 páginas por modelo (PDF multipágina), 20 archivos/100 MB por importación, 500 ordinarias y 100 reservas, 2–5 opciones por fila. Los dos últimos límites se mantienen compatibles con el corrector. La numeración no verificada exige revisión; no se garantiza cualquier diseño o foto. La integración de modelos aprendidos en corrección sigue pendiente del 06E. Mantener windows.yml y compilar mediante Run workflow manual. No instalar Python.
+
+---
+
 # Ágora v0.6.21 — BLOCK 06D — RC1
 
 Base: v0.6.20 06C FIX01 validada por el usuario. Importar modelo en blanco desde Mis modelos o Corrector automático; PDF/JPG/PNG, PC, arrastre o QR global. Seleccionar número de preguntas, reservas y opciones impresas; revisar las casillas y los inicios de cada bloque, corregir o añadir bloques si hace falta, confirmar y guardar. Se conserva el original, la imagen de referencia y la geometría normalizada en external_models.sqlite3. Biblioteca con consulta, descarga, renombrado y eliminación. La lectura de hojas respondidas NO usa aún esta biblioteca: integración prevista en 06E. No se modifica el lector estable ni el flujo de compilación.
