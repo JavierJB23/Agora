@@ -1013,7 +1013,7 @@ def _automatic_page(im, questions, reserves=0, options=3, previous=None, progres
 def automatic_page(im, questions, reserves=0, options=3, previous=None, progress=None, verify_ocr=False):
     canvas,marks=_automatic_page(im,questions,reserves,options,previous,progress)
     if not verify_ocr: return canvas,marks
-    if progress: progress(.78,'Contrastando numeración impresa (OCR)')
+    if progress: progress(.78,'Comprobando numeración impresa')
     from .number_ocr import verify
     try:
         checked,_,_,conflicts=verify(canvas,marks)

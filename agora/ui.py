@@ -160,7 +160,12 @@ class MainWindow(QMainWindow):
         self.nav={}; self.pages={}; self.stack=QStackedWidget(); layout.addWidget(self.stack,1)
         self.add_nav(sl,'home','Inicio','home')
         for m in MODULES: self.add_nav(sl,m.key,m.name,m.icon)
-        sl.addStretch(); self.add_nav(sl,'settings','Configuración','settings')
+        sl.addStretch()
+        self.mobile_status=label('', 'muted', True); self.mobile_status.hide(); sl.addWidget(self.mobile_status)
+        self.mobile_stop=button('Desconectar móvil',role='softAction'); self.mobile_stop.hide(); sl.addWidget(self.mobile_stop)
+        from .mobile_ui import MobileConnection
+        self.mobile_connection=MobileConnection(self); self.mobile_stop.clicked.connect(self.mobile_connection.close); self.stack.currentChanged.connect(self.mobile_connection.invalidate)
+        self.add_nav(sl,'settings','Configuración','settings')
         sl.addWidget(label(f'v{VERSION}  ·  BLOCK {BLOCK}','muted')); sl.addWidget(label('Datos locales · Sin cuenta','muted'))
         self.make_home()
         for m in MODULES:
@@ -197,16 +202,16 @@ class MainWindow(QMainWindow):
     def closeEvent(self,event):
         for mode in ('manual','automatic'):
             if self.stack.currentWidget() is self.pages.get(mode) and not getattr(self,mode).allow_leave(): event.ignore(); return
-        super().closeEvent(event)
+        self.mobile_connection.close(); super().closeEvent(event)
     def make_library(self):
-        l=self.page('library'); self.library_stack=CurrentPageStack(); self.library_stack.currentChanged.connect(lambda *_:self.library_stack.updateGeometry()); l.addWidget(self.library_stack); l.addStretch()
+        l=self.page('library'); self.library_stack=CurrentPageStack(); self.library_stack.currentChanged.connect(lambda *_:self.library_stack.updateGeometry()); self.library_stack.currentChanged.connect(self.mobile_connection.invalidate); l.addWidget(self.library_stack); l.addStretch()
         root=QWidget(); rl=vertical(root,spacing=16); self.library_stack.addWidget(root)
         back=button('Volver al inicio','home'); back.clicked.connect(lambda:self.go('home')); rl.addWidget(back,0,Qt.AlignmentFlag.AlignLeft)
         rl.addWidget(label('Mi temario','heading')); tiles=QHBoxLayout(); self.library_buttons=[]
         for i,(name,symbol) in enumerate((('Mis temas','books'),('Mis plantillas','template'))):
             b=CenteredTile(name,icon(symbol)); b.setFixedSize(220,220); b.clicked.connect(lambda checked=False,j=i:self.select_library_tab(j)); tiles.addWidget(b); self.library_buttons.append(b)
         tiles.addStretch(); rl.addLayout(tiles); rl.addStretch()
-        tabs=QTabWidget(); tabs.setObjectName('libraryTabs'); tabs.tabBar().hide(); self.library_tabs=tabs; self.library_stack.addWidget(tabs)
+        tabs=QTabWidget(); tabs.setObjectName('libraryTabs'); tabs.tabBar().hide(); self.library_tabs=tabs; tabs.currentChanged.connect(self.mobile_connection.invalidate); self.library_stack.addWidget(tabs)
         themes=QWidget(); tl=vertical(themes,spacing=16); back=button('Volver a Mi temario','book'); back.clicked.connect(lambda:self.library_stack.setCurrentIndex(0)); tl.addWidget(back,0,Qt.AlignmentFlag.AlignLeft); tl.addWidget(label('Mis temas','heading')); tl.addWidget(label('Temario de estudio','tileTitle')); tl.addStretch(); tabs.addTab(themes,'Mis temas')
         archive=QWidget(); al=vertical(archive,spacing=16); tabs.addTab(archive,'Mis plantillas')
         back=button('Volver a Mi temario','book'); back.clicked.connect(lambda:self.library_stack.setCurrentIndex(0)); al.addWidget(back,0,Qt.AlignmentFlag.AlignLeft); al.addWidget(label('Mis plantillas','heading'))
@@ -226,7 +231,10 @@ class MainWindow(QMainWindow):
         from PySide6.QtWidgets import QDialog
         dialog=ImportDialog(self,multiple=True,max_files=20)
         if dialog.exec()!=QDialog.DialogCode.Accepted: return
-        for name,data in dialog.items:
+        self.receive_library_items(dialog.items)
+
+    def receive_library_items(self,items):
+        for name,data in items:
             self.register_library_document(name,data)
         self.refresh_library()
 

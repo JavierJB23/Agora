@@ -20,7 +20,7 @@ def centered_button(s,fn):
 
 class ImportDialog(QDialog):
     def __init__(self,parent,extensions=('.pdf','.docx'),multiple=False,max_files=2):
-        super().__init__(parent); self.setWindowTitle('Importar documento'); self.setAcceptDrops(True); self.extensions=extensions; self.item=None; self.items=[]; self.multiple=multiple; self.max_files=max(2,min(20,int(max_files))) if multiple else 1; self.session=None
+        super().__init__(parent); self.setWindowTitle('Importar documento'); self.setAcceptDrops(True); self.extensions=extensions; self.item=None; self.items=[]; self.multiple=multiple; self.max_files=max(2,min(20,int(max_files))) if multiple else 1; self.session=None; self.connection=getattr(parent.window(),'mobile_connection',None) if parent is not None else None
         root=QVBoxLayout(self); root.setContentsMargins(18,18,18,18); root.setSpacing(12)
         self.stack=QStackedWidget(); root.addWidget(self.stack)
         self.source=QWidget(); source=QVBoxLayout(self.source); source.setContentsMargins(0,0,0,0); source.setSpacing(14)
@@ -80,22 +80,29 @@ class ImportDialog(QDialog):
             if self.stack.currentWidget() is self.source: self.error('No se ha encontrado una red local.')
             else: self.info.setText('No se ha encontrado una red local. Inténtalo de nuevo.')
             return
-        try: self.session=UploadSession(extensions=self.extensions,multiple=self.multiple,max_files=self.max_files-len(self.items),reusable=self.multiple,max_bytes=MAX_BYTES-sum(len(data) for _,data in self.items))
+        try: self.session=self.connection.start(self) if self.connection else UploadSession(extensions=self.extensions,multiple=self.multiple,max_files=self.max_files-len(self.items),reusable=self.multiple,max_bytes=MAX_BYTES-sum(len(data) for _,data in self.items))
         except OSError as e:
             if self.stack.currentWidget() is self.source: self.error('No se pudo iniciar la conexión local: '+str(e))
             else: self.info.setText('No se pudo iniciar la conexión local: '+str(e))
             return
         self.info.setText('Abre la cámara del móvil y escanea el QR. Ambos dispositivos deben estar en la misma red privada. Si Windows pregunta, permite el acceso solo en redes privadas.')
-        if self.multiple: self.info.setText(self.info.text()+' Puedes enviar varias tandas sin volver a escanear. Pulsa Importar archivos al terminar.')
-        self.retry.hide(); self.network.show(); self.network.setChecked(False); self.address.clear(); self.address.addItems(ips); self.draw_qr(self.address.currentText()); self.stack.setCurrentWidget(self.mobile_page); self.resize(480,min(600,self.screen().availableGeometry().height()-80)); self.timer.start(); self.expiry.start(900000 if self.multiple else 300000)
+        if self.connection: self.info.setText(self.info.text()+' La carga es automática. Conserva la página del móvil para seguir enviando durante 15 minutos.')
+        elif self.multiple: self.info.setText(self.info.text()+' Puedes enviar varias tandas sin volver a escanear. Pulsa Importar archivos al terminar.')
+        self.retry.hide(); self.network.show(); self.network.setChecked(False); self.address.clear(); self.address.addItems(ips); self.draw_qr(self.address.currentText()); self.stack.setCurrentWidget(self.mobile_page); self.resize(480,min(600,self.screen().availableGeometry().height()-80)); self.timer.start() if not self.connection else self.connection.update_route(); self.expiry.start(900000 if self.multiple else 300000) if not self.connection else None
     def draw_qr(self,ip):
         if not self.session or not ip: return
         import qrcode
         from qrcode.image.svg import SvgPathImage
         stream=BytesIO(); qrcode.make(self.session.url(ip),image_factory=SvgPathImage,border=4).save(stream)
         renderer=QSvgRenderer(QByteArray(stream.getvalue())); image=QImage(288,288,QImage.Format.Format_ARGB32); image.fill(Qt.GlobalColor.white); painter=QPainter(image); renderer.render(painter); painter.end(); self.qr.setPixmap(QPixmap.fromImage(image))
+    def receive_mobile(self,items):
+        self.items=list(items); self.item=self.items[0]; self.accept()
+
+    def mobile_expired(self):
+        self.session=None; self.qr.clear(); self.network.hide(); self.address.hide(); self.info.setText('El QR ha caducado. Genera otro para continuar.'); self.retry.show()
+
     def poll(self):
-        if not self.session: return
+        if not self.session or self.connection: return
         try: received=self.session.items.get_nowait()
         except queue.Empty: return
         if not self.multiple:
@@ -121,4 +128,5 @@ class ImportDialog(QDialog):
         super().reject()
     def cleanup(self,*_):
         self.timer.stop(); self.expiry.stop()
-        if self.session: self.session.close(); self.session=None
+        if self.connection: self.connection.detach(self); self.session=None
+        elif self.session: self.session.close(); self.session=None

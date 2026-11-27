@@ -194,8 +194,12 @@ class OpticalPage(QWidget):
     def load(self,checked=False,force_guided=False):
         d=ImportDialog(self,omr.EXTENSIONS,multiple=True,max_files=20)
         if d.exec()!=QDialog.DialogCode.Accepted or not d.items: return
+        self.import_items(d.items)
+
+    def import_items(self,items):
+        if not items: return
         try:
-            results,errors=self.run_import(d.items)
+            results,errors=self.run_import(items)
             pending={}; occupied=set(self.marks)
             for im,aligned,marks,snapshot in results:
                 nums=self.page_numbers(marks)
@@ -216,7 +220,7 @@ class OpticalPage(QWidget):
             if not pending: raise ValueError('No se han localizado preguntas en las hojas importadas.\n'+'\n'.join(errors))
             if errors and not confirm(self,'Importación parcial','No se pudieron leer todas las páginas:\n'+'\n'.join(errors)+'\n¿Conservar las hojas reconocidas?'): return
             if any(slot in self.marks for slot in pending) or any(self.answers[i] for p in pending.values() for m in p[2] if (i:=self.target_index(m.number)) is not None):
-                if not confirm(self,'Sustituir lectura','Se sustituirán las respuestas de las páginas importadas. ¿Continuar?'): return
+                if not confirm(self,'Sustituir lectura','Ya hay respuestas cargadas en estas páginas. Se sobreescribirán. ¿Seguro que quieres continuar?'): return
             for slot,(im,aligned,marks,snapshot) in pending.items(): self.install(slot,im,aligned,marks,snapshot)
             self.page.setCurrentIndex(1 if '' not in self.answers[:self.config.questions] and '' in self.answers[self.config.questions:] else 0 if any(not m.number.startswith('R') for p in pending.values() for m in p[2]) else 1); self.filter.setCurrentIndex(1 if all(self.answers) else 0); self.changed(); self.refresh()
             self.progress_bar.setValue(100); self.progress_info.setText('100 % · Lectura completada'); self.progress_bar.repaint()
@@ -359,8 +363,6 @@ class OpticalPage(QWidget):
             elif m and m.suggestion and not self.proposal(m): status+=f' · posible {m.suggestion}'
             for col,s in [(0,self.config.number(i)),(2,status)]:
                 t=QTableWidgetItem(s); t.setTextAlignment(A.AlignCenter)
-                if col==0 and m and m.number_check:
-                    t.setToolTip({'OCR':'Número impreso leído por OCR','sequence':'Numeración contrastada por secuencia','geometry':'Numeración geométrica: OCR no concluyente','unavailable':'OCR no disponible: numeración geométrica'}.get(m.number_check,''))
                 self.table.setItem(row,col,t)
             if m:
                 crop=QLabel(); crop.setAlignment(A.AlignCenter); crop.setPixmap(pix(omr.crop_image(self.aligned[page],m)).scaled(155,43,Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation)); self.table.setCellWidget(row,1,crop)
@@ -383,12 +385,6 @@ class OpticalPage(QWidget):
                 break
     def update_count(self):
         n=self.answers.count(''); suffix=' · Sin imagen guardada' if not self.images and any(self.answers[i] for i in self.indices(self.page.currentIndex())) else ''; extra=sum(m.number.startswith('R') and self.target_index(m.number) is None for ms in self.marks.values() for m in ms); self.count.setText(f'{len(self.answers)-n}/{len(self.answers)} respuestas · {n} pendientes'+suffix+(f' · {extra} reservas sin solución (no puntúan)' if extra else ''))
-        marks=[m for ms in self.marks.values() for m in ms if m.number.startswith('R')==(self.page.currentIndex()==1)]
-        if any(m.number_check for m in marks):
-            direct=sum(m.number_check=='OCR' for m in marks); sequence=sum(m.number_check=='sequence' for m in marks)
-            info=f' · OCR (hoja): {direct} leídos, {sequence} por secuencia' if direct or sequence else ' · Numeración geométrica (OCR no concluyente)'
-            if any(m.number_check=='unavailable' for m in marks): info+=' · OCR no disponible en alguna hoja'
-            self.count.setText(self.count.text()+info)
     def reset(self):
         if any(self.answers) and not confirm(self,'Reiniciar lectura','Se descartarán las respuestas y revisiones actuales. ¿Continuar?'): return
         self.images.clear(); self.aligned.clear(); self.marks.clear(); self.records.clear(); self.answers[:]=['']*len(self.answers); self.changed(); self.refresh()

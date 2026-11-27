@@ -141,6 +141,8 @@ class ManualPage(QWidget):
         except Exception as e: QMessageBox.warning(self,'No se pudo abrir',str(e)); return False
 
     def render(self):
+        connection=getattr(self.window(),'mobile_connection',None)
+        if connection: connection.invalidate()
         # Disable shortcuts immediately, including until deleteLater is processed.
         for sc in getattr(self,'shortcuts',[]): sc.setEnabled(False); sc.deleteLater()
         self.shortcuts=[]
@@ -331,7 +333,12 @@ class ManualPage(QWidget):
     def import_key(self):
         dialog=ImportDialog(self)
         if dialog.exec()!=QDialog.DialogCode.Accepted or not dialog.item: return
-        name,data=dialog.item
+        self.receive_mobile_key([dialog.item])
+
+    def receive_mobile_key(self,items):
+        if len(items)!=1: return
+        name,data=items[0]
+        if self.key_source and not confirm(self,'Sustituir solucionario','Ya hay un solucionario cargado. Se sobreescribirá si confirmas la importación. ¿Seguro que quieres continuar?'): return
         try: imported=extract_key(data,name)
         except Exception as e:
             QMessageBox.warning(self,'No se pudo leer el solucionario',str(e)); return
