@@ -22,6 +22,7 @@ class Page:
     image: np.ndarray
     blocks: list
     source: str
+    labels: tuple = ()  # printed identifiers, when independently available
 
 
 def _candidates(im):
@@ -83,6 +84,14 @@ def detect_blocks(im,options):
             for run in runs:
                 if len(run)<2: continue
                 blocks.append(Block([r.tolist() for r in run]))
+        # Sliding groups can reuse the last two options of one column and the
+        # first of another. Prefer complete columns, never count a cell twice.
+        clean=[]; used=[]
+        for b in sorted(blocks,key=lambda b:-len(b.rows)):
+            cells=[(x,y,w,h) for row in b.rows for x,y,w,h in row]
+            if any(abs(x-a)<min(w,c)*.5 and abs(y-bb)<min(h,d)*.5 for x,y,w,h in cells for a,bb,c,d in used): continue
+            clean.append(b); used.extend(cells)
+        blocks=clean
         score=sum(len(b.rows) for b in blocks)-.5*len(blocks)
         if score>bestscore: bestscore=score; best=blocks
     if not best: raise ValueError('No se reconocen bloques de casillas. Comprueba las opciones impresas y la nitidez.')
@@ -102,14 +111,185 @@ def learn_page(im,source,options):
     return max(candidates,key=lambda p:sum(len(b.rows) for b in p.blocks)-.5*len(p.blocks))
 
 
+def pdf_labels(text):
+    # Accept printed row labels, not footer page numbers or header fields.
+    found=[]
+    for line in (text or '').splitlines():
+        m=re.fullmatch(r'\s*(R\s*-?\s*\d{1,4}|\d{1,4})(?:\s+[A-E](?:\s+[A-E])*)?\s*',line,re.I)
+        if m:
+            n=re.sub(r'[\s-]','',m[1].upper())
+            if int(n.lstrip('R'))>0: found.append(n)
+    return tuple(found)
+
+
+def pdf_options(text):
+    from collections import Counter
+    counts=Counter()
+    for line in (text or '').splitlines():
+        m=re.fullmatch(r'\s*(?:R\s*-?\s*)?\d{1,4}\s+([A-E](?:\s+[A-E]){1,4})\s*',line,re.I)
+        if m:
+            letters=m[1].upper().split()
+            if letters==list('ABCDE'[:len(letters)]): counts[len(letters)]+=1
+    if counts: return counts.most_common(1)[0][0]
+    for m in re.finditer(r'(?im)^\s*N[º°]\s*\n((?:[A-E]\s*\n){2,5})',text or ''):
+        letters=m[1].split()
+        if letters==list('ABCDE'[:len(letters)]): counts[len(letters)]+=1
+    return counts.most_common(1)[0][0] if counts else None
+
+
+def detected_options(pages,fallback):
+    choices={len(row) for p in pages for b in p.blocks for row in b.rows}
+    if len(choices)>1: raise ValueError('Las páginas tienen distintos números de opciones. Comprueba los documentos del modelo.')
+    return next(iter(choices),fallback)
+
+
+def learn_with_hints(im,source,options,text=''):
+    labels=pdf_labels(text); preferred=pdf_options(text) or options
+    p=learn_page(im,source,preferred)
+    rows=lambda x:sum(len(b.rows) for b in x.blocks)
+    if not rows(p) or (labels and rows(p)!=len(labels)):
+        for o in range(2,6):
+            if o==preferred: continue
+            candidate=learn_page(im,source,o)
+            if labels:
+                if abs(rows(candidate)-len(labels))<abs(rows(p)-len(labels)): p=candidate
+                if rows(p)==len(labels): break
+            elif rows(candidate)>rows(p): p=candidate
+    p.labels=labels or photo_labels(p)
+    return p
+
+
+def photo_labels(page):
+    # Use independent printed-number OCR, not handwritten ink or the answer key.
+    from . import number_ocr
+    try:
+        tokens=number_ocr.recognize(omr.geometry_gray(page.image),11)
+    except (RuntimeError, OSError, ValueError, __import__('subprocess').TimeoutExpired): return ()
+    labels=[]
+    for block in page.blocks:
+        votes={}
+        for j,row in enumerate(block.rows):
+            x,y,w,h=row[0]
+            matches=[(conf,t) for t,conf,l,top,ww,hh in tokens if conf>=65 and 0<x-(l+ww/2)<max(8*w,80) and abs(top+hh/2-y)<max(h*.65,5)]
+            if matches:
+                t=max(matches)[1]; start=int(t.lstrip('R'))-j
+                if start>0:
+                    k=(t.startswith('R'),start); votes[k]=votes.get(k,0)+1
+        n=len(block.rows)
+        def strong(votes):
+            if not votes: return None
+            key,support=max(votes.items(),key=lambda kv:kv[1])
+            return key if support>=min(n,max(2,(n+3)//4)) and support>=.8*sum(votes.values()) else None
+        anchor=strong(votes)
+        if anchor is None:
+            # OCR on a narrow strip immediately preceding the detected cells.
+            # Separating the digits from printed A/B/C improves colored sheets.
+            x0=min(row[0][0] for row in block.rows); y0=min(row[0][1] for row in block.rows); y1=max(row[0][1] for row in block.rows)
+            cw=float(np.median([row[0][2] for row in block.rows])); ch=float(np.median([row[0][3] for row in block.rows])); x1=max(1,int(x0-cw*.60)); left=max(0,int(x0-cw*7)); top=max(0,int(y0-ch*.75)); bottom=min(page.image.shape[0],int(y1+ch*.75)+1)
+            if bottom<=top or x1<=left: return ()
+            strip=omr.geometry_gray(page.image[top:bottom,left:x1]); strip=cv.resize(strip,None,fx=2,fy=2,interpolation=cv.INTER_CUBIC)
+            try: local=number_ocr.recognize(strip,6)
+            except (RuntimeError,OSError,ValueError,__import__('subprocess').TimeoutExpired): local=[]
+            votes={}
+            for t,conf,l,yy,ww,hh in local:
+                if conf<55: continue
+                cy=top+(yy+hh/2)/2; j=min(range(n),key=lambda j:abs(block.rows[j][0][1]-cy)); v=int(t.lstrip('R'))-j
+                if abs(block.rows[j][0][1]-cy)<ch*.65 and v>0:
+                    k=(t.startswith('R'),v); votes[k]=votes.get(k,0)+1
+            anchor=strong(votes)
+        if anchor is None: return ()
+        reserve,start=anchor
+        labels.extend(('R' if reserve else '')+str(start+j) for j in range(n))
+    return tuple(labels)
+
+
 def learn_items(items,options):
+    # Model imports have their own page limit; the stable exam reader stays unchanged.
     pages=[]
     for name,data in items:
-        for i,im in enumerate(omr.decode(name,data)):
-            if len(pages)>=20: raise ValueError('Máximo 20 páginas por modelo.')
-            pages.append(learn_page(im,f'{name} · {i+1}',options))
+        if Path(name).suffix.lower()=='.pdf':
+            import pypdfium2 as pdfium
+            from pypdf import PdfReader
+            try: reader=PdfReader(BytesIO(data))
+            except Exception: reader=None
+            doc=pdfium.PdfDocument(data)
+            try:
+                if not 1<=len(doc)<=200-len(pages): raise ValueError('Máximo 200 páginas por modelo.')
+                for i in range(len(doc)):
+                    pdfpage=doc[i]
+                    try:
+                        w,h=pdfpage.get_size(); bitmap=pdfpage.render(scale=min(3,2000/max(w,h)))
+                        try: im=np.array(bitmap.to_pil().convert('RGB'))
+                        finally: bitmap.close()
+                    finally: pdfpage.close()
+                    try: text=reader.pages[i].extract_text() if reader else ''
+                    except Exception: text=''
+                    pages.append(learn_with_hints(im,f'{name} · {i+1}',options,text))
+            finally: doc.close()
+        else:
+            for i,im in enumerate(omr.decode(name,data)):
+                if len(pages)>=200: raise ValueError('Máximo 200 páginas por modelo.')
+                pages.append(learn_with_hints(im,f'{name} · {i+1}',options))
     if not pages: raise ValueError('No hay páginas.')
     return pages
+
+
+def suggest_numbering(pages,questions,reserves):
+    """Prefer printed identifiers; use initial values only for ambiguous geometry."""
+    n=1; r=1; total=sum(len(b.rows) for p in pages for b in p.blocks)
+    reliable=[]
+    for p in pages:
+        count=sum(len(b.rows) for b in p.blocks)
+        reliable.append(bool(count and len(p.labels)==count and len(set(p.labels))==count))
+    # If the total is exactly the suggested ordinary count, do not invent reserves.
+    # With no printed labels, a reserve hint or ordinary boundary is only a proposal.
+    cutoff=questions if total>=questions and (reserves or total>questions) else total
+    for p,known in zip(pages,reliable):
+        cursor=0; rebuilt=[]
+        for b in p.blocks:
+            if known:
+                labels=p.labels[cursor:cursor+len(b.rows)]; cursor+=len(b.rows)
+            else:
+                labels=[]
+                for _ in b.rows:
+                    if n<=cutoff: labels.append(str(n)); n+=1
+                    else: labels.append('R'+str(r)); r+=1
+            runs=[]
+            for row,label in zip(b.rows,labels):
+                reserve=label.startswith('R'); v=int(label.lstrip('R'))
+                if known:
+                    if reserve: r=max(r,v+1)
+                    else: n=max(n,v+1)
+                if not runs or label!=next_label(runs[-1].start,len(runs[-1].rows)):
+                    runs.append(Block([],label))
+                runs[-1].rows.append(row)
+            rebuilt.extend(runs)
+        p.blocks=rebuilt
+    return detected_counts(pages)
+
+
+def next_label(start,offset):
+    start=start.strip().upper().replace('-',''); return ('R' if start.startswith('R') else '')+str(int(start.lstrip('R'))+offset)
+
+
+def detected_counts(pages):
+    return tuple(sum(len(b.rows) for p in pages for b in p.blocks if b.start.startswith('R')==reserve) for reserve in (False,True))
+
+
+def page_kind(page):
+    types={b.start.startswith('R') for b in page.blocks}
+    return 'mixed' if len(types)>1 else ('reserve' if True in types else 'ordinary')
+
+
+def reorder_pages(pages,order,kinds):
+    # Keep mixed column classifications; a deliberate override changes only numbers.
+    if sorted(order)!=list(range(len(pages))) or len(kinds)!=len(pages): raise ValueError('Orden de páginas incorrecto.')
+    result=[pages[i] for i in order]; nexts={False:1,True:1}
+    for p,kind in zip(result,kinds):
+        for b in p.blocks:
+            reserve=b.start.startswith('R') if kind=='mixed' else kind=='reserve'
+            b.start=('R' if reserve else '')+str(nexts[reserve]); nexts[reserve]+=len(b.rows)
+    return result
 
 
 def preview(page):
@@ -127,6 +307,7 @@ def metadata(pages,questions,reserves,options):
     if not 1<=questions<=500 or not 0<=reserves<=100 or not 2<=options<=5: raise ValueError('Configuración fuera de rango.')
     wanted={str(i) for i in range(1,questions+1)}|{f'R{i}' for i in range(1,reserves+1)}; seen=set(); result=[]
     for p in pages:
+        if p.labels and len(p.labels)!=sum(len(b.rows) for b in p.blocks): raise ValueError('La numeración impresa y las filas reconocidas no coinciden en '+p.source+'. Repite la importación con una hoja nítida.')
         h,w=p.image.shape[:2]; blocks=[]; used=[]
         for b in p.blocks:
             if not b.rows: continue

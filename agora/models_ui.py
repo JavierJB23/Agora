@@ -1,9 +1,9 @@
 """Model library and live printable PDF editor."""
 from dataclasses import replace
 from pathlib import Path
-from PySide6.QtCore import Qt,QTimer
+from PySide6.QtCore import Qt,QTimer,QVariantAnimation,QEasingCurve
 from PySide6.QtGui import QPixmap,QImage,QColor,QPainter
-from PySide6.QtWidgets import (QWidget,QDialog,QVBoxLayout,QHBoxLayout,QGridLayout,QLabel,QLineEdit,QCheckBox,QScrollArea,QFileDialog,QMessageBox,QColorDialog,QInputDialog,QSizePolicy)
+from PySide6.QtWidgets import (QWidget,QDialog,QVBoxLayout,QHBoxLayout,QGridLayout,QLabel,QLineEdit,QCheckBox,QScrollArea,QFileDialog,QMessageBox,QColorDialog,QInputDialog,QSizePolicy,QFrame)
 from .controls import SafeComboBox,SafeSpinBox
 from .models import Model,ModelLibrary,PRESETS,pdf_bytes,layout,color_name
 from .ui import button,label,frame,vertical,ASSETS
@@ -124,11 +124,39 @@ class ModelEditor(QDialog):
         except Exception as e: QMessageBox.warning(self,'Impresión',str(e))
         finally: painter.end()
 
+class ModelSection(QWidget):
+    """A clipped content area animated like a roller blind, not a sudden hide."""
+    def __init__(self,title,parent=None):
+        super().__init__(parent); self.title=title; self.expanded=False
+        root=vertical(self,spacing=6); self.header=button('',role='softAction'); self.header.setStyleSheet('text-align:left;padding:12px 16px;font-weight:600;'); self.header.clicked.connect(self.toggle); root.addWidget(self.header)
+        self.viewport=QScrollArea(); self.viewport.setFrameShape(QFrame.Shape.NoFrame); self.viewport.setWidgetResizable(True); self.viewport.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff); self.viewport.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        content=QWidget(); self.content=content; body=vertical(content,margins=(0,2,0,2),spacing=8); self.grid=QGridLayout(); self.grid.setHorizontalSpacing(12); self.grid.setVerticalSpacing(12); body.addLayout(self.grid)
+        close=button('Ocultar'); close.setStyleSheet('font-style:italic;text-align:center;padding:4px 12px;'); close.setSizePolicy(QSizePolicy.Policy.Fixed,QSizePolicy.Policy.Fixed); close.clicked.connect(self.toggle); body.addWidget(close,0,Qt.AlignmentFlag.AlignHCenter)
+        self.viewport.setWidget(content); root.addWidget(self.viewport); self.viewport.setFixedHeight(0); self.viewport.hide()
+        self.anim=QVariantAnimation(self); self.anim.setDuration(280); self.anim.setEasingCurve(QEasingCurve.Type.InOutCubic); self.anim.valueChanged.connect(lambda value:self.set_height(int(value))); self.anim.finished.connect(self.finished); self.update_header()
+    def update_header(self): self.header.setText(('⌄  ' if self.expanded else '›  ')+self.title+('    · Ocultar' if self.expanded else '    · Mostrar'))
+    def set_height(self,h):
+        self.viewport.setFixedHeight(max(0,h)); self.updateGeometry()
+    def target(self):
+        self.content.layout().activate(); return max(1,self.content.sizeHint().height())+2
+    def toggle(self):
+        self.expanded=not self.expanded; self.update_header(); self.anim.stop(); start=self.viewport.height() if self.viewport.isVisible() else 0
+        self.viewport.show(); self.anim.setStartValue(start); self.anim.setEndValue(self.target() if self.expanded else 0); self.anim.start()
+    def finished(self):
+        if self.expanded: self.set_height(self.target())
+        else: self.set_height(0); self.viewport.hide()
+    def sync(self):
+        if self.expanded:
+            self.anim.stop(); self.set_height(self.target()); self.viewport.show()
+
+
 class ModelsPage(QWidget):
     def __init__(self,window):
-        super().__init__(); self.window=window; self.library=None; self.thumbnails={}; l=vertical(self,spacing=16); back=button('Volver a Mi temario','book'); back.clicked.connect(lambda:window.library_stack.setCurrentIndex(0)); l.addWidget(back,0,Qt.AlignmentFlag.AlignLeft); l.addWidget(label('Mis modelos','heading'))
+        super().__init__(); self.main_window=window; self.library=None; self.thumbnails={}; l=vertical(self,spacing=16); back=button('Volver a Mi temario','book'); back.clicked.connect(lambda:window.library_stack.setCurrentIndex(0)); l.addWidget(back,0,Qt.AlignmentFlag.AlignLeft); l.addWidget(label('Mis modelos','heading'))
         row=QHBoxLayout(); create=button('Crear modelo',role='primary'); create.clicked.connect(lambda:self.edit(Model())); row.addWidget(create); imp=button('Importar modelo en blanco',role='softAction'); imp.clicked.connect(self.import_external); row.addWidget(imp); row.addStretch(); l.addLayout(row)
-        l.addWidget(label('Modelos de Ágora','tileTitle')); self.presets=QGridLayout(); l.addLayout(self.presets); l.addWidget(label('Mis modelos personalizados','tileTitle')); self.custom=QGridLayout(); l.addLayout(self.custom); l.addWidget(label('Modelos externos aprendidos','tileTitle')); self.external=QGridLayout(); l.addLayout(self.external); l.addStretch()
+        self.preset_section=ModelSection('Modelos de Ágora',self); self.custom_section=ModelSection('Mis modelos personalizados',self); self.external_section=ModelSection('Modelos externos aprendidos',self)
+        for section in (self.preset_section,self.custom_section,self.external_section): l.addWidget(section)
+        self.presets=self.preset_section.grid; self.custom=self.custom_section.grid; self.external=self.external_section.grid; l.addStretch()
         for m in PRESETS: self.add_card(self.presets,m)
     def refresh(self):
         while self.custom.count():
@@ -136,12 +164,12 @@ class ModelsPage(QWidget):
             if w: w.hide(); w.deleteLater()
         self.thumbnails={m:p for m,p in self.thumbnails.items() if m in PRESETS}
         try:
-            if self.library is None: self.library=ModelLibrary(self.window.storage.directory)
+            if self.library is None: self.library=ModelLibrary(self.main_window.storage.directory)
             entries=self.library.entries()
             if not entries: self.custom.addWidget(label('Todavía no hay modelos personalizados.','muted'),0,0,1,2)
             for mid,m,date in entries: self.add_card(self.custom,m,mid,date)
         except Exception as e: self.custom.addWidget(label(str(e),wrap=True),0,0,1,2)
-        self.refresh_external()
+        self.custom_section.sync(); self.refresh_external()
     def import_external(self):
         from .external_ui import import_model
         import_model(self); self.refresh_external()
@@ -171,6 +199,7 @@ class ModelsPage(QWidget):
                 self.external.addWidget(card,i//2,i%2)
             self.external.setColumnStretch(0,1); self.external.setColumnStretch(1,1)
         except Exception as e: self.external.addWidget(label(str(e),wrap=True),0,0,1,2)
+        self.external_section.sync()
     def rename_external(self,lib,mid,name):
         new,ok=QInputDialog.getText(self,'Renombrar modelo','Nombre del modelo',text=name)
         if ok:
@@ -197,7 +226,7 @@ class ModelsPage(QWidget):
         actions.setColumnStretch(2,1); info.addStretch(); n=l.count(); l.addWidget(card,n//2,n%2); l.setColumnStretch(0,1); l.setColumnStretch(1,1)
     def consult(self,m): ModelEditor(self,m,read_only=True).exec()
     def edit(self,m,mid=None):
-        if self.library is None: self.library=ModelLibrary(self.window.storage.directory)
+        if self.library is None: self.library=ModelLibrary(self.main_window.storage.directory)
         if mid is None and m in PRESETS: m=replace(m,name=m.name+' personalizado')
         dlg=ModelEditor(self,m,lambda value:self.library.save(value,mid)); dlg.exec(); self.refresh()
     def download(self,m):
