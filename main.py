@@ -91,6 +91,19 @@ def smoke_test(report):
             if not m.start_new() or not m.open_saved(aid): raise RuntimeError('Recuperación del simulacro incorrecta')
             m.move_stage(2)
             if not np.array_equal(m.reader.images[0],images[0]) or m.reader.marks[0]!=marks or m.answers!=['B']: raise RuntimeError('Recuperación de imágenes o respuestas incorrecta')
+            from agora.models import PRESETS,pdf_bytes,ModelLibrary
+            from agora.models_ui import render_page
+            import pypdfium2 as pdfium
+            w.go('library'); w.select_library_tab(2)
+            model=PRESETS[0]; generated=pdf_bytes(model)
+            doc=pdfium.PdfDocument(generated)
+            try:
+                if len(doc)!=2: raise RuntimeError('Paginación del modelo incorrecta')
+            finally: doc.close()
+            if render_page(generated,0).isNull(): raise RuntimeError('Vista previa del modelo incorrecta')
+            lib=ModelLibrary(folder); mid=lib.save(model)
+            if lib.entries()[0][1]!=model: raise RuntimeError('Persistencia de modelos incorrecta')
+            lib.delete(mid)
             w.go('home')
             w.close()
             app.processEvents()

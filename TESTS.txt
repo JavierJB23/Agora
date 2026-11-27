@@ -1,3 +1,15 @@
+Resultado 06C RC1 local: 113 pruebas correctas, 33 omitidas (Qt no disponible), 0 fallos. 5 pruebas del generador y 5 de MobileSession incluidas. JavaScript: 3 estados simulados correctos. QR impreso decodificado en ambas páginas.
+
+06C RC1 (v0.6.19):
+- Compilar manual, comprobar EXE y conservación de datos.
+- Mi temario tiene tres botones centrados; Mis modelos abre pantalla independiente.
+- Consultar los cuatro diseños; exportar e imprimir, comprobar numeración y reservas.
+- Crear 120+9 A–C, 50+5 A–D, 500+100 A–E, horizontal, notas, distintas formas y colores. Vista previa debe coincidir con PDF. No solapar ni recortar casillas; paginar.
+- Guardar modelo personalizado, editar, renombrar y eliminar; reabrir Ágora y verificar persistencia; originales no modificables.
+- QR: recepción automática, nuevas tandas, destino cambiante, avisos de sustitución. Al desconectar oculta reloj y botones, muestra Móvil desconectado. Tras 15 min muestra Tiempo agotado. Comprobar pérdida de Wi-Fi y error de transferencia.
+- Regresión del corrector y reservas. El lector específico de QR de modelos y aprendizaje de hojas externas todavía NO está implementado; no confundir QR de identificación impreso con QR de transferencia.
+- Pruebas no gráficas nuevas del generador y servidor QR; prueba GUI de editor y smoke EXE ampliados. Qt no disponible en entorno local, compilación e impresión Windows y Safari requieren validación.
+
 06B FIX01 (v0.6.18):
 - Iniciar QR desde Respuestas, enviar una foto; el PC comienza lectura sin pulsar Importar archivos.
 - Dejar Safari abierto; enviar reservas desde la misma sesión. El original no se pierde y no hay aviso de sustitución si no se solapa.

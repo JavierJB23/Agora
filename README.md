@@ -1,3 +1,15 @@
+# Ágora v0.6.19 — BLOCK 06C — RC1
+
+Base: 06B FIX01 validado por el usuario. Copia estable: conservar ZIP v0.6.18 y copia de datos.
+- Mi temario > Mis modelos, tercer botón y pantalla independiente. Cuatro diseños de serie, consultables, descargables y personalizables sin modificar originales.
+- Generador A4 con vista previa del PDF real, paginación, 1–500 ordinarias, 0–100 reservas, 2–5 opciones (límites del corrector), hasta cuatro columnas, círculos/cuadrados/óvalos, orientación, color, márgenes, tamaño de casillas, título, cabecera, logo, notas y reservas separadas. Si no caben, reduce columnas/pagina; no encoge las casillas. Colores demasiado claros usan tinta oscura para conservar contraste. Guardado local independiente models.sqlite3; editar, renombrar, eliminar con aviso, exportar PDF e imprimir. Se incluyen marcas de alineación e identificador QR de diseño; su lectura específica está pendiente del 06E. El modelo generado no es un solucionario. Importar modelos en blanco desde PC/QR y aprender sus geometrías: 06D, no implementado aún. No se modifica OMR/OCR ni puntuación.
+- QR móvil: reloj de 48 px, sin notas redundantes. Al desconectar o agotar tiempo, la web oculta todos los controles y muestra el motivo. El servidor conserva temporalmente únicamente el estado final (hasta el plazo original + 60 s), sin admitir envíos. Si se corta Wi-Fi no puede conocer el motivo hasta reconectar; muestra error de conexión. Se mantienen importación inmediata, enrutamiento y avisos de sustitución.
+- Subir todos los archivos, incluyendo requirements.txt (añade ReportLab); mantener windows.yml del 06B RC1, ejecutar Run workflow manualmente. No instalar Python. Se añade comprobación de PDF generado al smoke test del EXE. No se incluyen documentos privados.
+
+Validación local: 146 pruebas ejecutadas, 113 correctas y 33 gráficas omitidas por falta de PySide6; comprobación adicional de los tres estados de página móvil mediante JavaScript y decodificación del QR de las dos páginas del modelo clásico. Revisadas visualmente las dos páginas del clásico y el compacto. Pendientes Windows, impresión real y Safari.
+
+## Histórico (06C RC1 prevalece)
+
 # Ágora v0.6.18 — BLOCK 06B — FIX01
 
 - Sesión móvil global: el QR dura 15 minutos desde su creación, sin reiniciarse con cada envío. La ventana del PC acepta la primera tanda automáticamente; la página del móvil sigue disponible y muestra el destino y la cuenta atrás. Conservar el navegador abierto, navegar a Soluciones (manual o automático), Respuestas del automático o Mis plantillas y enviar otra tanda sin escanear. El destino debe estar disponible y no ocupado; en Inicio y otros apartados se bloquea el envío. Los envíos que cambien de destino se rechazan, sin reasignación silenciosa. Límite de 20 archivos / 100 MiB por tanda (1 archivo para Soluciones). Desconectar móvil en el lateral o cerrar Ágora finaliza la sesión. Se mantiene la revisión de solucionarios y las confirmaciones de sustitución de respuestas solapadas; no se exige confirmación de sustitución para una hoja adicional sin solapamientos. Las duplicidades en biblioteca siguen su flujo normal.

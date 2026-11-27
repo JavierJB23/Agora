@@ -5,3 +5,5 @@ numpy==2.3.5
 opencv-python-headless==4.13.0.92
 Pillow==12.3.0
 pypdfium2==5.8.0
+
+reportlab==4.4.9

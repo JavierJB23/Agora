@@ -1,3 +1,6 @@
+# BLOCK 06C — RC1 v0.6.19 (pendiente de validación)
+06B FIX01 v0.6.18 validado por usuario. Nueva pantalla Mis modelos, generador, biblioteca y PDF. Ajuste visual y cierre QR. No avanzar hasta validar. Siguiente: 06D importar modelo en blanco (PC/QR), detectar geometría, conservar original y registro opcional, acceso desde corrector y biblioteca. Después 06E lectura específica de modelos propios/externos y pruebas generalistas; continuar 07, 08, 09–13. OCR de opciones y formatos desconocidos sigue pendiente. Mantener compilación manual.
+
 # BLOCK 06B — FIX01 v0.6.18 (pendiente de validación)
 QR global con envío automático y cuenta atrás de 15 minutos. Destinos actualmente disponibles: Soluciones de ambos correctores, Respuestas del automático y Mis plantillas. Extender esta misma conexión al importar temas y modelos en bloques futuros. Ocultar anotación OCR sin retirar avisos de errores. RC1 validado por el usuario en lector y pendiente de ajustar QR; FIX16 permanece punto de restauración estable. No avanzar a 06C hasta validar FIX01.
 
