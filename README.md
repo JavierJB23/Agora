@@ -265,3 +265,15 @@ Regla de reservas y puntuación: reemplazo por orden ascendente; sin reservas v�
 - Repasar respuestas sustituye a Repasar errores. Frases de inicio variables, respetando el saludo nominal personalizado existente.
 - El OMR diferencia las filas oscuras de una cuadrícula de cuadrados verificada de las cabeceras sólidas; se mantienen las verificaciones geométricas y de numeración OCR. Las anotaciones manuscritas fuera de las casillas no se convierten en reservas.
 - Compilación manual mediante workflow_dispatch. No incluye fotografías ni documentos de usuario en el repositorio.
+
+## v0.6.24 · BLOCK 06D · FIX03
+
+- Correctores: sugerencias de búsqueda por nombre, sin tildes ni distinción de mayúsculas. Al elegir una sugerencia se selecciona su ID en el desplegable. Se mantiene la protección de un borrador ya activo.
+- Editor de modelos: Intro confirma el valor numérico (o muestra el aviso y recupera el anterior) sin activar botones del diálogo ni abrir el selector de color.
+- QR reutilizable: cámara, fototeca y archivos. Soluciones y respuestas automáticas admiten PDF, DOCX, JPG/JPEG y PNG, con validación por destino y 100 MB por envío. Los solucionarios fotográficos utilizan Tesseract local y revisión del listado; un PDF escaneado también admite OCR. Un solucionario por importación (PDF multipágina permitido). Los Word de respuestas admiten listados numerados o hojas insertadas como imágenes; enviar listados Word y hojas ópticas en lotes separados. No se admite DOC antiguo ni HEIC directo.
+- Anulaciones reversibles: se guarda la respuesta anterior en `annul_originals`, independiente de la plantilla común, sin cambiar la fórmula de nota. En Resultado, selecciona una fila y pulsa Anular / restaurar pregunta; en manual también puedes pulsar Anulada de nuevo, y en automático el desplegable ofrece Restaurar respuesta original. Guarda progreso para conservar la modificación. Las anulaciones del solucionario se editan en Soluciones. Si no había respuesta anterior (versiones antiguas o pregunta pendiente), debes indicar la original al restaurar. R1, R2... se utilizan por orden solo si son necesarias. Si las reservas disponibles no cubren todas las anuladas, se conserva la regla anterior de excluir las no sustituidas del denominador.
+- Soluciones numeradas consecutivamente: si coinciden exactamente con el total configurado de ordinarias y reservas y no hay prefijo R, se pide confirmar la separación de las últimas reservas.
+- El código OMR geométrico no ha cambiado. El envío de fotos de soluciones y lectura de texto utiliza OCR, no OMR.
+- GitHub Actions sigue siendo manual (workflow_dispatch); ejecutar una vez terminada la subida.
+
+Validación local: 74 pruebas dirigidas aprobadas en la revisión final, comprobación sintáctica Python y JavaScript. Las pruebas de interfaz nuevas y anteriores necesitan PySide6/Windows y quedan pendientes de la compilación de GitHub. El conjunto anterior, durante la revisión, pasó 128 pruebas técnicas y omitió 40 pruebas Qt. No se ha probado la cámara/fototeca en un iPhone real.

@@ -328,3 +328,89 @@ v0.6.23 FIX02:
 - Nuevas pruebas locales: fila oscura de cuadrados frente a cabecera sólida; actualización atómica de modelo aprendido, eliminación y recuperación de páginas, identidad persistente. Ambas superadas; módulo external_models: 11/11.
 - Fotografía nueva del Test 10: 120 filas, 4 opciones impresas; OCR directo en 69 filas y comprobación de continuidad en 51, sin conflicto de numeración. Lectura de la 119: A. Probado con 107 y 120 preguntas configuradas, sin verificar una nota final ni la exactitud de todas las marcas contra un solucionario.
 - Añadidas pruebas UI de filtro, ausencia del botón en corrector, límites y título de repaso. Pendientes de ejecución en GitHub Actions/Windows, incluido el comportamiento de la animación y los avisos de campos numéricos.
+
+v0.6.24 FIX03 — resultado local de la revisión final:
+test_blank_restores_and_original_not_overwritten (test_fix03.Fix03Tests.test_blank_restores_and_original_not_overwritten) ... ok
+test_local_ocr_photo (test_fix03.Fix03Tests.test_local_ocr_photo) ... ok
+test_mobile_pickers_and_extensions (test_fix03.Fix03Tests.test_mobile_pickers_and_extensions) ... ok
+test_photo_key_and_archive (test_fix03.Fix03Tests.test_photo_key_and_archive) ... ok
+test_reversible_annulments_and_saved_reserves (test_fix03.Fix03Tests.test_reversible_annulments_and_saved_reserves) ... ok
+test_word_embedded_scan_order (test_fix03.Fix03Tests.test_word_embedded_scan_order) ... ok
+test_word_list_reserves_and_blanks (test_fix03.Fix03Tests.test_word_list_reserves_and_blanks) ... ok
+test_columns_with_reserves (test_answer_import.ImportTests.test_columns_with_reserves) ... ok
+test_compact (test_answer_import.ImportTests.test_compact) ... ok
+test_docx (test_answer_import.ImportTests.test_docx) ... ok
+test_invalid_file (test_answer_import.ImportTests.test_invalid_file) ... invalid pdf header: b'not a'
+EOF marker not found
+ok
+test_missing_and_duplicate_and_prose (test_answer_import.ImportTests.test_missing_and_duplicate_and_prose) ... ok
+test_questionnaire (test_answer_import.ImportTests.test_questionnaire) ... ok
+test_reserves (test_answer_import.ImportTests.test_reserves) ... ok
+test_annulled_without_reserves (test_grading.AttemptAnnulmentTests.test_annulled_without_reserves) ... ok
+test_key_and_attempt_annulment_not_counted_twice_and_skip_reserve (test_grading.AttemptAnnulmentTests.test_key_and_attempt_annulment_not_counted_twice_and_skip_reserve) ... ok
+test_missing_reserve_warning_uses_attempt_annulments (test_grading.AttemptAnnulmentTests.test_missing_reserve_warning_uses_attempt_annulments) ... ok
+test_three_annulled_use_three_reserves (test_grading.AttemptAnnulmentTests.test_three_annulled_use_three_reserves) ... ok
+test_all_correct (test_grading.GradingTests.test_all_correct) ... ok
+test_blank (test_grading.GradingTests.test_blank) ... ok
+test_five_options_custom_scoring (test_grading.GradingTests.test_five_options_custom_scoring) ... ok
+test_insufficient_reserves (test_grading.GradingTests.test_insufficient_reserves) ... ok
+test_invalid_config (test_grading.GradingTests.test_invalid_config) ... ok
+test_invalid_entries (test_grading.GradingTests.test_invalid_entries) ... ok
+test_large_exam (test_grading.GradingTests.test_large_exam) ... ok
+test_mixed (test_grading.GradingTests.test_mixed) ... ok
+test_negative_and_floor (test_grading.GradingTests.test_negative_and_floor) ... ok
+test_no_evaluable (test_grading.GradingTests.test_no_evaluable) ... ok
+test_precision_and_rounding (test_grading.GradingTests.test_precision_and_rounding) ... ok
+test_real_size_example (test_grading.GradingTests.test_real_size_example) ... ok
+test_replacement_order (test_grading.GradingTests.test_replacement_order) ... ok
+test_unused_reserves (test_grading.GradingTests.test_unused_reserves) ... ok
+test_zero_penalty (test_grading.GradingTests.test_zero_penalty) ... ok
+test_missing_reserves_warning (test_grading.OptionalReservesTests.test_missing_reserves_warning) ... ok
+test_batch_library_limit (test_library.LibraryTests.test_batch_library_limit) ... ok
+test_delete_clears_only_linked_drafts (test_library.LibraryTests.test_delete_clears_only_linked_drafts) ... ok
+test_deleted_template_original_preserved_not_relisted (test_library.LibraryTests.test_deleted_template_original_preserved_not_relisted) ... ok
+test_duplicate_pattern_and_overwrite (test_library.LibraryTests.test_duplicate_pattern_and_overwrite) ... ok
+test_import_does_not_register_and_cascade_is_explicit (test_library.LibraryTests.test_import_does_not_register_and_cascade_is_explicit) ... ok
+test_linked_and_legacy_entries (test_library.LibraryTests.test_linked_and_legacy_entries) ... ok
+test_migration_does_not_delete_attempts_with_recycled_old_ids (test_library.LibraryTests.test_migration_does_not_delete_attempts_with_recycled_old_ids) ... ok
+test_migration_keeps_unknown_dates (test_library.LibraryTests.test_migration_keeps_unknown_dates) ... invalid pdf header: b'old'
+EOF marker not found
+EOF marker not found
+ok
+test_rename_preserves_id_document_and_attempt (test_library.LibraryTests.test_rename_preserves_id_document_and_attempt) ... ok
+test_changed_destination_while_uploading (test_mobile_session.MobileSessionTests.test_changed_destination_while_uploading) ... ok
+test_disconnect_reports_terminal_state_and_blocks_upload (test_mobile_session.MobileSessionTests.test_disconnect_reports_terminal_state_and_blocks_upload) ... ok
+test_expiry (test_mobile_session.MobileSessionTests.test_expiry) ... ok
+test_reuse_across_destinations_and_countdown (test_mobile_session.MobileSessionTests.test_reuse_across_destinations_and_countdown) ... ok
+test_wrong_screen_and_wrong_format (test_mobile_session.MobileSessionTests.test_wrong_screen_and_wrong_format) ... ok
+test_delete_attempt_preserves_unrelated_draft_and_templates (test_storage.ManualStorageTests.test_delete_attempt_preserves_unrelated_draft_and_templates) ... ok
+test_delete_attempt_removes_linked_recovery (test_storage.ManualStorageTests.test_delete_attempt_removes_linked_recovery) ... ok
+test_draft_roundtrip (test_storage.ManualStorageTests.test_draft_roundtrip) ... ok
+test_optical_draft_replacement_does_not_change_saved (test_storage.ManualStorageTests.test_optical_draft_replacement_does_not_change_saved) ... ok
+test_optical_snapshots_exact_and_shared (test_storage.ManualStorageTests.test_optical_snapshots_exact_and_shared) ... ok
+test_saved_attempts_are_independent_of_recovery (test_storage.ManualStorageTests.test_saved_attempts_are_independent_of_recovery) ... ok
+test_separate_automatic_draft_and_history (test_storage.ManualStorageTests.test_separate_automatic_draft_and_history) ... ok
+test_solution_original_archive_independent (test_storage.ManualStorageTests.test_solution_original_archive_independent) ... ok
+test_templates_independent (test_storage.ManualStorageTests.test_templates_independent) ... ok
+test_upgrade_from_block01 (test_storage.ManualStorageTests.test_upgrade_from_block01) ... ok
+test_upgrade_from_schema2_preserves_data (test_storage.ManualStorageTests.test_upgrade_from_schema2_preserves_data) ... ok
+test_upgrade_from_schema4_keeps_legacy_attempt (test_storage.ManualStorageTests.test_upgrade_from_schema4_keeps_legacy_attempt) ... ok
+test_upgrade_from_schema5_preserves_documents_and_attempts (test_storage.ManualStorageTests.test_upgrade_from_schema5_preserves_documents_and_attempts) ... ok
+test_future_db_not_downgraded (test_storage.StorageTests.test_future_db_not_downgraded) ... ok
+test_initialization (test_storage.StorageTests.test_initialization) ... ok
+test_module_registry (test_storage.StorageTests.test_module_registry) ... ok
+test_persistence (test_storage.StorageTests.test_persistence) ... ok
+test_reject_unknown (test_storage.StorageTests.test_reject_unknown) ... ok
+test_batch_two_images_atomic (test_transfer.TransferTests.test_batch_two_images_atomic) ... ok
+test_limit_and_browser_agree (test_transfer.TransferTests.test_limit_and_browser_agree) ... ok
+test_mobile_large_file_selector_and_brand (test_transfer.TransferTests.test_mobile_large_file_selector_and_brand) ... ok
+test_reusable_qr_batches_and_finalization (test_transfer.TransferTests.test_reusable_qr_batches_and_finalization) ... ok
+test_transfer_above_previous_limit (test_transfer.TransferTests.test_transfer_above_previous_limit) ... ok
+test_upload_once_and_token (test_transfer.TransferTests.test_upload_once_and_token) ... ok
+test_remove_ordinary_and_keep_reserves_without_solution (test_page_removal.PageRemovalTests.test_remove_ordinary_and_keep_reserves_without_solution) ... ok
+test_remove_reserve_and_save_roundtrip (test_page_removal.PageRemovalTests.test_remove_reserve_and_save_roundtrip) ... ok
+
+----------------------------------------------------------------------
+Ran 74 tests in 5.715s
+
+OK
