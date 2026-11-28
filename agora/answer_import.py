@@ -142,17 +142,28 @@ def _column_ocr(gray, initial):
                 m=PAIR.fullmatch(line)
                 if not m:
                     # Retry only a damaged answer glyph, with its own alphabet.
-                    n=re.fullmatch(r'(R?)[ ]*(\d{1,3})[.]\s*(.+)',line,re.I)
+                    n=re.fullmatch(r'(R?)[ ]*(\d{1,3})[.]\s*(.*)',line,re.I)
                     if not n: raise ValueError('Número o letra dudosos: '+line)
                     row=ink[max(0,y-2):z+2,l:r]
                     xx=np.flatnonzero(row.any(axis=0)); pieces=np.split(xx,np.where(np.diff(xx)>max(2,h//3))[0]+1)
                     if len(pieces)<2: raise ValueError('No se distingue la letra: '+line)
                     a,b=int(pieces[-1][0]),int(pieces[-1][-1])+1
+                    # The column OCR may emit only '3.'. A separate, letter-sized
+                    # ink component must actually exist to retry; never turn a
+                    # period or an empty answer into a guessed letter.
+                    glyph_ink=row[:,a:b]
+                    yy=np.flatnonzero(glyph_ink.any(axis=1))
+                    if not len(yy) or yy[-1]-yy[0]+1<.35*h or b-a<.22*h:
+                        raise ValueError('No se distingue la letra: '+line)
                     for scale in (2,4,5):
                         glyph=cv.resize(gray[max(0,y-3):z+3,max(0,l+a-2):l+b+2],None,fx=scale,fy=scale,interpolation=cv.INTER_CUBIC)
                         glyph=cv.copyMakeBorder(glyph,12,12,12,12,cv.BORDER_CONSTANT,value=255)
                         v=_ocr_image(glyph,10,'ABCDEXabcde').strip().upper()
                         if len(v)==1 and v in 'ABCDEX': break
+                    if len(v)!=1 or v not in 'ABCDEX':
+                        for mode in (7,13,8):
+                            v=_ocr_image(glyph,mode,'ABCDEXabcde').strip().upper()
+                            if len(v)==1 and v in 'ABCDEX': break
                     if len(v)!=1 or v not in 'ABCDEX': raise ValueError('Letra dudosa: '+line)
                     line=n[1]+n[2]+v; m=PAIR.fullmatch(line)
                 number=int(m[2])
