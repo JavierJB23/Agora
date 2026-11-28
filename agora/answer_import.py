@@ -136,49 +136,56 @@ def _column_ocr(gray, initial):
             y0,y1=rows[0][0],rows[-1][1]
             text=_ocr_image(prep(gray[max(0,y0-h//2):y1+h//2,l:r]),6,'0123456789.ABCDEXabcdeRr ')
             lines=[v.strip() for v in text.splitlines() if v.strip()]
-            if len(lines)!=len(rows): raise ValueError('No coincide el número de filas de la columna.')
+            # Do not pair shifted OCR text with physical rows.
+            if len(lines)!=len(rows): lines=['']*len(rows)
             previous=None
             for line,(y,z) in zip(lines,rows):
                 m=PAIR.fullmatch(line)
-                if not m:
-                    # Retry only a damaged answer glyph, with its own alphabet.
-                    n=re.fullmatch(r'(R?)[ ]*(\d{1,3})[.]\s*(.*)',line,re.I)
-                    if not n: raise ValueError('Número o letra dudosos: '+line)
+                if m and (previous is None or int(m[2])==previous+1):
+                    prefix,number,value=m[1],int(m[2]),m[3].upper()
+                else:
+                    # Recover fields from actual pixels, not the damaged OCR text.
                     row=ink[max(0,y-2):z+2,l:r]
-                    xx=np.flatnonzero(row.any(axis=0)); pieces=np.split(xx,np.where(np.diff(xx)>max(2,h//3))[0]+1)
-                    if len(pieces)<2: raise ValueError('No se distingue la letra: '+line)
+                    xx=np.flatnonzero(row.any(axis=0))
+                    pieces=[p for p in np.split(xx,np.where(np.diff(xx)>max(2,h//3))[0]+1) if len(p)]
+                    if len(pieces)<2: raise ValueError('Número o letra no visibles: '+line)
                     a,b=int(pieces[-1][0]),int(pieces[-1][-1])+1
-                    # The column OCR may emit only '3.'. A separate, letter-sized
-                    # ink component must actually exist to retry; never turn a
-                    # period or an empty answer into a guessed letter.
-                    glyph_ink=row[:,a:b]
-                    yy=np.flatnonzero(glyph_ink.any(axis=1))
-                    if not len(yy) or yy[-1]-yy[0]+1<.35*h or b-a<.22*h:
-                        raise ValueError('No se distingue la letra: '+line)
-                    for scale in (2,4,5):
-                        glyph=cv.resize(gray[max(0,y-3):z+3,max(0,l+a-2):l+b+2],None,fx=scale,fy=scale,interpolation=cv.INTER_CUBIC)
-                        glyph=cv.copyMakeBorder(glyph,12,12,12,12,cv.BORDER_CONSTANT,value=255)
-                        v=_ocr_image(glyph,10,'ABCDEXabcde').strip().upper()
-                        if len(v)==1 and v in 'ABCDEX': break
-                    if len(v)!=1 or v not in 'ABCDEX':
-                        for mode in (7,13,8):
-                            v=_ocr_image(glyph,mode,'ABCDEXabcde').strip().upper()
-                            if len(v)==1 and v in 'ABCDEX': break
-                    if len(v)!=1 or v not in 'ABCDEX': raise ValueError('Letra dudosa: '+line)
-                    line=n[1]+n[2]+v; m=PAIR.fullmatch(line)
-                number=int(m[2])
-                if previous is not None and number!=previous+1:
-                    row=ink[max(0,y-2):z+2,l:r]
-                    xx=np.flatnonzero(row.any(axis=0)); pieces=np.split(xx,np.where(np.diff(xx)>max(2,h//3))[0]+1)
-                    if len(pieces)<2: raise ValueError('Número dudoso: '+line)
-                    a,b=int(xx[0]),int(pieces[-2][-1])+1
-                    digits=prep(gray[max(0,y-3):z+3,max(0,l+a-2):l+b+2])
-                    read=_ocr_image(digits,7,'0123456789.').strip().rstrip('.')
-                    if not read.isdigit() or int(read)!=previous+1: raise ValueError('Numeración dudosa: '+line)
-                    number=int(read)
+                    left,right=int(xx[0]),int(pieces[-2][-1])+1
+                    def visible(a,b,min_height,min_width):
+                        yy=np.flatnonzero(row[:,a:b].any(axis=1))
+                        return bool(len(yy) and yy[-1]-yy[0]+1>=min_height*h and b-a>=min_width*h)
+                    if not visible(a,b,.35,.22) or not visible(left,right,.55,.20):
+                        raise ValueError('Número o letra no visibles: '+line)
+                    def crop(a,b):
+                        return gray[max(0,y-3):z+3,max(0,l+a-2):l+b+2]
+                    def variants(glyph, alphabet, pattern, modes):
+                        for scale in (2,4,5):
+                            g=cv.resize(glyph,None,fx=scale,fy=scale,interpolation=cv.INTER_CUBIC)
+                            _,binary=cv.threshold(g,0,255,cv.THRESH_BINARY+cv.THRESH_OTSU)
+                            for im in (g,binary):
+                                im=cv.copyMakeBorder(im,15,15,15,15,cv.BORDER_CONSTANT,value=255)
+                                for mode in modes:
+                                    v=_ocr_image(im,mode,alphabet).strip().upper().replace(' ','')
+                                    if pattern.fullmatch(v): yield v
+                    n=re.fullmatch(r'(R?)[ ]*(\d{1,3})[.]\s*(.*)',line,re.I)
+                    tail=re.fullmatch(r'\s*\.?\s*([A-EX])\s*',line,re.I)
+                    prefix=m[1] if m else n[1] if n else None
+                    number=int(m[2]) if m else int(n[2]) if n else None
+                    value=m[3].upper() if m else tail[1].upper() if tail else None
+                    expected=None if previous is None else previous+1
+                    if number is None or (expected is not None and number!=expected):
+                        candidates=variants(crop(left,right),'0123456789.Rr-',re.compile(r'R?-?\d{1,3}\.?'),(7,8,13,10))
+                        for digit_text in candidates:
+                            read=int(digit_text.lstrip('R-').rstrip('.'))
+                            if read>0 and (expected is None or read==expected):
+                                number=read; prefix=prefix or digit_text.startswith('R'); break
+                        else: raise ValueError('Numeración dudosa: '+line)
+                    if value is None:
+                        value=next(variants(crop(a,b),'ABCDEXabcde',re.compile(r'[A-EX]'),(10,7,13,8)),None)
+                        if value is None: raise ValueError('Letra dudosa: '+line)
                 previous=number
-                target=reserve if is_reserve or m[1] else ordinary
-                target.append(('R' if target is reserve else '')+str(number)+m[3].upper())
+                target=reserve if is_reserve or prefix else ordinary
+                target.append(('R' if target is reserve else '')+str(number)+value)
     if reserve_seen and not reserve: raise ValueError('No se han leído las reservas.')
     result='\n'.join(ordinary+reserve)
     parse_pages([result])  # verify duplicates and gaps before proposing any solution
