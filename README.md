@@ -277,3 +277,11 @@ Regla de reservas y puntuación: reemplazo por orden ascendente; sin reservas v�
 - GitHub Actions sigue siendo manual (workflow_dispatch); ejecutar una vez terminada la subida.
 
 Validación local: 74 pruebas dirigidas aprobadas en la revisión final, comprobación sintáctica Python y JavaScript. Las pruebas de interfaz nuevas y anteriores necesitan PySide6/Windows y quedan pendientes de la compilación de GitHub. El conjunto anterior, durante la revisión, pasó 128 pruebas técnicas y omitió 40 pruebas Qt. No se ha probado la cámara/fototeca en un iPhone real.
+
+## v0.6.25 · BLOCK 06D · FIX04
+
+- Sugerencias del buscador de plantillas: filas alternas rosa pastel, separación, hover y selección de alto contraste; puntero de mano. No cambia el filtrado ni la carga de plantillas.
+- QR: de nuevo un único selector de archivos y un botón de envío. En destinos que admiten imágenes se retira `accept` para dejar al navegador ofrecer su selector nativo (cámara, fototeca y archivos, según iOS); la validación de extensiones y tamaño continúa en el servidor. No admite HEIC directo. Los destinos exclusivamente documentales mantienen sus filtros. Sin cambios en sesión, plazo y rutas.
+- OCR de solucionarios: si la lectura de texto normal falla, identifica columnas por densidad de tinta, separa encabezados de reserva explícitos y vuelve a leer las filas. Si un número no coincide con la secuencia se vuelve a reconocer su recorte; no se rellena por inferencia. Las letras dudosas se releen con el alfabeto de respuestas. Se rechazan duplicados, huecos y resultados incompletos detectados. Se mantiene la revisión antes de aceptar. El motor geométrico OMR y el baremo no cambian.
+- Prueba local con fotografía aportada: simulacro 19, 120 ordinarias y 9 reservas; 129/129 coincidentes con transcripción visual. La foto no forma parte del paquete ni del repositorio. Nueva prueba sintética de tres columnas y reservas. Pendientes de validar en Windows y Safari de iPhone.
+- Compilación exclusivamente manual (`workflow_dispatch`).

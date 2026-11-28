@@ -414,3 +414,37 @@ test_remove_reserve_and_save_roundtrip (test_page_removal.PageRemovalTests.test_
 Ran 74 tests in 5.715s
 
 OK
+
+
+=== v0.6.25 FIX04: pruebas dirigidas ===
+test_columns_with_reserves (test_answer_import.ImportTests.test_columns_with_reserves) ... ok
+test_compact (test_answer_import.ImportTests.test_compact) ... ok
+test_docx (test_answer_import.ImportTests.test_docx) ... ok
+test_invalid_file (test_answer_import.ImportTests.test_invalid_file) ... invalid pdf header: b'not a'
+EOF marker not found
+ok
+test_missing_and_duplicate_and_prose (test_answer_import.ImportTests.test_missing_and_duplicate_and_prose) ... ok
+test_questionnaire (test_answer_import.ImportTests.test_questionnaire) ... ok
+test_reserves (test_answer_import.ImportTests.test_reserves) ... ok
+test_blank_restores_and_original_not_overwritten (test_fix03.Fix03Tests.test_blank_restores_and_original_not_overwritten) ... ok
+test_local_ocr_photo (test_fix03.Fix03Tests.test_local_ocr_photo) ... ok
+test_mobile_pickers_and_extensions (test_fix03.Fix03Tests.test_mobile_pickers_and_extensions) ... ok
+test_photo_key_and_archive (test_fix03.Fix03Tests.test_photo_key_and_archive) ... ok
+test_reversible_annulments_and_saved_reserves (test_fix03.Fix03Tests.test_reversible_annulments_and_saved_reserves) ... ok
+test_word_embedded_scan_order (test_fix03.Fix03Tests.test_word_embedded_scan_order) ... ok
+test_word_list_reserves_and_blanks (test_fix03.Fix03Tests.test_word_list_reserves_and_blanks) ... ok
+test_columns_reserve_layout (test_fix04.Fix04Tests.test_columns_reserve_layout) ... ok
+test_native_picker_not_three_buttons (test_fix04.Fix04Tests.test_native_picker_not_three_buttons) ... ok
+test_changed_destination_while_uploading (test_mobile_session.MobileSessionTests.test_changed_destination_while_uploading) ... ok
+test_disconnect_reports_terminal_state_and_blocks_upload (test_mobile_session.MobileSessionTests.test_disconnect_reports_terminal_state_and_blocks_upload) ... ok
+test_expiry (test_mobile_session.MobileSessionTests.test_expiry) ... ok
+test_reuse_across_destinations_and_countdown (test_mobile_session.MobileSessionTests.test_reuse_across_destinations_and_countdown) ... ok
+test_wrong_screen_and_wrong_format (test_mobile_session.MobileSessionTests.test_wrong_screen_and_wrong_format) ... ok
+
+----------------------------------------------------------------------
+Ran 21 tests in 1.783s
+
+OK
+
+Foto privada de simulacro 19: 120/120 ordinarias, 9/9 reservas, verificación visual completa. No incluida en ZIP.
+Python compileall y node --check: correctos. Interfaz Qt e iPhone pendientes.
