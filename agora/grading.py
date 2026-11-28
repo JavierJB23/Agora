@@ -108,3 +108,16 @@ def missing_reserves_message(config,key,answers):
     else:
         detail='Ninguna de las reservas pendientes se necesita para sustituir anuladas. No afectarán a la nota.'
     return f'Faltan {len(missing)} respuestas de reserva. {detail} ¿Corregir igualmente?'
+
+
+def change_answer(answers, originals, index, value):
+    """X is a scoring override; retain the original response independently."""
+    key=str(index); previous=answers[index]
+    if value=='X' and previous!='X': originals[key]=previous
+    elif value!='X': originals.pop(key,None)
+    answers[index]=value
+
+
+def restore_answer(answers, originals, index):
+    if answers[index]!='X' or str(index) not in originals: return False
+    answers[index]=originals.pop(str(index)); return True

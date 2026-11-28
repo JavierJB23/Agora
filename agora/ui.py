@@ -232,7 +232,8 @@ class MainWindow(QMainWindow):
     def import_library(self):
         from .import_ui import ImportDialog
         from PySide6.QtWidgets import QDialog
-        dialog=ImportDialog(self,multiple=True,max_files=20)
+        from .answer_import import KEY_EXTENSIONS
+        dialog=ImportDialog(self,KEY_EXTENSIONS,multiple=True,max_files=20)
         if dialog.exec()!=QDialog.DialogCode.Accepted: return
         self.receive_library_items(dialog.items)
 
@@ -274,7 +275,7 @@ class MainWindow(QMainWindow):
             stamp=datetime.fromisoformat(e['created']).astimezone().strftime('%d/%m/%Y · %H:%M') if e['created'] else 'Fecha no disponible'
             info.addWidget(label(size+' · '+stamp,'muted',True)); h.addLayout(info,1)
             if e['ref']:
-                b=button('Consultar PDF' if e['filename'].lower().endswith('.pdf') else 'Consultar Word',role='softAction'); b.clicked.connect(lambda checked=False,r=e['ref']:consult_document(self,self.storage,r)); h.addWidget(b)
+                b=button('Consultar PDF' if e['filename'].lower().endswith('.pdf') else 'Consultar Word' if e['filename'].lower().endswith('.docx') else 'Consultar imagen',role='softAction'); b.clicked.connect(lambda checked=False,r=e['ref']:consult_document(self,self.storage,r)); h.addWidget(b)
             if e['payload']:
                 b=button('Consultar plantilla',role='softAction'); b.clicked.connect(lambda checked=False,n=e['name'],p=e['payload']:consult_template(self,self.storage,n,p)); h.addWidget(b)
             b=button('Renombrar',role='softAction'); b.clicked.connect(lambda checked=False,t=e['id'],n=e['name']:self.rename_library_template(t,n)); h.addWidget(b)

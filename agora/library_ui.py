@@ -9,7 +9,7 @@ from .grading import ExamConfig,evaluate
 
 
 def export_document(parent,name,data):
-    dest,_=QFileDialog.getSaveFileName(parent,'Guardar copia del documento',name,'PDF (*.pdf)' if name.lower().endswith('.pdf') else 'Word (*.docx)')
+    dest,_=QFileDialog.getSaveFileName(parent,'Guardar copia del documento',name,'Documento original (*'+Path(name).suffix+')')
     if dest:
         try: Path(dest).write_bytes(data)
         except OSError as e: QMessageBox.warning(parent,'No se pudo guardar la copia',str(e))
@@ -20,6 +20,13 @@ def consult_document(parent,storage,ref):
     except Exception as e: QMessageBox.warning(parent,'Documento no disponible',str(e)); return
     dlg=QDialog(parent); dlg.setWindowTitle('Consultar documento original'); dlg.resize(800,720); lay=QVBoxLayout(dlg)
     lay.addWidget(label(name,'heading',True))
+    if Path(name).suffix.lower() in ('.jpg','.jpeg','.png'):
+        from .omr import decode
+        from .omr_ui import pix
+        try:
+            im=decode(name,data)[0]; preview=QLabel(); preview.setAlignment(Qt.AlignmentFlag.AlignCenter); preview.setPixmap(pix(im).scaled(740,590,Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation)); lay.addWidget(preview,1)
+        except Exception as e: lay.addWidget(label(str(e),wrap=True))
+        lay.addWidget(btn('Guardar copia',lambda:export_document(dlg,name,data),'primary')); lay.addWidget(btn('Cerrar',dlg.accept)); dlg.exec(); return
     if not name.lower().endswith('.pdf'):
         from .answer_import import read_docx
         preview=QPlainTextEdit(); preview.setReadOnly(True)

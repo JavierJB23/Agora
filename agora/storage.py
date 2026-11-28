@@ -137,7 +137,8 @@ class Storage:
         """Keep original bytes for an attempt; never register a library template."""
         from hashlib import sha256
         suffix=Path(name).suffix.lower()
-        if suffix not in ('.pdf','.docx') or not data or len(data)>100*1024*1024:
+        from .answer_import import KEY_EXTENSIONS
+        if suffix not in KEY_EXTENSIONS or not data or len(data)>100*1024*1024:
             raise ValueError('Documento de soluciones no válido.')
         ref=sha256(suffix.encode()+b'\0'+data).hexdigest()
         with self.connection() as db:

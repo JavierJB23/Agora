@@ -26,7 +26,7 @@ def render_page(data,index,scale=1.5):
 class ModelSpinBox(SafeSpinBox):
     """Keep the last valid number; out-of-range typed input is never clamped silently."""
     def __init__(self,lo,hi,value):
-        super().__init__(); self.setRange(lo,hi); self.setKeyboardTracking(False); self.setValue(value)
+        super().__init__(); self.setRange(lo,hi); self.setKeyboardTracking(False); self.setValue(value); self.lineEdit().installEventFilter(self)
     def validate(self,text,pos):
         t=text.strip()
         if t in ('','-','+'):
@@ -46,8 +46,14 @@ class ModelSpinBox(SafeSpinBox):
         try: outside=not self.minimum()<=int(text.strip())<=self.maximum()
         except ValueError: outside=False
         if outside: self.lineEdit().setText(self.fixup(text))
+    def eventFilter(self,watched,event):
+        from PySide6.QtCore import QEvent
+        if watched is self.lineEdit() and event.type()==QEvent.Type.KeyPress and event.key() in (Qt.Key.Key_Return,Qt.Key.Key_Enter):
+            self._restore_invalid_input(); self.interpretText(); event.accept(); return True
+        return super().eventFilter(watched,event)
     def keyPressEvent(self,event):
-        if event.key() in (Qt.Key.Key_Return,Qt.Key.Key_Enter): self._restore_invalid_input()
+        if event.key() in (Qt.Key.Key_Return,Qt.Key.Key_Enter):
+            self._restore_invalid_input(); self.interpretText(); event.accept(); return
         super().keyPressEvent(event)
     def focusOutEvent(self,event):
         self._restore_invalid_input(); super().focusOutEvent(event)
@@ -89,7 +95,10 @@ class ModelEditor(QDialog):
         actions=QHBoxLayout(); close=button('Cerrar' if read_only else 'Cancelar'); close.clicked.connect(self.reject); actions.addWidget(close); actions.addStretch(); self.export_button=button('Exportar PDF',role='softAction'); self.export_button.clicked.connect(self.export); actions.addWidget(self.export_button); self.print_button=button('Imprimir',role='softAction'); self.print_button.clicked.connect(self.print_pdf); actions.addWidget(self.print_button)
         if save_callback is not None:
             self.save_button=button('Guardar modelo',role='primary'); self.save_button.clicked.connect(self.save); actions.addWidget(self.save_button)
-        root.addLayout(actions); self.timer=QTimer(self); self.timer.setSingleShot(True); self.timer.timeout.connect(self.refresh); self.refresh()
+        root.addLayout(actions)
+        from PySide6.QtWidgets import QPushButton
+        for b in self.findChildren(QPushButton): b.setAutoDefault(False); b.setDefault(False)
+        self.timer=QTimer(self); self.timer.setSingleShot(True); self.timer.timeout.connect(self.refresh); self.refresh()
     def model(self):
         if self.read_only: return self.source
         values={}

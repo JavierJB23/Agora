@@ -12,6 +12,7 @@ import pypdfium2 as pdfium
 
 WIDTH, HEIGHT = 1190,1684
 EXTENSIONS=('.pdf','.jpg','.jpeg','.png')
+RESPONSE_EXTENSIONS=(*EXTENSIONS,'.docx')
 @dataclass(frozen=True)
 class Mark:
     number: str
@@ -25,7 +26,12 @@ class Mark:
 
 def decode(name,data):
     ext=Path(name).suffix.lower()
-    if ext not in EXTENSIONS: raise ValueError('Formato no admitido: PDF, JPG o PNG.')
+    if ext=='.docx':
+        from .answer_import import docx_images
+        images=docx_images(data)
+        if not images: raise ValueError('El Word debe contener las hojas de respuestas como imágenes JPG o PNG.')
+        return [im for name,blob in images for im in decode(name,blob)]
+    if ext not in EXTENSIONS: raise ValueError('Formato no admitido: PDF, JPG, PNG o Word .docx con imágenes.')
     if ext=='.pdf':
         doc=pdfium.PdfDocument(data)
         try:

@@ -1,13 +1,13 @@
 """Manual correction wizard; import a solution key, then enter personal answers."""
 from pathlib import Path
 from dataclasses import asdict, replace
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QStringListModel
 from PySide6.QtGui import QShortcut, QKeySequence
 from PySide6.QtWidgets import (QWidget,QLabel,QPushButton,QVBoxLayout,QHBoxLayout,QGridLayout,QFrame,
- QLineEdit,QCheckBox,QMessageBox,QInputDialog,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,QApplication,QDialog,QMenu)
-from .grading import ExamConfig, evaluate, format_number
+ QLineEdit,QCheckBox,QMessageBox,QInputDialog,QTableWidget,QTableWidgetItem,QHeaderView,QAbstractItemView,QApplication,QDialog,QMenu,QCompleter)
+from .grading import ExamConfig, evaluate, format_number, change_answer, restore_answer
 from .controls import SafeComboBox, SafeSpinBox
-from .answer_import import extract_key
+from .answer_import import extract_key, KEY_EXTENSIONS
 from .import_ui import ImportDialog
 
 ALIGN=Qt.AlignmentFlag
@@ -31,7 +31,7 @@ def confirm(parent,title,text):
 
 class ManualPage(QWidget):
     def __init__(self, storage, go_home, mode="manual"):
-        super().__init__(); self.mode=mode; self.storage=storage; self.optical_cache={}; self.config=ExamConfig(); self.key=['']*self.config.size; self.answers=['']*self.config.size
+        super().__init__(); self.mode=mode; self.storage=storage; self.optical_cache={}; self.config=ExamConfig(); self.key=['']*self.config.size; self.answers=['']*self.config.size; self.annul_originals={}
         self.key_source=''; self.document_ref=None; self.template_id=None; self.stage=0; self.cursor=0; self.result=None; self._template_items=[]; self.persist_failed=False; self.attempt_id=None; self.saved_snapshot=None; self.form_override=None; self.expected_counts=None
         self.root=QVBoxLayout(self); self.root.setContentsMargins(0,0,0,0); self.root.setSpacing(10)
         top=QHBoxLayout(); top.addWidget(btn('‹  Volver al inicio',go_home)); top.addWidget(btn('Guardar progreso',self.save_progress,'primary')); top.addStretch(); self.root.addLayout(top)
@@ -56,9 +56,11 @@ class ManualPage(QWidget):
                 record=self.storage.load_optical_page(ref); original,aligned,marks=unpack(record,i)
                 for kind,val in (('images',original),('aligned',aligned),('marks',marks),('records',record)):
                     cache.setdefault(kind,{})[i]=val
+        if self.mode=='automatic' and d.get('response_documents'):
+            cache['text_documents']={str(i):ref for i,ref in d['response_documents'].items() if str(i).isdigit() and 0<=int(i)<c.size and isinstance(ref,str)}
         self.optical_cache.clear(); self.optical_cache.update(cache); self.template_id=d.get('template_id'); self.template_id=self.template_id if any(i==self.template_id for i,_,_ in self.storage.templates()) else None; self.document_ref=d.get('document_ref')
         self.expected_counts=tuple(d['expected_counts']) if d.get('expected_counts') else None
-        self.config=c; self.key=k; self.answers=a; self.key_source=d.get('key_source') or ('Plantilla anterior' if all(k) else ''); self.stage=stage if stage in (0,1,2,3) else 0; self.cursor=max(0,min(int(cursor),c.size-1)); self.result=None
+        self.config=c; self.key=k; self.answers=a; self.annul_originals={str(i):v for i in range(c.size) if a[i]=='X' and (v:=d.get('annul_originals',{}).get(str(i))) in (*c.letters,'-','')}; self.key_source=d.get('key_source') or ('Plantilla anterior' if all(k) else ''); self.stage=stage if stage in (0,1,2,3) else 0; self.cursor=max(0,min(int(cursor),c.size-1)); self.result=None
         self.attempt_id=d.get('attempt_id'); self.saved_snapshot=self.storage.load_attempt(self.attempt_id) if self.attempt_id is not None else None
         self.form_override=d.get('form') if self.stage==0 else None
         if self.form_override is not None:
@@ -73,9 +75,11 @@ class ManualPage(QWidget):
 
     def payload(self,read_form=False):
         d={'mode':self.mode,'config':asdict(self.config),'key':list(self.key),'answers':list(self.answers),'stage':self.stage,'cursor':self.cursor,'key_source':self.key_source,'attempt_id':self.attempt_id,'corrected':self.result is not None}
+        if self.annul_originals: d['annul_originals']=dict(self.annul_originals)
         if self.expected_counts is not None: d['expected_counts']=list(self.expected_counts)
         if self.template_id is not None: d['template_id']=self.template_id
         if self.document_ref is not None: d['document_ref']=self.document_ref
+        if self.optical_cache.get('text_documents'): d['response_documents']=dict(self.optical_cache['text_documents'])
         if self.optical_cache.get('records'): d['optical_pages']={str(i):r[0] for i,r in self.optical_cache['records'].items()}
         form=self.form_data() if read_form and self.stage==0 and hasattr(self,'name') else self.form_override if self.stage==0 else None
         if form is not None and form!=dict(d['config'],questions=(self.expected_counts or (self.config.questions,self.config.reserves))[0],reserves=(self.expected_counts or (self.config.questions,self.config.reserves))[1]): d['form']=dict(form)
@@ -84,7 +88,7 @@ class ManualPage(QWidget):
     @staticmethod
     def comparable(d):
         if not d: return None
-        return {**{k:d.get(k) for k in ('config','key','answers','key_source','form','document_ref','template_id','expected_counts')},'optical_pages':d.get('optical_pages',{}),'corrected':bool(d.get('corrected',d.get('stage')==3))}
+        return {**{k:d.get(k) for k in ('config','key','answers','key_source','form','document_ref','template_id','expected_counts')},'optical_pages':d.get('optical_pages',{}),'annul_originals':d.get('annul_originals',{}),'response_documents':d.get('response_documents',{}),'corrected':bool(d.get('corrected',d.get('stage')==3))}
 
     def active(self):
         d=self.payload(True)
@@ -130,7 +134,7 @@ class ManualPage(QWidget):
 
     def reset_state(self):
         # In-memory reset only: caller handles database changes atomically.
-        self.optical_cache.clear(); self.config=ExamConfig(); self.key=['']*self.config.size; self.answers=['']*self.config.size; self.key_source=''; self.document_ref=None; self.template_id=None; self.result=None; self.stage=0; self.cursor=0; self.attempt_id=None; self.saved_snapshot=None; self.form_override=None; self.expected_counts=None; self.persist_failed=False; self.notice.setText(''); self.render()
+        self.optical_cache.clear(); self.config=ExamConfig(); self.key=['']*self.config.size; self.answers=['']*self.config.size; self.annul_originals={}; self.key_source=''; self.document_ref=None; self.template_id=None; self.result=None; self.stage=0; self.cursor=0; self.attempt_id=None; self.saved_snapshot=None; self.form_override=None; self.expected_counts=None; self.persist_failed=False; self.notice.setText(''); self.render()
 
     def open_saved(self,attempt_id):
         if self.active() and not confirm(self,'Abrir simulacro','Se sustituirá el borrador actual. El progreso no guardado en Mis simulacros se perderá. ¿Continuar?'): return False
@@ -214,7 +218,7 @@ class ManualPage(QWidget):
         if self.form_override:
             f=self.form_override; self.name.setText(f['name']); self.penalty.setCurrentText(f['penalty']); self.maximum.setText(f['maximum']); self.floor.setChecked(f['floor_zero']); self.question_count.setValue(f.get('questions',q)); self.reserve_count.setValue(f.get('reserves',r))
         self.key_summary=label(self.key_summary_text(),'tileTitle',True); p.addWidget(self.key_summary); self.key_summary.setVisible(bool(self.key_source))
-        t=panel(self.body); t.addWidget(label('Plantillas guardadas','tileTitle')); self.templates_combo=SafeComboBox(); search_row=QHBoxLayout(); search_row.addWidget(self.templates_combo,3); self.template_search=QLineEdit(); self.template_search.setPlaceholderText('Buscar plantilla…'); self.template_search.setClearButtonEnabled(True); search_row.addWidget(self.template_search,2); t.addLayout(search_row); self.template_search.textChanged.connect(self.filter_templates); self.template_search.returnPressed.connect(self.search_template_enter)
+        t=panel(self.body); t.addWidget(label('Plantillas guardadas','tileTitle')); self.templates_combo=SafeComboBox(); search_row=QHBoxLayout(); search_row.addWidget(self.templates_combo,3); self.template_search=QLineEdit(); self.template_search.setPlaceholderText('Buscar plantilla…'); self.template_search.setClearButtonEnabled(True); search_row.addWidget(self.template_search,2); t.addLayout(search_row); self.template_suggestions=QStringListModel(self.template_search); self.template_completer=QCompleter(self.template_suggestions,self.template_search); self.template_completer.setCompletionMode(QCompleter.CompletionMode.UnfilteredPopupCompletion); self.template_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive); self.template_completer.setMaxVisibleItems(8); self.template_completer.setWidget(self.template_search); self.template_completer.activated[str].connect(self.pick_template_suggestion); self.template_search.textChanged.connect(self.filter_templates); self.template_search.textEdited.connect(self.show_template_suggestions); self.template_search.returnPressed.connect(self.search_template_enter)
         row=QHBoxLayout(); row.addWidget(btn('Consultar plantilla',self.view_template)); self.use_template_button=btn('Usar plantilla',self.load_template); row.addWidget(self.use_template_button); self.use_template_button.hide(); row.addWidget(btn('Eliminar plantilla',self.remove_template)); row.addWidget(btn('Quitar plantilla',self.clear_template)); row.addStretch(); t.addLayout(row); self.refresh_templates(); self.templates_combo.activated.connect(self.template_selected)
         p2=panel(self.body,12); row=QHBoxLayout(); row.addWidget(btn('Nuevo / limpiar borrador',self.reset)); row.addStretch(); p2.addLayout(row); p2.addWidget(btn('Continuar a soluciones  ›',self.apply_config,'primary'))
 
@@ -237,6 +241,20 @@ class ManualPage(QWidget):
             self.templates_combo.setToolTip(f'{self.templates_combo.count()-1} plantillas encontradas')
         finally: self.templates_combo.blockSignals(previous)
         self.update_template_action()
+        matches=[(self.templates_combo.itemText(j),self.templates_combo.itemData(j)) for j in range(1,self.templates_combo.count())]
+        from collections import Counter
+        counts=Counter(n for n,_ in matches); self._suggested_templates={(n if counts[n]==1 else f"{n} · #{tid}"):tid for n,tid in matches}; self.template_suggestions.setStringList(list(self._suggested_templates))
+
+    def show_template_suggestions(self,text):
+        if text.strip() and self._suggested_templates:
+            self.template_completer.setCompletionPrefix(''); self.template_completer.complete()
+        else: self.template_completer.popup().hide()
+
+    def pick_template_suggestion(self,text):
+        tid=self._suggested_templates.get(text)
+        if tid is None: return
+        self.template_search.blockSignals(True); self.template_search.clear(); self.template_search.blockSignals(False)
+        self.filter_templates(preferred=tid); self.template_completer.popup().hide(); self.template_selected()
 
     def search_template_enter(self):
         if self.templates_combo.count()==2:
@@ -276,7 +294,7 @@ class ManualPage(QWidget):
         if self.active() and not confirm(self,'Cargar plantilla','Se reemplazará el borrador actual, incluidas tus respuestas. ¿Continuar? Si eliges No, podrás consultar o eliminar la plantilla sin cargarla.'):
             self.notice.setText('Plantilla seleccionada, no cargada'); return False
         # Stay in configuration so Consultar / Eliminar remain accessible.
-        self.optical_cache.clear(); self.template_id=tid; self.document_ref=d.get('document_ref'); self.attempt_id=None; self.saved_snapshot=None; self.config=c; self.key=k; self.key_source=d.get('key_source') or 'Plantilla guardada'; self.answers=['']*c.size; self.result=None; self.cursor=0; self.form_override=None
+        self.optical_cache.clear(); self.template_id=tid; self.document_ref=d.get('document_ref'); self.attempt_id=None; self.saved_snapshot=None; self.config=c; self.key=k; self.key_source=d.get('key_source') or 'Plantilla guardada'; self.answers=['']*c.size; self.annul_originals={}; self.result=None; self.cursor=0; self.form_override=None
         self.expected_counts=(c.questions,c.reserves); self.question_count.setValue(c.questions); self.reserve_count.setValue(c.reserves)
         self.name.setText(c.name); self.penalty.setCurrentText(c.penalty); self.maximum.setText(c.maximum); self.floor.setChecked(c.floor_zero)
         self.key_summary.setText(self.key_summary_text()); self.key_summary.show()
@@ -300,7 +318,7 @@ class ManualPage(QWidget):
         self.form_override=self.form_data()
         self.expected_counts=None
         self.config=replace(self.config,questions=ExamConfig().questions,reserves=ExamConfig().reserves,options=ExamConfig().options)
-        self.key=['']*self.config.size; self.answers=['']*self.config.size
+        self.key=['']*self.config.size; self.answers=['']*self.config.size; self.annul_originals={}
         self.key_source=''; self.document_ref=None; self.template_id=None; self.result=None; self.cursor=0
         self.optical_cache.clear(); self.attempt_id=None; self.saved_snapshot=None
         self.templates_combo.setCurrentIndex(0); self.update_template_action(); self.key_summary.hide(); self.persist(True)
@@ -344,7 +362,7 @@ class ManualPage(QWidget):
             consult_document(self,self.storage,self.document_ref)
 
     def import_key(self):
-        dialog=ImportDialog(self)
+        dialog=ImportDialog(self,KEY_EXTENSIONS)
         if dialog.exec()!=QDialog.DialogCode.Accepted or not dialog.item: return
         self.receive_mobile_key([dialog.item])
 
@@ -358,6 +376,11 @@ class ManualPage(QWidget):
         self.review_import(imported,name,data)
     def review_import(self,imported,name,data=None):
         from .template_ui import review_key
+        expected=self.expected_counts or (self.config.questions,self.config.reserves)
+        if expected[1] and not imported.reserves and len(imported.ordinary)==sum(expected):
+            if confirm(self,'Numeración de reservas',f'El documento tiene {sum(expected)} soluciones consecutivas. ¿Separar las últimas {expected[1]} como reservas?'):
+                from .answer_import import ImportedKey
+                imported=ImportedKey(imported.ordinary[:expected[0]],imported.ordinary[expected[0]:])
         options=review_key(self,imported,name,self.config.options)
         if options is None: return
         c=replace(self.config,questions=len(imported.ordinary),reserves=len(imported.reserves),options=options)
@@ -370,20 +393,20 @@ class ManualPage(QWidget):
             if not confirm(self,'Sustituir solucionario','Se borrarán tus respuestas actuales para evitar mezclarlas con otro examen. ¿Continuar?'): return
         try: ref=self.storage.archive_solution_document(name,data) if data is not None else None
         except Exception as e: QMessageBox.warning(self,'No se pudo conservar el documento',str(e)); return
-        if changed or (any(self.answers) and imported.key!=self.key): self.answers=['']*c.size
+        if changed or (any(self.answers) and imported.key!=self.key): self.answers=['']*c.size; self.annul_originals={}
         self.expected_counts=expected
         self.install_key(imported,name,c.options,document_ref=ref,preserve_expected=True)
     def install_key(self,imported,name,options,document_ref=None,preserve_expected=False):
         # Internal operation, after preview/confirmation.
         c=replace(self.config,questions=len(imported.ordinary),reserves=len(imported.reserves),options=options)
-        if c.size!=len(self.answers): self.answers=['']*c.size
+        if c.size!=len(self.answers): self.answers=['']*c.size; self.annul_originals={}
         if c.size!=self.config.size or (c.questions,c.reserves,c.options)!=(self.config.questions,self.config.reserves,self.config.options) or list(imported.key)!=list(self.key): self.optical_cache.clear()
         if not preserve_expected: self.expected_counts=(c.questions,c.reserves)
         self.template_id=None; self.document_ref=document_ref; self.config=c; self.key=imported.key; self.key_source=name; self.result=None; self.move_stage(1)
     def show_answers(self):
         if self.mode=='manual': self.show_entry(False); return
         from .omr_ui import OpticalPage
-        self.reader=OpticalPage(self.config,self.answers,self.optical_cache,self.optical_changed)
+        self.reader=OpticalPage(self.config,self.answers,self.optical_cache,self.optical_changed,self.annul_originals,self.storage)
         self.body.addWidget(self.reader)
         bar=QWidget(); actions=QHBoxLayout(bar); actions.setContentsMargins(0,4,0,0); actions.setSpacing(14); actions.addStretch()
         from .omr_ui import compact_btn
@@ -434,6 +457,8 @@ class ManualPage(QWidget):
             if i>=end: continue
             num.setText(self.config.number(i)); num.setProperty('selected',i==self.cursor); num.setProperty('pending',self.values[i]==''); num.setToolTip('Pendiente de rellenar' if self.values[i]=='' else 'Respuesta registrada'); num.style().unpolish(num); num.style().polish(num)
             for value,b in choices: b.setChecked(self.values[i]==value)
+            if not self.is_key and self.values[i]=='X' and str(i) in self.annul_originals:
+                num.setToolTip('Anulada · respuesta original: '+(self.annul_originals[str(i)] or 'Pendiente')+' · pulsa Anulada otra vez para restaurarla')
             clear.setEnabled(bool(self.values[i]))
         # Set focus inside page when coming from a navigation button, enabling keyboard entry.
         focused=QApplication.focusWidget()
@@ -451,10 +476,17 @@ class ManualPage(QWidget):
     def clear_slot(self,j): self.clear((self.cursor//16)*16+j)
     def choose(self,i,v):
         if not 0<=i<self.config.size: return
-        self.result=None; self.values[i]=v; self.cursor=min(i+1,self.config.size-1); self.persist(); self.refresh_entries()
+        self.result=None
+        if self.is_key: self.values[i]=v
+        elif v=='X' and self.answers[i]=='X' and restore_answer(self.answers,self.annul_originals,i): pass
+        else: change_answer(self.answers,self.annul_originals,i,v)
+        self.cursor=min(i+1,self.config.size-1); self.persist(); self.refresh_entries()
     def clear(self,i):
         if not 0<=i<self.config.size: return
-        self.result=None; self.values[i]=''; self.cursor=i; self.persist(); self.refresh_entries()
+        self.result=None
+        if self.is_key: self.values[i]=''
+        else: change_answer(self.answers,self.annul_originals,i,'')
+        self.cursor=i; self.persist(); self.refresh_entries()
     def complete_key(self):
         if not self.key_source:
             self.notice.setText('Importa primero el documento de soluciones desde ordenador o móvil.'); return False
@@ -507,15 +539,31 @@ class ManualPage(QWidget):
         if r.annulled>r.reserve_used: p.addWidget(label(f'{r.annulled-r.reserve_used} anuladas sin reserva válida: excluidas del denominador.','muted',True))
         t=panel(self.body); t.addWidget(label('Detalle de preguntas','tileTitle')); self.filter=SafeComboBox(); self.filter.addItems(['Todas','Aciertos','Errores','En blanco','Anuladas','Reservas']); t.addWidget(self.filter)
         self.table=QTableWidget(0,5); self.table.setHorizontalHeaderLabels(['Pregunta','Solución','Tu respuesta','Resultado','Sustituye a']); self.table.verticalHeader().hide(); self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers); self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows); self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch); self.table.setMinimumHeight(270); self.table.setAlternatingRowColors(True); t.addWidget(self.table); self.filter.currentIndexChanged.connect(self.populate_table); self.populate_table()
-        row=QHBoxLayout(); row.addWidget(btn('‹ Editar respuestas',lambda:self.move_stage(2))); row.addWidget(btn('Editar soluciones',lambda:self.move_stage(1))); row.addStretch(); row.addWidget(btn('Nuevo simulacro',self.reset,'primary')); t.addLayout(row)
+        row=QHBoxLayout(); row.addWidget(btn('‹ Editar respuestas',lambda:self.move_stage(2))); row.addWidget(btn('Editar soluciones',lambda:self.move_stage(1))); row.addWidget(btn('Anular / restaurar pregunta',self.toggle_result_annulment,'softAction')); row.addStretch(); row.addWidget(btn('Nuevo simulacro',self.reset,'primary')); t.addLayout(row)
         t.addWidget(label('Pulsa Guardar progreso para conservar este resultado en Mis simulacros.','muted',True))
+
+    def toggle_result_annulment(self):
+        row=self.table.currentRow(); item=self.table.item(row,0) if row>=0 else None
+        if item is None:
+            QMessageBox.information(self,'Anular / restaurar','Selecciona una pregunta en la tabla.'); return
+        n=item.text(); i=self.config.questions+int(n[1:])-1 if n.startswith('R') else int(n)-1
+        if self.key[i]=='X':
+            QMessageBox.information(self,'Solución anulada','Esta pregunta está anulada en el solucionario. Para modificarla, utiliza Editar soluciones.'); return
+        if self.answers[i]=='X':
+            if str(i) not in self.annul_originals or not self.annul_originals[str(i)]:
+                v,ok=QInputDialog.getItem(self,'Restaurar pregunta','Selecciona la respuesta original:',[*self.config.letters,'En blanco'],0,False)
+                if not ok: return
+                change_answer(self.answers,self.annul_originals,i,'-' if v=='En blanco' else v)
+            else: restore_answer(self.answers,self.annul_originals,i)
+        else: change_answer(self.answers,self.annul_originals,i,'X')
+        self.result=evaluate(self.config,self.key,self.answers); self.render(); self.persist()
 
     def populate_table(self,*_):
         idx=self.filter.currentIndex(); rows=[r for r in self.result.rows if idx==0 or idx==1 and r.status=='Acierto' or idx==2 and r.status=='Error' or idx==3 and r.status=='En blanco' or idx==4 and 'anulada' in r.status.lower() or idx==5 and r.number.startswith('R')]
         self.table.setRowCount(len(rows))
         from PySide6.QtGui import QColor,QBrush
         for i,r in enumerate(rows):
-            for j,v in enumerate((r.number,'—' if r.solution=='X' else r.solution,'—' if r.answer=='-' else 'Anulada' if r.answer=='X' else r.answer,r.status,r.replaces or '—')):
+            for j,v in enumerate((r.number,'—' if r.solution=='X' else r.solution,'—' if r.answer=='-' else ('Anulada · '+self.annul_originals.get(str(self.config.questions+int(r.number[1:])-1 if r.number.startswith('R') else int(r.number)-1),'').replace('-','En blanco')).rstrip(' ·') if r.answer=='X' else r.answer,r.status,r.replaces or '—')):
                 x=QTableWidgetItem(v); x.setTextAlignment(ALIGN.AlignCenter)
                 if j==3 and r.status in ('Acierto','Error'): x.setForeground(QBrush(QColor('#30764D' if r.status=='Acierto' else '#A13952')))
                 self.table.setItem(i,j,x)

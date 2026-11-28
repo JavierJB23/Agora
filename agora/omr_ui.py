@@ -77,11 +77,11 @@ class ReadWorker(QThread):
         except Exception as e: self.failure=str(e)
 
 class OpticalPage(QWidget):
-    def __init__(self,config,answers,cache,changed):
-        super().__init__(); self.config=config; self.answers=answers; self.changed=changed
-        self.images=cache.setdefault('images',{}); self.aligned=cache.setdefault('aligned',{}); self.marks=cache.setdefault('marks',{}); self.records=cache.setdefault('records',{})
+    def __init__(self,config,answers,cache,changed,annul_originals=None,storage=None):
+        super().__init__(); self.config=config; self.answers=answers; self.changed=changed; self.annul_originals=annul_originals if annul_originals is not None else {}
+        self.images=cache.setdefault('images',{}); self.aligned=cache.setdefault('aligned',{}); self.marks=cache.setdefault('marks',{}); self.records=cache.setdefault('records',{}); self.text_documents=cache.setdefault('text_documents',{}); self.storage=storage
         l=QVBoxLayout(self); l.setContentsMargins(0,0,0,0); l.setSpacing(7)
-        l.addWidget(btn('Importar hojas de respuestas (PDF o fotos)',self.load,True))
+        l.addWidget(btn('Importar hojas de respuestas (PDF, Word o fotos)',self.load,True))
         row=QHBoxLayout(); self.page=SafeComboBox(); self.page.addItems(['Preguntas ordinarias','Reservas']); self.page.currentIndexChanged.connect(self.refresh); row.addWidget(self.page); self.filter=SafeComboBox(); self.filter.addItems(['Solo pendientes','Todas las preguntas']); self.filter.currentIndexChanged.connect(self.refresh); row.addWidget(self.filter); row.addWidget(btn('Ver hoja y casillas',self.preview)); row.addWidget(btn('Releer hoja',self.adjust)); l.addLayout(row)
         self.count=text(''); self.count.setToolTip('Las lecturas claras se rellenan automáticamente; revisa las dudosas y las posibles anuladas.'); l.addWidget(self.count)
         self.table=QTableWidget(0,4); self.table.setHorizontalHeaderLabels(['Pregunta','Recorte original','Estado de lectura','Respuesta']); self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch); self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers); self.table.setAlternatingRowColors(True); self.table.verticalHeader().hide(); self.table.setMinimumHeight(260); l.addWidget(self.table)
@@ -192,12 +192,26 @@ class OpticalPage(QWidget):
         # Keep physical reserve sheets even if the key has no reserve solutions.
         return {m.number for m in marks if self.target_index(m.number) is not None or m.number.startswith('R')}
     def load(self,checked=False,force_guided=False):
-        d=ImportDialog(self,omr.EXTENSIONS,multiple=True,max_files=20)
+        d=ImportDialog(self,omr.RESPONSE_EXTENSIONS,multiple=True,max_files=20)
         if d.exec()!=QDialog.DialogCode.Accepted or not d.items: return
         self.import_items(d.items)
 
     def import_items(self,items):
         if not items: return
+        # Word with embedded scans follows the unchanged optical pipeline.
+        # Word with a numbered text list follows an explicit review/confirmation.
+        from .answer_import import docx_images,read_docx,parse_response_list
+        from pathlib import Path
+        optical=[]; textual=[]
+        try:
+            for name,data in items:
+                if Path(name).suffix.lower()=='.docx' and not docx_images(data): textual.append((name,data,parse_response_list(read_docx(data),self.config)))
+                else: optical.append((name,data))
+            if textual and optical: raise ValueError('Importa primero las hojas escaneadas y después los Word con respuestas escritas, en envíos separados.')
+            if textual:
+                self.import_text_answers(textual); return
+        except Exception as e: QMessageBox.warning(self,'No se pudo leer',str(e)); return
+        items=optical
         try:
             results,errors=self.run_import(items)
             pending={}; occupied=set(self.marks)
@@ -221,7 +235,11 @@ class OpticalPage(QWidget):
             if errors and not confirm(self,'Importación parcial','No se pudieron leer todas las páginas:\n'+'\n'.join(errors)+'\n¿Conservar las hojas reconocidas?'): return
             if any(slot in self.marks for slot in pending) or any(self.answers[i] for p in pending.values() for m in p[2] if (i:=self.target_index(m.number)) is not None):
                 if not confirm(self,'Sustituir lectura','Ya hay respuestas cargadas en estas páginas. Se sobreescribirán. ¿Seguro que quieres continuar?'): return
-            for slot,(im,aligned,marks,snapshot) in pending.items(): self.install(slot,im,aligned,marks,snapshot)
+            for slot,(im,aligned,marks,snapshot) in pending.items():
+                for m in marks:
+                    i=self.target_index(m.number)
+                    if i is not None: self.annul_originals.pop(str(i),None); self.text_documents.pop(str(i),None)
+                self.install(slot,im,aligned,marks,snapshot)
             self.page.setCurrentIndex(1 if '' not in self.answers[:self.config.questions] and '' in self.answers[self.config.questions:] else 0 if any(not m.number.startswith('R') for p in pending.values() for m in p[2]) else 1); self.filter.setCurrentIndex(1 if all(self.answers) else 0); self.changed(); self.refresh()
             self.progress_bar.setValue(100); self.progress_info.setText('100 % · Lectura completada'); self.progress_bar.repaint()
             if any(m.number.startswith('R') and self.target_index(m.number) is None for p in pending.values() for m in p[2]):
@@ -229,6 +247,28 @@ class OpticalPage(QWidget):
         except Exception as e: QMessageBox.warning(self,'No se pudo leer',str(e))
         finally:
             self.progress_bar.hide(); self.progress_info.hide()
+    def import_text_answers(self,items):
+        if self.storage is None: raise ValueError('No hay almacenamiento para conservar el documento original.')
+        combined={}; physical={self.target_index(m.number) for marks in self.marks.values() for m in marks}
+        for name,data,values in items:
+            if set(combined)&set(values): raise ValueError('Hay preguntas repetidas entre documentos.')
+            if physical&set(values): raise ValueError('El documento coincide con una hoja óptica ya cargada. Elimina primero esa hoja si quieres sustituirla.')
+            combined.update(values)
+        detail=f'Se han leído {len(combined)} respuestas de Word. Comprueba las respuestas antes de corregir.'
+        if any(self.answers[i] for i in combined): detail+=' Se sustituirán las respuestas existentes.'
+        d=QDialog(self); d.setWindowTitle('Revisar respuestas de Word'); d.resize(540,620); l=QVBoxLayout(d); l.addWidget(text(detail))
+        table=QTableWidget(len(combined),2); table.setHorizontalHeaderLabels(['Pregunta','Respuesta']); table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch); table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        for row,(i,v) in enumerate(sorted(combined.items())):
+            table.setItem(row,0,QTableWidgetItem(self.config.number(i))); table.setItem(row,1,QTableWidgetItem('En blanco' if v=='-' else 'Anulada' if v=='X' else v))
+        l.addWidget(table); row=QHBoxLayout(); row.addWidget(btn('Cancelar',d.reject)); row.addWidget(btn('Confirmar',d.accept,True)); l.addLayout(row)
+        if d.exec()!=QDialog.DialogCode.Accepted: return
+        refs=[self.storage.archive_solution_document(name,data) for name,data,_ in items]
+        from .grading import change_answer
+        for ref,(_,_,values) in zip(refs,items):
+            for i,v in values.items():
+                self.annul_originals.pop(str(i),None); self.answers[i]=''; change_answer(self.answers,self.annul_originals,i,v); self.text_documents[str(i)]=ref
+        self.page.setCurrentIndex(0 if any(i<self.config.questions for i in combined) else 1); self.filter.setCurrentIndex(1); self.changed(); self.refresh()
+
     def install(self,slot,im,aligned,marks,snapshot=None):
         if snapshot is None: snapshot=record(im,aligned,marks)
         self.images[slot]=im; self.aligned[slot]=aligned; self.marks[slot]=marks; self.records[slot]=snapshot
@@ -246,7 +286,13 @@ class OpticalPage(QWidget):
     def preview(self):
         i=self.choose_page()
         if i==-1: return
-        if i is None: QMessageBox.information(self,'Ver hoja','No hay hoja reconocida de este tipo en el simulacro.'); return
+        if i is None:
+            refs=list(dict.fromkeys(self.text_documents.get(str(j)) for j in self.indices(self.page.currentIndex()) if str(j) in self.text_documents))
+            if refs and self.storage:
+                from .library_ui import consult_document
+                for ref in refs: consult_document(self,self.storage,ref)
+            else: QMessageBox.information(self,'Ver hoja','No hay hoja reconocida de este tipo en el simulacro.')
+            return
         import cv2 as cv
         d=QDialog(self); d.setWindowTitle('Hoja de respuestas'); d.resize(690,780); l=QVBoxLayout(d)
         row=QHBoxLayout(); im=QLabel(); im.setAlignment(A.AlignCenter)
@@ -355,7 +401,7 @@ class OpticalPage(QWidget):
         self.table.setRowCount(0); self.table.setRowCount(len(shown)+len(extra))
         for row,(j,i) in enumerate(shown):
             self.table.setRowHeight(row,48); page,m=lookup.get(self.config.number(i),(None,None))
-            status=m.status if m else ('Respuesta conservada · sin recorte' if self.answers[i] else 'Hoja no cargada')
+            status=m.status if m else ('Importada de Word' if str(i) in self.text_documents else 'Respuesta conservada · sin recorte' if self.answers[i] else 'Hoja no cargada')
             if self.answers[i]=='X': status='Anulada manualmente'
             elif m and len(m.scores)<self.config.options: status='Faltan opciones impresas · revisar'
             elif m and 'Posible anulada' in m.status: status=m.status
@@ -367,7 +413,9 @@ class OpticalPage(QWidget):
                 self.table.setItem(row,col,t)
             if m:
                 crop=QLabel(); crop.setAlignment(A.AlignCenter); crop.setPixmap(pix(omr.crop_image(self.aligned[page],m)).scaled(155,43,Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation)); self.table.setCellWidget(row,1,crop)
-            combo=SafeComboBox(); vals=['',*self.config.letters,'-','X']; combo.addItems(['Pendiente',*self.config.letters,'En blanco','Anulada']); combo.setCurrentIndex(vals.index(self.answers[i])); combo.currentIndexChanged.connect(lambda k,n=i,v=vals:self.set_choice(n,v[k])); self.table.setCellWidget(row,3,combo)
+            combo=SafeComboBox(); vals=['',*self.config.letters,'-','X']; combo.addItems(['Pendiente',*self.config.letters,'En blanco','Anulada']); 
+            if self.answers[i]=='X' and str(i) in self.annul_originals: vals.append('RESTORE'); combo.addItem('Restaurar respuesta original')
+            combo.setCurrentIndex(vals.index(self.answers[i])); combo.currentIndexChanged.connect(lambda k,n=i,v=vals:self.set_choice(n,v[k])); self.table.setCellWidget(row,3,combo)
         for row,n in enumerate(extra,start=len(shown)):
             page,m=lookup[n]; self.table.setRowHeight(row,48)
             for col,value in ((0,n),(2,m.status+' · Sin solución'),(3,self.proposal(m) or 'Pendiente')):
@@ -375,7 +423,11 @@ class OpticalPage(QWidget):
             crop=QLabel(); crop.setAlignment(A.AlignCenter); crop.setPixmap(pix(omr.crop_image(self.aligned[page],m)).scaled(155,43,Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation)); self.table.setCellWidget(row,1,crop)
         self.update_count()
     def set_choice(self,i,value):
-        self.answers[i]=value; self.changed(); self.update_count()
+        from .grading import change_answer,restore_answer
+        if value=='RESTORE':
+            restore_answer(self.answers,self.annul_originals,i); self.changed(); QTimer.singleShot(0,self.refresh); return
+        change_answer(self.answers,self.annul_originals,i,value); self.changed(); self.update_count()
+        if value=='X': QTimer.singleShot(0,self.refresh)
         # Keep the visual state synchronized without rebuilding the active dropdown.
         for row in range(self.table.rowCount()):
             item=self.table.item(row,0)
@@ -391,7 +443,12 @@ class OpticalPage(QWidget):
         slot=self.choose_page(kind)
         if slot==-1: return
         if slot is None:
-            QMessageBox.information(self,'Eliminar página','No hay una hoja cargada de este tipo.'); return
+            indices=[i for i in self.indices(kind) if str(i) in self.text_documents]
+            if indices and confirm(self,'Eliminar respuestas de Word','¿Eliminar las respuestas importadas de Word de este tipo? Se conservarán las demás respuestas.'):
+                for i in indices: self.text_documents.pop(str(i),None); self.annul_originals.pop(str(i),None); self.answers[i]=''
+                self.changed(); self.refresh()
+            elif not indices: QMessageBox.information(self,'Eliminar página','No hay una hoja cargada de este tipo.')
+            return
         reserve=kind==1; title='reservas' if reserve else 'preguntas ordinarias'
         msg=f'Se eliminarán las {title} de esta hoja y sus respuestas revisadas. Las demás hojas y respuestas se conservarán. ¿Continuar?'
         if not confirm(self,'Eliminar página',msg): return
@@ -399,7 +456,9 @@ class OpticalPage(QWidget):
             remove_page_kind(dict(images=self.images,aligned=self.aligned,marks=self.marks,records=self.records),self.answers,self.config,slot,reserve)
         except Exception as e:
             QMessageBox.warning(self,'No se pudo eliminar la página',str(e)); return
+        for k in list(self.annul_originals):
+            if self.answers[int(k)]!='X': self.annul_originals.pop(k)
         self.page.setCurrentIndex(kind); self.changed(); self.refresh()
     def reset(self):
         if (any(self.answers) or self.marks) and not confirm(self,'Reiniciar lectura','Se descartarán las respuestas y revisiones actuales. ¿Continuar?'): return
-        self.images.clear(); self.aligned.clear(); self.marks.clear(); self.records.clear(); self.answers[:]=['']*len(self.answers); self.changed(); self.refresh()
+        self.images.clear(); self.aligned.clear(); self.marks.clear(); self.records.clear(); self.text_documents.clear(); self.answers[:]=['']*len(self.answers); self.annul_originals.clear(); self.changed(); self.refresh()

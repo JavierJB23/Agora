@@ -3,6 +3,7 @@ import queue,secrets,math
 from PySide6.QtCore import QObject,QTimer
 from PySide6.QtWidgets import QApplication,QMessageBox
 from .mobile_session import MobileSession
+from .answer_import import KEY_EXTENSIONS
 
 class MobileConnection(QObject):
     def __init__(self,window):
@@ -32,12 +33,12 @@ class MobileConnection(QObject):
         for mode in ('manual','automatic'):
             if current is w.pages.get(mode):
                 p=getattr(w,mode)
-                if p.stage==1: return ((mode,1,id(p.key),p.attempt_id),'Corrector '+('manual' if mode=='manual' else 'automático')+' · Soluciones · '+p.config.name,('.pdf','.docx'),1,p.receive_mobile_key)
+                if p.stage==1: return ((mode,1,id(p.key),p.attempt_id),'Corrector '+('manual' if mode=='manual' else 'automático')+' · Soluciones · '+p.config.name,KEY_EXTENSIONS,1,p.receive_mobile_key)
                 if p.stage==2 and mode=='automatic':
-                    from .omr import EXTENSIONS
-                    return ((mode,2,id(p.reader),p.attempt_id),'Corrector automático · Respuestas · '+p.config.name,EXTENSIONS,20,p.reader.import_items)
+                    from .omr import RESPONSE_EXTENSIONS
+                    return ((mode,2,id(p.reader),p.attempt_id),'Corrector automático · Respuestas · '+p.config.name,RESPONSE_EXTENSIONS,20,p.reader.import_items)
         if current is w.pages.get('library') and w.library_stack.currentIndex()==1 and w.library_tabs.currentIndex()==1:
-            return (('library',1),'Mi temario · Mis plantillas',('.pdf','.docx'),20,w.receive_library_items)
+            return (('library',1),'Mi temario · Mis plantillas',KEY_EXTENSIONS,20,w.receive_library_items)
         if current is w.pages.get('library') and w.library_stack.currentIndex()==1 and w.library_tabs.currentIndex()==2:
             from .omr import EXTENSIONS
             return (('library',2),'Mi temario · Mis modelos · Modelo en blanco',EXTENSIONS,20,w.models_page.receive_external)
