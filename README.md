@@ -285,3 +285,9 @@ Validación local: 74 pruebas dirigidas aprobadas en la revisión final, comprob
 - OCR de solucionarios: si la lectura de texto normal falla, identifica columnas por densidad de tinta, separa encabezados de reserva explícitos y vuelve a leer las filas. Si un número no coincide con la secuencia se vuelve a reconocer su recorte; no se rellena por inferencia. Las letras dudosas se releen con el alfabeto de respuestas. Se rechazan duplicados, huecos y resultados incompletos detectados. Se mantiene la revisión antes de aceptar. El motor geométrico OMR y el baremo no cambian.
 - Prueba local con fotografía aportada: simulacro 19, 120 ordinarias y 9 reservas; 129/129 coincidentes con transcripción visual. La foto no forma parte del paquete ni del repositorio. Nueva prueba sintética de tres columnas y reservas. Pendientes de validar en Windows y Safari de iPhone.
 - Compilación exclusivamente manual (`workflow_dispatch`).
+
+## v0.6.26 · BLOCK 06D · FIX05
+
+- Corrige la incidencia de la compilación Windows 94: el OCR de columna puede devolver un número y punto sin letra (`3.`). Se recupera únicamente si existe un componente de tinta de tamaño compatible con una letra, releyendo ese recorte con varios modos OCR si es necesario. Se mantiene el rechazo de respuestas ausentes, duplicados y numeración incompleta.
+- Se conserva la prueba original de FIX04 y se añaden dos regresiones: omisión de una letra por el OCR (incluidas reservas) y ausencia real de una letra en el papel. Prueba privada del simulacro 19: 129/129 coincidencias con la transcripción visual, no incluida en el paquete.
+- No cambia OMR, QR, interfaz, base de datos, baremo ni workflow manual. Pendiente validar Windows (Tesseract 5.5.3) y iPhone; el entorno local usa Tesseract 5.5.0 y carece de PySide6.

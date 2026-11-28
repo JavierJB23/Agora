@@ -448,3 +448,9 @@ OK
 
 Foto privada de simulacro 19: 120/120 ordinarias, 9/9 reservas, verificación visual completa. No incluida en ZIP.
 Python compileall y node --check: correctos. Interfaz Qt e iPhone pendientes.
+
+=== v0.6.26 FIX05 ===
+Compilación Windows 94 (FIX04): 180 pruebas, 1 error en test_columns_reserve_layout por OCR «3.» sin letra. FIX05 conserva esa prueba y añade dos pruebas de regresión con omisión simulada sobre OCR real y letra realmente ausente.
+Batería local completa: 182 pruebas descubiertas, 139 aprobadas, 43 omitidas por falta de PySide6, 0 errores y 0 fallos. Tesseract 5.5.0 local; Windows/Tesseract 5.5.3 pendiente.
+Fotografía simulacro 19: 129/129 coincidencias con transcripción visual independiente (120 ordinarias + 9 reservas). PDF S24: 120 + 9; PDF temas 56–59: 107 + 0. Documentos privados excluidos del ZIP.
+Python compileall correcto. Compilación exclusivamente manual.

@@ -114,3 +114,5 @@ FIX15: refuerzo de numeración y eliminación del ajuste geométrico manual en i
 BLOCK 06B: OCR local y numeración universal; BLOCK 06C: Mi temario / Mis modelos y generador PDF personalizable; BLOCK 06D: importar modelos externos en blanco por PC/QR y aprender geometría; BLOCK 06E: identificación automática de modelos propios y aprendidos. El lector universal sigue admitiendo modelos externos sin registro previo.
 
 v0.6.25 (06D FIX04): refinamiento visual del predictor, selector QR nativo único y fallback OCR de solucionarios en columnas con reservas. No se altera el motor OMR, la biblioteca ni el sistema de anulaciones. Próximo bloque tras validación: 06E, integrar modelos propios y aprendidos con lector.
+
+v0.6.26 (06D FIX05): corregida omisión de letra durante OCR de columnas observada en Windows; pruebas de regresión sin alterar el flujo ni el motor OMR. 06E queda pendiente hasta validar FIX05.
