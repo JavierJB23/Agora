@@ -73,21 +73,120 @@ def read_docx(data):
                 lines.append('    '.join(' '.join(paragraph(p) for p in c.iter(ns+'p')) for c in row.findall(ns+'tc')))
     return ['\n'.join(lines)]
 
-def ocr_text(image):
+def _ocr_image(gray, psm=6, whitelist=None):
     import os, subprocess, cv2 as cv
     from .number_ocr import engine
     exe,extra=engine()
     if not exe: raise ValueError('Motor OCR local no disponible.')
-    gray=cv.cvtColor(image,cv.COLOR_RGB2GRAY)
-    if max(gray.shape)<1600: gray=cv.resize(gray,None,fx=2,fy=2,interpolation=cv.INTER_CUBIC)
     ok,png=cv.imencode('.png',gray)
     if not ok: raise ValueError('No se pudo preparar la imagen.')
-    cmd=[exe,'stdin','stdout',*extra,'-l','eng','--psm','6','-c','preserve_interword_spaces=1']
+    cmd=[exe,'stdin','stdout',*extra,'-l','eng','--psm',str(psm),'-c','preserve_interword_spaces=1']
+    if whitelist: cmd+=['-c','tessedit_char_whitelist='+whitelist]
     r=subprocess.run(cmd,input=png.tobytes(),capture_output=True,timeout=45,env=dict(os.environ,OMP_THREAD_LIMIT='1'),creationflags=getattr(subprocess,'CREATE_NO_WINDOW',0))
     if r.returncode: raise ValueError('No se pudo leer el texto de la imagen.')
-    # Correct an OCR-only glyph ambiguity in the numeric part of R1, never a response letter.
-    text=r.stdout.decode('utf-8',errors='replace')
-    return re.sub(r'(?<![\w])R[ \t]*[Il](?=[ \t]*[A-EX](?:$|[\s,;|]))','R1',text)
+    return r.stdout.decode('utf-8',errors='replace')
+
+
+def _column_ocr(gray, initial):
+    """Fallback for printed multi-column keys. Check geometry and actual digits;
+    never fill missing answers from a presumed sequence or the exam configuration."""
+    import cv2 as cv, numpy as np
+    _,ink=cv.threshold(gray,0,255,cv.THRESH_BINARY_INV+cv.THRESH_OTSU)
+    _,_,stats,_=cv.connectedComponentsWithStats(ink)
+    heights=[int(h) for x,y,w,h,area in stats[1:] if 5<h<60 and 3<w<50 and area>12]
+    if len(heights)<20: raise ValueError('No se distinguen las columnas del solucionario.')
+    h=max(8,int(np.median(heights))); xs=np.flatnonzero((ink>0).sum(0)>3*h)
+    bands=[b for b in np.split(xs,np.where(np.diff(xs)>5*h)[0]+1) if len(b)>h]
+    if not 2<=len(bands)<=8: raise ValueError('No se distinguen las columnas del solucionario.')
+    # A recognized global title is allowed above the answer columns, not arbitrary prose.
+    title=next((v for v in initial.splitlines() if v.strip()),'')
+    has_title=bool(TITLE.match(title))
+    def runs(mask):
+        ys=np.flatnonzero((mask>0).sum(1)>2)
+        return [(int(r[0]),int(r[-1])+1) for r in np.split(ys,np.where(np.diff(ys)>max(2,h//4))[0]+1) if len(r) and r[-1]-r[0]>=h*.48]
+    def prep(a):
+        a=cv.resize(a,None,fx=2,fy=2,interpolation=cv.INTER_CUBIC)
+        _,a=cv.threshold(a,0,255,cv.THRESH_BINARY+cv.THRESH_OTSU)
+        return cv.copyMakeBorder(a,15,15,15,15,cv.BORDER_CONSTANT,value=255)
+    bounds=[(max(0,int(b[0])-3*h),min(gray.shape[1],int(b[-1])+4*h)) for b in bands]
+    layouts=[runs(ink[:,l:r]) for l,r in bounds]
+    # All initial text above a shared first data row must be a single title line.
+    starts=[]
+    for rr in layouts:
+        if len(rr)<4: raise ValueError('Columna incompleta.')
+        if has_title and rr[1][0]-rr[0][1]>3*h: starts.append(rr[1][0])
+    cutoff=min(starts)-h if starts else 0
+    if cutoff and any(sum(y<cutoff for y,_ in rr)>1 for rr in layouts): raise ValueError('Texto adicional antes de las columnas.')
+    ordinary=[]; reserve=[]; reserve_seen=False
+    for (l,r),rr in zip(bounds,layouts):
+        rr=[(y,z) for y,z in rr if y>=cutoff]
+        if not rr: raise ValueError('Columna vacía.')
+        segments=[]; current=[]; is_reserve=False
+        for y,z in rr:
+            row=ink[y:z,l:r]
+            # A wide text line may be an explicit reserve heading. Verify its text.
+            if np.count_nonzero(row.any(axis=0))>5*h:
+                heading=_ocr_image(prep(gray[max(0,y-2):z+2,max(0,l-2*h):min(gray.shape[1],r+5*h)]),7).strip()
+                if not RES.fullmatch(heading): raise ValueError('Texto no reconocido entre las respuestas: '+heading[:80])
+                if current: segments.append((is_reserve,current)); current=[]
+                is_reserve=True; reserve_seen=True; continue
+            current.append((y,z))
+        if current: segments.append((is_reserve,current))
+        for is_reserve,rows in segments:
+            y0,y1=rows[0][0],rows[-1][1]
+            text=_ocr_image(prep(gray[max(0,y0-h//2):y1+h//2,l:r]),6,'0123456789.ABCDEXabcdeRr ')
+            lines=[v.strip() for v in text.splitlines() if v.strip()]
+            if len(lines)!=len(rows): raise ValueError('No coincide el número de filas de la columna.')
+            previous=None
+            for line,(y,z) in zip(lines,rows):
+                m=PAIR.fullmatch(line)
+                if not m:
+                    # Retry only a damaged answer glyph, with its own alphabet.
+                    n=re.fullmatch(r'(R?)[ ]*(\d{1,3})[.]\s*(.+)',line,re.I)
+                    if not n: raise ValueError('Número o letra dudosos: '+line)
+                    row=ink[max(0,y-2):z+2,l:r]
+                    xx=np.flatnonzero(row.any(axis=0)); pieces=np.split(xx,np.where(np.diff(xx)>max(2,h//3))[0]+1)
+                    if len(pieces)<2: raise ValueError('No se distingue la letra: '+line)
+                    a,b=int(pieces[-1][0]),int(pieces[-1][-1])+1
+                    for scale in (2,4,5):
+                        glyph=cv.resize(gray[max(0,y-3):z+3,max(0,l+a-2):l+b+2],None,fx=scale,fy=scale,interpolation=cv.INTER_CUBIC)
+                        glyph=cv.copyMakeBorder(glyph,12,12,12,12,cv.BORDER_CONSTANT,value=255)
+                        v=_ocr_image(glyph,10,'ABCDEXabcde').strip().upper()
+                        if len(v)==1 and v in 'ABCDEX': break
+                    if len(v)!=1 or v not in 'ABCDEX': raise ValueError('Letra dudosa: '+line)
+                    line=n[1]+n[2]+v; m=PAIR.fullmatch(line)
+                number=int(m[2])
+                if previous is not None and number!=previous+1:
+                    row=ink[max(0,y-2):z+2,l:r]
+                    xx=np.flatnonzero(row.any(axis=0)); pieces=np.split(xx,np.where(np.diff(xx)>max(2,h//3))[0]+1)
+                    if len(pieces)<2: raise ValueError('Número dudoso: '+line)
+                    a,b=int(xx[0]),int(pieces[-2][-1])+1
+                    digits=prep(gray[max(0,y-3):z+3,max(0,l+a-2):l+b+2])
+                    read=_ocr_image(digits,7,'0123456789.').strip().rstrip('.')
+                    if not read.isdigit() or int(read)!=previous+1: raise ValueError('Numeración dudosa: '+line)
+                    number=int(read)
+                previous=number
+                target=reserve if is_reserve or m[1] else ordinary
+                target.append(('R' if target is reserve else '')+str(number)+m[3].upper())
+    if reserve_seen and not reserve: raise ValueError('No se han leído las reservas.')
+    result='\n'.join(ordinary+reserve)
+    parse_pages([result])  # verify duplicates and gaps before proposing any solution
+    return result
+
+
+def ocr_text(image):
+    import cv2 as cv
+    gray=cv.cvtColor(image,cv.COLOR_RGB2GRAY)
+    if max(gray.shape)<1600: gray=cv.resize(gray,None,fx=2,fy=2,interpolation=cv.INTER_CUBIC)
+    text=_ocr_image(gray)
+    text=re.sub(r'(?<![\w])R[ \t]*[Il](?=[ \t]*[A-EX](?:$|[\s,;|]))','R1',text)
+    try: parse_pages([text]); return text
+    except ValueError:
+        # A page containing only explicitly labeled reserves can be parsed with other pages.
+        if re.search(r'(?im)^\s*(?:R\s*[- ]?\d|preguntas de reserva)',text) and not TITLE.search(text):
+            return text
+        try: return _column_ocr(gray,text)
+        except ValueError: return text
 
 
 def extract_key(data, filename):
