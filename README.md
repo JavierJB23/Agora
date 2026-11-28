@@ -255,3 +255,13 @@ Regla de reservas y puntuación: reemplazo por orden ascendente; sin reservas v�
 - Se rechazan encuadres desproporcionados y bloques que se solapan con otras preguntas.
 - Una raya roja que atraviesa la fila deja la respuesta pendiente con «Posible anulada · tachadura roja · revisar». Una cruz roja aislada sigue siendo informativa. La anulación requiere confirmación del usuario; no se modifica el motor de notas.
 - Las cuatro pruebas de regresión añadidas pasan localmente. La prueba gráfica común queda pendiente de GitHub.
+
+### v0.6.23 · BLOCK 06D · FIX02
+- Las tres secciones de Mis modelos calculan el tamaño de sus tarjetas fuera de la zona recortada, incluso al volver a la pantalla. Se mantiene la animación de 280 ms.
+- La importación de modelos en blanco se centraliza en Mis modelos; la biblioteca se denomina Modelos en blanco aprendidos.
+- Edición de modelos aprendidos: añadir páginas por PC/QR, quitar la página visible, reordenar y confirmar la revisión. Actualización transaccional con el mismo identificador; los archivos originales se conservan íntegros como respaldo y pueden reimportarse para recuperar páginas retiradas.
+- Límites visibles en los campos del generador (mín./máx.) y aviso para valores escritos fuera de rango.
+- Búsqueda de plantillas en ambos correctores mediante su biblioteca compartida: filtra sin alterar el simulacro, ignora mayúsculas y tildes; Intro permite seleccionar una coincidencia única con las reglas habituales de confirmación.
+- Repasar respuestas sustituye a Repasar errores. Frases de inicio variables, respetando el saludo nominal personalizado existente.
+- El OMR diferencia las filas oscuras de una cuadrícula de cuadrados verificada de las cabeceras sólidas; se mantienen las verificaciones geométricas y de numeración OCR. Las anotaciones manuscritas fuera de las casillas no se convierten en reservas.
+- Compilación manual mediante workflow_dispatch. No incluye fotografías ni documentos de usuario en el repositorio.

@@ -322,3 +322,9 @@ FIX14 (v0.6.14):
 - No subir las fotografías privadas al repositorio.
 
 FIX15: comprobar Simulacro 2023 desde PC y QR (mismo archivo y distintas fotos), 120 filas físicas, 8 tachaduras (5,6,24,38,39,100,108,109), ausencia de cabeceras como respuestas. Probar también TEST10, círculos blancos, reservas, relectura y conservación de datos. La edición manual de respuestas sigue disponible; se retira el ajuste geométrico manual de la interfaz.
+
+v0.6.23 FIX02:
+- Regresión local: 163 pruebas descubiertas en primera ejecución (126 superadas, 37 UI omitidas por ausencia de PySide6).
+- Nuevas pruebas locales: fila oscura de cuadrados frente a cabecera sólida; actualización atómica de modelo aprendido, eliminación y recuperación de páginas, identidad persistente. Ambas superadas; módulo external_models: 11/11.
+- Fotografía nueva del Test 10: 120 filas, 4 opciones impresas; OCR directo en 69 filas y comprobación de continuidad en 51, sin conflicto de numeración. Lectura de la 119: A. Probado con 107 y 120 preguntas configuradas, sin verificar una nota final ni la exactitud de todas las marcas contra un solucionario.
+- Añadidas pruebas UI de filtro, ausencia del botón en corrector, límites y título de repaso. Pendientes de ejecución en GitHub Actions/Windows, incluido el comportamiento de la animación y los avisos de campos numéricos.
