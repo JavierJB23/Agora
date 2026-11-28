@@ -654,3 +654,36 @@ class UITests(unittest.TestCase):
     def test_home_phrases_and_renamed_module(self):
         with tempfile.TemporaryDirectory() as d:
             w=MainWindow(Storage(d)); first=w.greeting.text(); w.refresh_home(); self.assertNotEqual(first,w.greeting.text()); self.assertEqual(w.nav['errors'].text(),'Repasar respuestas'); w.close(); w.deleteLater(); self.app.processEvents()
+
+    def test_fix03_predictor_selects_exact_template(self):
+        from dataclasses import asdict
+        from agora.grading import ExamConfig
+        with tempfile.TemporaryDirectory() as d:
+            storage=Storage(d)
+            tid=storage.save_template('Psicología tema 24',{'config':asdict(ExamConfig(name='Tema 24',questions=2,reserves=0)),'key':['A','B']})
+            storage.save_template('Tema 57',{'config':asdict(ExamConfig(name='Tema 57',questions=2,reserves=0)),'key':['A','C']})
+            w=MainWindow(storage); w.show(); w.go('manual'); m=w.manual
+            m.template_search.setText('psicologia 24'); self.assertEqual(m.template_suggestions.stringList(),['Psicología tema 24'])
+            m.pick_template_suggestion('Psicología tema 24'); self.assertEqual(m.templates_combo.currentData(),tid); self.assertEqual(m.key,['A','B'])
+            w.close(); w.deleteLater(); self.app.processEvents()
+
+    def test_fix03_enter_does_not_open_colors(self):
+        from unittest.mock import patch
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+        from agora.models_ui import ModelEditor
+        from agora.models import Model
+        dlg=ModelEditor(None,Model()); dlg.show(); self.app.processEvents(); field=dlg.fields['reserves']; old=field.value()
+        with patch('agora.models_ui.QMessageBox.warning') as warn,patch('agora.models_ui.QColorDialog.getColor') as color:
+            field.lineEdit().setText('101'); field.lineEdit().setFocus(); QTest.keyClick(field.lineEdit(),Qt.Key.Key_Return); self.app.processEvents()
+            self.assertEqual(field.value(),old); warn.assert_called_once(); color.assert_not_called(); self.assertTrue(dlg.isVisible())
+        dlg.reject(); dlg.deleteLater(); self.app.processEvents()
+
+    def test_fix03_recalculate_from_result_and_reopen(self):
+        with tempfile.TemporaryDirectory() as d:
+            s=Storage(d); w=MainWindow(s); m=w.manual
+            m.install_key(ImportedKey(('A','A'),('B',)),'test.pdf',3); m.next_entry()
+            for i,v in enumerate('ABB'): m.choose(i,v)
+            m.next_entry(); original=m.result.grade; m.table.selectRow(1); m.toggle_result_annulment(); self.assertEqual(m.result.grade,10); self.assertEqual(m.annul_originals,{'1':'B'})
+            self.assertTrue(m.save_progress()); aid=m.attempt_id; m.start_new(); self.assertTrue(m.open_saved(aid)); m.table.selectRow(1); m.toggle_result_annulment(); self.assertEqual(m.result.grade,original); self.assertEqual(m.answers,['A','B','B'])
+            w.close(); w.deleteLater(); self.app.processEvents()
