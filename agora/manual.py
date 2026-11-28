@@ -214,21 +214,34 @@ class ManualPage(QWidget):
         if self.form_override:
             f=self.form_override; self.name.setText(f['name']); self.penalty.setCurrentText(f['penalty']); self.maximum.setText(f['maximum']); self.floor.setChecked(f['floor_zero']); self.question_count.setValue(f.get('questions',q)); self.reserve_count.setValue(f.get('reserves',r))
         self.key_summary=label(self.key_summary_text(),'tileTitle',True); p.addWidget(self.key_summary); self.key_summary.setVisible(bool(self.key_source))
-        t=panel(self.body); t.addWidget(label('Plantillas guardadas','tileTitle')); self.templates_combo=SafeComboBox(); t.addWidget(self.templates_combo)
+        t=panel(self.body); t.addWidget(label('Plantillas guardadas','tileTitle')); self.templates_combo=SafeComboBox(); search_row=QHBoxLayout(); search_row.addWidget(self.templates_combo,3); self.template_search=QLineEdit(); self.template_search.setPlaceholderText('Buscar plantilla…'); self.template_search.setClearButtonEnabled(True); search_row.addWidget(self.template_search,2); t.addLayout(search_row); self.template_search.textChanged.connect(self.filter_templates); self.template_search.returnPressed.connect(self.search_template_enter)
         row=QHBoxLayout(); row.addWidget(btn('Consultar plantilla',self.view_template)); self.use_template_button=btn('Usar plantilla',self.load_template); row.addWidget(self.use_template_button); self.use_template_button.hide(); row.addWidget(btn('Eliminar plantilla',self.remove_template)); row.addWidget(btn('Quitar plantilla',self.clear_template)); row.addStretch(); t.addLayout(row); self.refresh_templates(); self.templates_combo.activated.connect(self.template_selected)
         p2=panel(self.body,12); row=QHBoxLayout(); row.addWidget(btn('Nuevo / limpiar borrador',self.reset)); row.addStretch(); p2.addLayout(row); p2.addWidget(btn('Continuar a soluciones  ›',self.apply_config,'primary'))
 
     def refresh_templates(self):
+        try: self._template_items=self.storage.templates()
+        except Exception as e: self.notice.setText('No se pudieron cargar las plantillas: '+str(e)); self._template_items=[]
+        self.filter_templates(preferred=self.template_id)
+
+    def filter_templates(self,*_,preferred=None):
+        import unicodedata
+        def normal(s): return ''.join(c for c in unicodedata.normalize('NFKD',s.casefold()) if not unicodedata.combining(c))
+        query=normal(self.template_search.text()).split(); selected=preferred if preferred is not None else self.templates_combo.currentData()
         previous=self.templates_combo.blockSignals(True)
         try:
             self.templates_combo.clear(); self.templates_combo.addItem('Selecciona una plantilla',None)
-            self._template_items=self.storage.templates()
-            for i,name,d in self._template_items: self.templates_combo.addItem(name,i)
-            idx=self.templates_combo.findData(self.template_id)
-            if idx>=0: self.templates_combo.setCurrentIndex(idx)
-        except Exception as e: self.notice.setText('No se pudieron cargar las plantillas: '+str(e))
+            for i,name,d in self._template_items:
+                if all(t in normal(name) for t in query): self.templates_combo.addItem(name,i)
+            idx=self.templates_combo.findData(selected)
+            self.templates_combo.setCurrentIndex(max(0,idx))
+            self.templates_combo.setToolTip(f'{self.templates_combo.count()-1} plantillas encontradas')
         finally: self.templates_combo.blockSignals(previous)
         self.update_template_action()
+
+    def search_template_enter(self):
+        if self.templates_combo.count()==2:
+            self.templates_combo.setCurrentIndex(1); self.template_selected()
+        elif self.templates_combo.count()>2: self.templates_combo.showPopup()
 
     def update_template_action(self):
         tid=self.templates_combo.currentData()
@@ -372,8 +385,6 @@ class ManualPage(QWidget):
         from .omr_ui import OpticalPage
         self.reader=OpticalPage(self.config,self.answers,self.optical_cache,self.optical_changed)
         self.body.addWidget(self.reader)
-        from .external_ui import import_model
-        model_button=btn('Importar modelo en blanco',lambda:import_model(self),'softAction'); self.body.addWidget(model_button,0,ALIGN.AlignHCenter)
         bar=QWidget(); actions=QHBoxLayout(bar); actions.setContentsMargins(0,4,0,0); actions.setSpacing(14); actions.addStretch()
         from .omr_ui import compact_btn
         manage=QVBoxLayout(); manage.setSpacing(5)

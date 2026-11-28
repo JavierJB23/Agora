@@ -15,7 +15,7 @@ MODULES = (
     Module('history','Mis simulacros','history','Consulta y organiza tus exámenes.','03–04 / 07',('Historial local de correcciones.','Consulta y exportación de resultados.')),
     Module('progress','Mi progreso','chart','Conoce tu evolución y tus puntos fuertes.','08',('Gráficas de notas y precisión.','Comparación entre simulacros.')),
     Module('library','Mi temario','book','Tu biblioteca personal de estudio.','09',('Importación de PDF y Word desde PC o móvil.','Organización por temas y apartados.')),
-    Module('errors','Repasar errores','checkbook','Comprende y aprende de tus fallos.','10–12',('Vinculación con los enunciados y el temario.','Explicaciones con referencias comprobables.')),
+    Module('errors','Repasar respuestas','checkbook','Repasa tus aciertos y aprende de tus fallos.','10–12',('Vinculación con los enunciados y el temario.','Explicaciones con referencias comprobables.')),
     Module('training','Entrenamiento','brain','Practica con preguntas por temas.','12',('Banco de preguntas y repaso de errores.','Sesiones de práctica personalizadas.')),
     Module('plan','Plan de estudio','calendar','Organiza tus objetivos y repasos.','13',('Planificación personal.','Repasos espaciados.')),
 )

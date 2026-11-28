@@ -360,7 +360,10 @@ class MainWindow(QMainWindow):
         l.addLayout(grid); l.addStretch()
     def refresh_home(self):
         name=self.storage.get('student_name').strip()
-        self.greeting.setText(f'¡Hola, {name}!' if name else 'Tu plaza, un paso más cerca.')
+        import random
+        phrases=('Tu plaza, un paso más cerca.','Cada día cuenta.','El esfuerzo de hoy abre puertas mañana.','Un paso más hacia tu objetivo.','Tu constancia marca la diferencia.','Aprender también es avanzar.','Cada pregunta es una oportunidad para mejorar.','El futuro se construye paso a paso.')
+        if name: self.greeting.setText(f'¡Hola, {name}!')
+        else: self.greeting.setText(random.choice([p for p in phrases if p!=self.greeting.text()]))
         self.motto.setText(self.storage.get('welcome_message') or 'Aprende. Comprende. Avanza.')
     def make_module(self,m):
         l=self.page(m.key); back=button('Volver al inicio','home'); back.clicked.connect(lambda:self.go('home')); l.addWidget(back,0,Qt.AlignmentFlag.AlignLeft)

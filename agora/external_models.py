@@ -357,6 +357,24 @@ class ExternalLibrary:
             for i,p in enumerate(pages):
                 buf=BytesIO(); Image.fromarray(p.image).save(buf,format='PNG'); db.execute('INSERT INTO files VALUES (?,?,?,?,?)',(mid,'reference',i,f'pagina-{i+1}.png',buf.getvalue()))
         return mid
+    def update(self,mid,name,items,pages,questions,reserves,options):
+        """Replace geometry and sources atomically, preserving the model identity."""
+        name=name.strip()
+        if not name or len(name)>100: raise ValueError('Introduce un nombre de hasta 100 caracteres.')
+        meta=metadata(pages,questions,reserves,options)
+        signature=hashlib.sha256(b''.join(hashlib.sha256(data).digest() for _,data in items)).hexdigest()
+        refs=[]
+        for i,p in enumerate(pages):
+            buf=BytesIO(); Image.fromarray(p.image).save(buf,format='PNG'); refs.append((mid,'reference',i,f'pagina-{i+1}.png',buf.getvalue()))
+        with closing(sqlite3.connect(self.path)) as db,db:
+            if not db.execute('SELECT 1 FROM external WHERE id=?',(mid,)).fetchone(): raise ValueError('El modelo ya no existe.')
+            existing=db.execute('SELECT name FROM external WHERE signature=? AND id<>?',(signature,mid)).fetchone()
+            if existing: raise ValueError('Estos documentos ya están guardados como «'+existing[0]+'».')
+            db.execute('UPDATE external SET name=?,signature=?,metadata=? WHERE id=?',(name,signature,json.dumps(meta,ensure_ascii=False),mid))
+            db.execute('DELETE FROM files WHERE id=?',(mid,))
+            db.executemany('INSERT INTO files VALUES (?,?,?,?,?)',[(mid,'original',i,fn,data) for i,(fn,data) in enumerate(items)]+refs)
+        return mid
+
     def rename(self,mid,name):
         name=name.strip()
         if not name or len(name)>100: raise ValueError('Introduce un nombre de hasta 100 caracteres.')

@@ -1,8 +1,8 @@
 """Model library and live printable PDF editor."""
 from dataclasses import replace
 from pathlib import Path
-from PySide6.QtCore import Qt,QTimer,QVariantAnimation,QEasingCurve
-from PySide6.QtGui import QPixmap,QImage,QColor,QPainter
+from PySide6.QtCore import Qt,QTimer,QVariantAnimation,QEasingCurve,QAbstractAnimation
+from PySide6.QtGui import QPixmap,QImage,QColor,QPainter,QValidator
 from PySide6.QtWidgets import (QWidget,QDialog,QVBoxLayout,QHBoxLayout,QGridLayout,QLabel,QLineEdit,QCheckBox,QScrollArea,QFileDialog,QMessageBox,QColorDialog,QInputDialog,QSizePolicy,QFrame)
 from .controls import SafeComboBox,SafeSpinBox
 from .models import Model,ModelLibrary,PRESETS,pdf_bytes,layout,color_name
@@ -23,20 +23,52 @@ def render_page(data,index,scale=1.5):
         finally: page.close()
     finally: doc.close()
 
+class ModelSpinBox(SafeSpinBox):
+    """Keep the last valid number; out-of-range typed input is never clamped silently."""
+    def __init__(self,lo,hi,value):
+        super().__init__(); self.setRange(lo,hi); self.setKeyboardTracking(False); self.setValue(value)
+    def validate(self,text,pos):
+        t=text.strip()
+        if t in ('','-','+'):
+            return QValidator.State.Intermediate,text,pos
+        try: n=int(t)
+        except ValueError: return QValidator.State.Invalid,text,pos
+        return (QValidator.State.Acceptable if self.minimum()<=n<=self.maximum() else QValidator.State.Intermediate),text,pos
+    def fixup(self,text):
+        try: outside=not self.minimum()<=int(text.strip())<=self.maximum()
+        except ValueError: outside=False
+        if outside:
+            lo,hi=self.minimum(),self.maximum()
+            QTimer.singleShot(0,lambda: QMessageBox.warning(self.window(),'Número fuera de rango',f'Introduce un número comprendido entre {lo} y {hi}.'))
+        return str(self.value())
+    def _restore_invalid_input(self):
+        text=self.lineEdit().text()
+        try: outside=not self.minimum()<=int(text.strip())<=self.maximum()
+        except ValueError: outside=False
+        if outside: self.lineEdit().setText(self.fixup(text))
+    def keyPressEvent(self,event):
+        if event.key() in (Qt.Key.Key_Return,Qt.Key.Key_Enter): self._restore_invalid_input()
+        super().keyPressEvent(event)
+    def focusOutEvent(self,event):
+        self._restore_invalid_input(); super().focusOutEvent(event)
+
 class ModelEditor(QDialog):
     def __init__(self,parent,model,save_callback=None,read_only=False):
         super().__init__(parent); self.setWindowTitle('Consultar modelo' if read_only else 'Personalizar modelo'); self.setMinimumSize(760,520); self.resize(1130,760); self.source=model; self.read_only=read_only; self.save_callback=save_callback; self.data=None; self.index=0; self.color=model.color
         root=QVBoxLayout(self); root.addWidget(label('Consultar modelo' if read_only else 'Crear modelo personalizado','heading')); body=QHBoxLayout(); root.addLayout(body,1)
         controls=QWidget(); form=QGridLayout(controls); form.setContentsMargins(8,8,8,8); form.setColumnStretch(1,1); self.fields={}; self.row=0
-        def add(title,w,key):
-            form.addWidget(label(title,wrap=True),self.row,0); form.addWidget(w,self.row,1); self.row+=1; self.fields[key]=w
+        def add(title,w,key,container=None):
+            form.addWidget(label(title,wrap=True),self.row,0); form.addWidget(container if container is not None else w,self.row,1); self.row+=1; self.fields[key]=w
         for key,title in [('name','Nombre'),('title','Título de la hoja')]:
             w=QLineEdit(getattr(model,key)); w.setMaxLength(100); w.setReadOnly(read_only); add(title,w,key); w.textChanged.connect(self.schedule)
         for key,title,lo,hi in [('questions','Preguntas ordinarias',1,500),('reserves','Preguntas de reserva',0,100),('options','Opciones por pregunta',2,5),('columns','Columnas máximas',1,4),('size','Casilla (mm)',4,8),('margin','Margen (mm)',10,22)]:
             if read_only:
                 w=QLineEdit(str(getattr(model,key))); w.setReadOnly(True); add(title,w,key)
             else:
-                w=SafeSpinBox(); w.setRange(lo,hi); w.setValue(getattr(model,key)); add(title,w,key); w.valueChanged.connect(self.schedule)
+                w=ModelSpinBox(lo,hi,getattr(model,key)); cell=QWidget(); row=QHBoxLayout(cell); row.setContentsMargins(0,0,0,0); row.setSpacing(4); row.addWidget(w,1)
+                limit=QLabel(); limit.setStyleSheet('color:#A55379;font-weight:700;'); limit.setFixedWidth(limit.fontMetrics().horizontalAdvance('máx.')+8); row.addWidget(limit)
+                def update_limit(v,w=w,limit=limit): limit.setText('máx.' if v==w.maximum() else 'mín.' if v==w.minimum() else '')
+                w.valueChanged.connect(update_limit); update_limit(w.value()); add(title,w,key,cell); w.valueChanged.connect(self.schedule)
         for key,title,choices in [('shape','Forma',[('Círculos','circle'),('Cuadrados','square'),('Óvalos','oval')]),('orientation','Orientación A4',[('Vertical','portrait'),('Horizontal','landscape')])]:
             if read_only:
                 w=QLineEdit(next(n for n,v in choices if v==getattr(model,key))); w.setReadOnly(True); add(title,w,key)
@@ -129,8 +161,8 @@ class ModelSection(QWidget):
     def __init__(self,title,parent=None):
         super().__init__(parent); self.title=title; self.expanded=False
         root=vertical(self,spacing=6); self.header=button('',role='softAction'); self.header.setStyleSheet('text-align:left;padding:12px 16px;font-weight:600;'); self.header.clicked.connect(self.toggle); root.addWidget(self.header)
-        self.viewport=QScrollArea(); self.viewport.setFrameShape(QFrame.Shape.NoFrame); self.viewport.setWidgetResizable(True); self.viewport.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff); self.viewport.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        content=QWidget(); self.content=content; body=vertical(content,margins=(0,2,0,2),spacing=8); self.grid=QGridLayout(); self.grid.setHorizontalSpacing(12); self.grid.setVerticalSpacing(12); body.addLayout(self.grid)
+        self.viewport=QScrollArea(); self.viewport.setFrameShape(QFrame.Shape.NoFrame); self.viewport.setWidgetResizable(False); self.viewport.setStyleSheet('QScrollArea {background:transparent;border:0;}'); self.viewport.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff); self.viewport.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        content=QWidget(); content.setObjectName('modelSectionContent'); content.setStyleSheet('QWidget#modelSectionContent {background:transparent;}'); self.content=content; body=vertical(content,margins=(0,2,0,2),spacing=8); self.grid=QGridLayout(); self.grid.setHorizontalSpacing(12); self.grid.setVerticalSpacing(12); body.addLayout(self.grid)
         close=button('Ocultar'); close.setStyleSheet('font-style:italic;text-align:center;padding:4px 12px;'); close.setSizePolicy(QSizePolicy.Policy.Fixed,QSizePolicy.Policy.Fixed); close.clicked.connect(self.toggle); body.addWidget(close,0,Qt.AlignmentFlag.AlignHCenter)
         self.viewport.setWidget(content); root.addWidget(self.viewport); self.viewport.setFixedHeight(0); self.viewport.hide()
         self.anim=QVariantAnimation(self); self.anim.setDuration(280); self.anim.setEasingCurve(QEasingCurve.Type.InOutCubic); self.anim.valueChanged.connect(lambda value:self.set_height(int(value))); self.anim.finished.connect(self.finished); self.update_header()
@@ -138,23 +170,40 @@ class ModelSection(QWidget):
     def set_height(self,h):
         self.viewport.setFixedHeight(max(0,h)); self.updateGeometry()
     def target(self):
-        self.content.layout().activate(); return max(1,self.content.sizeHint().height())+2
+        # Measure the real card layout, not the tiny clipped viewport. Its width
+        # is known even when its content has not yet been shown by Qt.
+        self.content.ensurePolished(); lay=self.content.layout()
+        for i in range(self.grid.count()):
+            w=self.grid.itemAt(i).widget()
+            if w is not None: w.ensurePolished(); w.show(); w.updateGeometry()
+        self.grid.invalidate(); lay.invalidate(); lay.activate()
+        width=max(1,self.width())
+        width=max(width,lay.minimumSize().width())
+        h=max(1,lay.minimumSize().height(),lay.sizeHint().height(),lay.heightForWidth(width))
+        self.content.resize(width,h); lay.activate(); return h+2
+    def resizeEvent(self,event):
+        super().resizeEvent(event)
+        if self.expanded and self.anim.state()!=QAbstractAnimation.State.Running: QTimer.singleShot(0,self.sync)
+    def showEvent(self,event):
+        super().showEvent(event)
+        if self.expanded: QTimer.singleShot(0,self.sync)
     def toggle(self):
         self.expanded=not self.expanded; self.update_header(); self.anim.stop(); start=self.viewport.height() if self.viewport.isVisible() else 0
         self.viewport.show(); self.anim.setStartValue(start); self.anim.setEndValue(self.target() if self.expanded else 0); self.anim.start()
     def finished(self):
-        if self.expanded: self.set_height(self.target())
+        if self.expanded:
+            self.set_height(self.target()); QTimer.singleShot(0,self.sync)
         else: self.set_height(0); self.viewport.hide()
     def sync(self):
         if self.expanded:
-            self.anim.stop(); self.set_height(self.target()); self.viewport.show()
+            self.anim.stop(); self.viewport.show(); self.set_height(self.target())
 
 
 class ModelsPage(QWidget):
     def __init__(self,window):
         super().__init__(); self.main_window=window; self.library=None; self.thumbnails={}; l=vertical(self,spacing=16); back=button('Volver a Mi temario','book'); back.clicked.connect(lambda:window.library_stack.setCurrentIndex(0)); l.addWidget(back,0,Qt.AlignmentFlag.AlignLeft); l.addWidget(label('Mis modelos','heading'))
         row=QHBoxLayout(); create=button('Crear modelo',role='primary'); create.clicked.connect(lambda:self.edit(Model())); row.addWidget(create); imp=button('Importar modelo en blanco',role='softAction'); imp.clicked.connect(self.import_external); row.addWidget(imp); row.addStretch(); l.addLayout(row)
-        self.preset_section=ModelSection('Modelos de Ágora',self); self.custom_section=ModelSection('Mis modelos personalizados',self); self.external_section=ModelSection('Modelos externos aprendidos',self)
+        self.preset_section=ModelSection('Modelos de Ágora',self); self.custom_section=ModelSection('Mis modelos personalizados',self); self.external_section=ModelSection('Modelos en blanco aprendidos',self)
         for section in (self.preset_section,self.custom_section,self.external_section): l.addWidget(section)
         self.presets=self.preset_section.grid; self.custom=self.custom_section.grid; self.external=self.external_section.grid; l.addStretch()
         for m in PRESETS: self.add_card(self.presets,m)
@@ -187,19 +236,22 @@ class ModelsPage(QWidget):
             if w: w.hide(); w.deleteLater()
         try:
             lib=get_library(self); entries=lib.entries()
-            if not entries: self.external.addWidget(label('Todavía no hay modelos externos.','muted'),0,0,1,2)
+            if not entries: self.external.addWidget(label('Todavía no hay modelos en blanco aprendidos.','muted'),0,0,1,2)
             for i,(mid,name,date,meta) in enumerate(entries):
                 card=frame('tile'); h=QHBoxLayout(card); thumb=QLabel(); thumb.setFixedSize(88,118); thumb.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 refs=lib.files(mid,'reference')
                 if refs: thumb.setPixmap(pix(np.array(Image.open(BytesIO(refs[0][1])).convert('RGB'))).scaled(80,110,Qt.AspectRatioMode.KeepAspectRatio,Qt.TransformationMode.SmoothTransformation))
                 h.addWidget(thumb); info=QVBoxLayout(); h.addLayout(info,1); info.addWidget(label(name,'tileTitle',True)); info.addWidget(label(f'{meta["questions"]} preguntas · {meta["reserves"]} reservas · {meta["options"]} opciones · {len(meta["pages"])} pág.','muted',True)); info.addWidget(label(date.replace('T',' '),'muted'))
                 grid=QGridLayout(); info.addLayout(grid)
-                for j,(title,fn) in enumerate([('Consultar',lambda checked=False,m=mid,n=name,d=meta:consult(self,m,n,d,lib)),('Descargar original',lambda checked=False,m=mid:export_original(self,m,lib)),('Renombrar',lambda checked=False,m=mid,n=name:self.rename_external(lib,m,n)),('Eliminar',lambda checked=False,m=mid,n=name:self.remove_external(lib,m,n))]):
+                for j,(title,fn) in enumerate([('Consultar',lambda checked=False,m=mid,n=name,d=meta:consult(self,m,n,d,lib)),('Descargar original',lambda checked=False,m=mid:export_original(self,m,lib)),('Editar',lambda checked=False,m=mid,n=name,d=meta:self.edit_external(lib,m,n,d)),('Renombrar',lambda checked=False,m=mid,n=name:self.rename_external(lib,m,n)),('Eliminar',lambda checked=False,m=mid,n=name:self.remove_external(lib,m,n))]):
                     b=button(title,role='softAction'); b.setSizePolicy(QSizePolicy.Policy.Fixed,QSizePolicy.Policy.Fixed); b.setStyleSheet('text-align:center;padding:6px 8px;'); b.clicked.connect(fn); grid.addWidget(b,j//2,j%2,Qt.AlignmentFlag.AlignLeft)
                 self.external.addWidget(card,i//2,i%2)
             self.external.setColumnStretch(0,1); self.external.setColumnStretch(1,1)
         except Exception as e: self.external.addWidget(label(str(e),wrap=True),0,0,1,2)
         self.external_section.sync()
+    def edit_external(self,lib,mid,name,meta):
+        from .external_ui import edit_model
+        edit_model(self,mid,name,meta,lib); self.refresh_external()
     def rename_external(self,lib,mid,name):
         new,ok=QInputDialog.getText(self,'Renombrar modelo','Nombre del modelo',text=name)
         if ok:

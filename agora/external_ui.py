@@ -82,9 +82,9 @@ class OrderDialog(QDialog):
 
 
 class ReviewDialog(QDialog):
-    def __init__(self,parent,name,pages,q,r,o,items,library,read_only=False,expected=None):
-        super().__init__(parent); self.name=name; self.pages=pages; self.q=q; self.r=r; self.o=o; self.items=items; self.library=library; self.read_only=read_only; self.index=0; self.saved_id=None; self.expected=expected; self.row_map=[]
-        self.setWindowTitle('Consultar modelo externo' if read_only else 'Revisar modelo en blanco'); self.resize(1120,min(760,self.screen().availableGeometry().height()-60)); root=QVBoxLayout(self)
+    def __init__(self,parent,name,pages,q,r,o,items,library,read_only=False,expected=None,edit_id=None):
+        super().__init__(parent); self.name=name; self.pages=pages; self.q=q; self.r=r; self.o=o; self.items=items; self.library=library; self.read_only=read_only; self.index=0; self.saved_id=None; self.expected=expected; self.row_map=[]; self.edit_id=edit_id
+        self.setWindowTitle('Consultar modelo en blanco' if read_only else 'Editar modelo en blanco' if edit_id else 'Revisar modelo en blanco'); self.resize(1120,min(760,self.screen().availableGeometry().height()-60)); root=QVBoxLayout(self)
         heading=QLabel(name); heading.setObjectName('heading'); heading.setWordWrap(True); root.addWidget(heading)
         self.summary=QLabel(); self.summary.setWordWrap(True); root.addWidget(self.summary); body=QHBoxLayout(); root.addLayout(body,1)
         self.paper=QLabel(); self.paper.setAlignment(A.AlignCenter); self.paper.setMinimumSize(160,200); self.paper.setSizePolicy(QSizePolicy.Policy.Ignored,QSizePolicy.Policy.Ignored); self.paper.setStyleSheet('background:#EDE5E9;border-radius:8px;'); body.addWidget(self.paper,3)
@@ -94,6 +94,8 @@ class ReviewDialog(QDialog):
         if not read_only:
             self.table.cellChanged.connect(self.update_start)
             line=QHBoxLayout(); line.addStretch(); line.addWidget(compact_btn('Ordenar páginas',self.order_pages)); side.addLayout(line)
+            if edit_id:
+                line=QHBoxLayout(); line.addWidget(compact_btn('Añadir páginas',self.add_pages)); line.addWidget(compact_btn('Eliminar página',self.remove_page)); side.addLayout(line)
             self.checked=QCheckBox('He comprobado las casillas y la numeración de todas las páginas'); self.checked.setStyleSheet('QCheckBox {spacing:8px;}'); root.addWidget(self.checked)
         nav=QHBoxLayout(); self.prev=compact_btn('‹ Anterior',lambda:self.go(-1)); self.next=compact_btn('Siguiente ›',lambda:self.go(1)); self.counter=QLabel(); nav.addWidget(self.prev); nav.addStretch(); nav.addWidget(self.counter); nav.addStretch(); nav.addWidget(self.next); root.addLayout(nav)
         action=QHBoxLayout(); action.addWidget(compact_btn('Cerrar' if read_only else 'Cancelar',self.reject)); action.addStretch()
@@ -143,13 +145,47 @@ class ReviewDialog(QDialog):
         d=OrderDialog(self,self.pages)
         if d.exec()==QDialog.DialogCode.Accepted and (d.order!=list(range(len(self.pages))) or d.kinds!=[page_kind(p) for p in self.pages]):
             self.pages=reorder_pages(self.pages,d.order,d.kinds); self.index=0; self.checked.setChecked(False); self.refresh()
+    def remove_page(self):
+        if len(self.pages)<=1: QMessageBox.warning(self,'Eliminar página','El modelo debe conservar al menos una página.'); return
+        if not confirm(self,'Eliminar página',f'¿Quitar la página {self.index+1} del modelo? Los cambios se guardarán al confirmar.'): return
+        self.pages.pop(self.index); self.pages=reorder_pages(self.pages,list(range(len(self.pages))),[page_kind(p) for p in self.pages]); self.index=min(self.index,len(self.pages)-1); self.checked.setChecked(False); self.refresh()
+    def add_pages(self):
+        d=ImportDialog(host_window(self),omr.EXTENSIONS,multiple=True,max_files=20); d.destination_label='Mi temario · Editar modelo en blanco'
+        if d.exec()!=QDialog.DialogCode.Accepted or not d.items: return
+        # Reimporting an original is allowed to recover previously removed pages.
+        used={name for name,_ in self.items}; by_data={data:name for name,data in self.items}; incoming=[]; added_sources=[]
+        for name,data in d.items:
+            if data in by_data:
+                base=by_data[data]
+                if not any(n==base for n,_ in incoming): incoming.append((base,data))
+                continue
+            stem=Path(name).stem; suffix=Path(name).suffix; base=name; i=2
+            while base in used: base=f'{stem} ({i}){suffix}'; i+=1
+            used.add(base); by_data[data]=base; incoming.append((base,data)); added_sources.append((base,data))
+        if not incoming: return
+        progress=QProgressDialog('Reconociendo nuevas páginas…','',0,0,self); progress.setCancelButton(None); progress.setWindowModality(Qt.WindowModality.WindowModal); progress.setMinimumDuration(0); progress.show()
+        worker=LearnWorker(incoming,self.o,self); loop=QEventLoop(); worker.finished.connect(loop.quit); worker.start()
+        if not worker.isFinished(): loop.exec()
+        worker.wait(); progress.close(); new,error=worker.pages,worker.error; worker.deleteLater()
+        try:
+            if error: raise ValueError(error)
+            existing={p.source for p in self.pages}; new=[p for p in new if p.source not in existing]
+            if not new: raise ValueError('Todas las páginas seleccionadas ya forman parte del modelo.')
+            if len(self.pages)+len(new)>200: raise ValueError('Máximo 200 páginas por modelo.')
+            if any(not p.blocks for p in new): raise ValueError('Alguna página no tiene casillas reconocidas.')
+            if detected_options(new,self.o)!=self.o: raise ValueError('Las nuevas páginas tienen un número de opciones diferente.')
+            suggest_numbering(new,500,0)
+            self.items.extend(added_sources); self.pages.extend(new); self.pages=reorder_pages(self.pages,list(range(len(self.pages))),[page_kind(p) for p in self.pages]); self.index=len(self.pages)-len(new); self.checked.setChecked(False); self.refresh()
+        except Exception as e: QMessageBox.warning(self,'No se pudieron añadir páginas',str(e))
     def save(self):
         if not self.checked.isChecked(): QMessageBox.warning(self,'Revisar modelo','Confirma la numeración y las casillas antes de guardar.'); return
-        try: self.saved_id=self.library.save(self.name,self.items,self.pages,self.q,self.r,self.o)
+        try:
+            if self.edit_id: self.saved_id=self.library.update(self.edit_id,self.name,self.items,self.pages,self.q,self.r,self.o)
+            else: self.saved_id=self.library.save(self.name,self.items,self.pages,self.q,self.r,self.o)
         except Exception as e: QMessageBox.warning(self,'No se pudo guardar',str(e)); return
         self.accept()
 
-def consult(parent,mid,name,meta,lib):
+def restore_pages(mid,meta,lib):
     pages=[]
     for (_,data),p in zip(lib.files(mid,'reference'),meta['pages']):
         im=np.array(Image.open(BytesIO(data)).convert('RGB')); h,w=im.shape[:2]; blocks=[]
@@ -161,7 +197,20 @@ def consult(parent,mid,name,meta,lib):
                 runs[-1].rows.append([(x*w,y*h,cw*w,ch*h) for x,y,cw,ch in row['cells']])
             blocks.extend(runs)
         pages.append(Page(im,blocks,p['source']))
-    if pages: ReviewDialog(parent,name,pages,meta['questions'],meta['reserves'],meta['options'],[],lib,True).exec()
+    if len(pages)!=len(meta['pages']): raise ValueError('Faltan imágenes de referencia del modelo.')
+    return pages
+
+def consult(parent,mid,name,meta,lib):
+    try:
+        pages=restore_pages(mid,meta,lib)
+        if pages: ReviewDialog(parent,name,pages,meta['questions'],meta['reserves'],meta['options'],[],lib,True).exec()
+    except Exception as e: QMessageBox.warning(parent,'No se pudo consultar',str(e))
+
+def edit_model(parent,mid,name,meta,lib):
+    try:
+        pages=restore_pages(mid,meta,lib)
+        if pages: ReviewDialog(parent,name,pages,meta['questions'],meta['reserves'],meta['options'],lib.files(mid,'original'),lib,edit_id=mid).exec()
+    except Exception as e: QMessageBox.warning(parent,'No se pudo editar',str(e))
 
 def export_original(parent,mid,lib):
     files=lib.files(mid,'original')

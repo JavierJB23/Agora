@@ -929,19 +929,28 @@ def scan_repeated_rows(im, positions, extended=True):
         marks.append(m)
     return marks
 
-def verify_numbered_rows(im, marks):
+def verify_numbered_rows(im, marks, square_grid=False):
     """Never accept a dark printed header as an answer or a broken column.
     For the recognizable four-column 30-row family, require full columns and
     validate their starts against the printed headers if present."""
     gray=geometry_gray(im)
     blocks=reading_blocks(marks)
+    interior={m.number for b in blocks if len(b)>=5 for m in b[1:-1]} if square_grid else set()
     for m in marks:
         crop=crop_image(im,m)
         if crop.size and min(crop.shape[:2])>=4:
             g=geometry_gray(crop)
             # A filled header has dark ink throughout the crop, unlike bubbles.
             if np.mean(g<150)>.65 and np.median(g)<120 and np.mean((g<150).mean(axis=0)>.70)>.66:
-                raise ValueError('Se ha detectado una cabecera como posible respuesta.')
+                # A dark alternating row of a verified connected square grid
+                # is not a header: check for repeated lighter cell interiors.
+                n=len(m.scores); h,w=g.shape
+                _,local=cv.threshold(g,0,255,cv.THRESH_BINARY+cv.THRESH_OTSU)
+                light=local[h//4:3*h//4,:].mean(axis=0)>127
+                runs=np.diff(np.r_[False,light,False].astype(int)); widths=np.where(runs==-1)[0]-np.where(runs==1)[0]
+                holes=sum(w/(n+1)*.22<=v<=w/n*.95 for v in widths)
+                if not (m.number in interior and 2<=n<=5 and holes>=n-1):
+                    raise ValueError('Se ha detectado una cabecera como posible respuesta.')
     if len(marks)>=100 and all(len(m.scores)==3 and not m.number.startswith('R') for m in marks):
         # Group by physical x position as well as consecutive numbering. A
         # missed row may split one logical block into multiple fragments.
@@ -1000,12 +1009,12 @@ def _automatic_page(im, questions, reserves=0, options=3, previous=None, progres
                 return candidate,verify_numbered_rows(candidate,marks)
             except ValueError as e: errors.append(str(e))
     report(.65,"Comprobando geometría alternativa")
-    for detector in (lambda:square_page(im,aligned),lambda:(aligned,flexible_outline_blocks(aligned,options)),lambda:(raw,flexible_outline_blocks(raw,options))):
+    for index,detector in enumerate((lambda:square_page(im,aligned),lambda:(aligned,flexible_outline_blocks(aligned,options)),lambda:(raw,flexible_outline_blocks(raw,options)))):
         try:
             canvas,blocks=detector()
             if any(len(ms[0].scores)<options for _,ms in blocks): raise ValueError('Faltan opciones impresas.')
             marks=automatic_numbering(blocks,questions,reserves,previous)
-            return canvas,verify_numbered_rows(canvas,marks)
+            return canvas,verify_numbered_rows(canvas,marks,square_grid=index==0)
         except ValueError as e: errors.append(str(e))
     raise ValueError('No se ha podido verificar la estructura y numeración de la hoja. Prueba con otra fotografía o introduce las respuestas manualmente.')
 
