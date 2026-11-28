@@ -74,6 +74,17 @@ def smoke_test(report):
                 raise RuntimeError('Prueba de recorte horizontal incorrecta')
             if unpack(record(sq,square_view,newmarks),0)[2]!=newmarks:
                 raise RuntimeError('Prueba de guardado de lectura flexible incorrecta')
+            # 06E: verify a printed model through the same production entrypoint.
+            from agora.models import PRESETS
+            from agora.model_reader import ModelReader,own_references
+            from agora.grading import ExamConfig
+            ref=next(own_references(PRESETS[3])); sample=ref.image.copy()
+            x,y,cw,ch=ref.rows[0][1][1]
+            cv.line(sample,(round(x-cw*.25),round(y-ch*.25)),(round(x+cw*.25),round(y+ch*.25)),(20,40,130),2)
+            cv.line(sample,(round(x-cw*.25),round(y+ch*.25)),(round(x+cw*.25),round(y-ch*.25)),(20,40,130),2)
+            _,model_marks=ModelReader(folder).read(sample,ExamConfig(questions=20,reserves=0))
+            if len(model_marks)!=20 or omr.proposed(model_marks[0])!='B' or model_marks[0].model_name!='Ágora Repaso':
+                raise RuntimeError('Prueba de reconocimiento de modelo Ágora incorrecta')
             pdf = PdfWriter()
             pdf.add_blank_page(width=595, height=842)
             buf = BytesIO()

@@ -457,3 +457,13 @@ Python compileall correcto. Compilación exclusivamente manual.
 
 === v0.6.27 FIX06 ===
 Compilación Windows 95: 182 pruebas, 2 errores por OCR «.a» sin número. Recuperación independiente de ambos campos y filas omitidas. 188 pruebas locales: 145 correctas, 43 omitidas por PySide6 no disponible, 0 fallos. Incluye las seis nuevas regresiones con OCR real y omisiones simuladas; pruebas anteriores FIX04 y FIX05 conservadas. Prueba adicional sintética de 120 ordinarias + 9 reservas: 129/129 correctas; importación de los PDF privados S24 (120+9) y temas 56-59 (107+0) correcta. La foto original del simulacro 19 no se ha reejecutado en esta revisión. No se incluyen documentos privados. Windows con Tesseract 5.5.3 y EXE pendientes de validar.
+
+---
+BLOCK 06E RC1 (v0.6.28) — lista de verificación en Windows
+1. Compilar manualmente y abrir el EXE, comprobar v0.6.28 BLOCK 06E y los modelos/plantillas/simulacros guardados.
+2. Imprimir Ágora Clásico, marcar algunas A/B/C y reservas con bolígrafo azul; subir ambas páginas en orden inverso por QR. Verificar numeración, recortes y que «Ver hoja y casillas» indique Ágora Clásico si se reconoció por modelo.
+3. Probar Ágora Compacto/Estándar o un personalizado con cuadrados/óvalos, 4/5 opciones, color distinto y orientación horizontal. Marcas dobles, rojo y tachaduras quedan revisables; sin respuesta inventada.
+4. Importar un modelo externo en blanco desde Mis modelos, guardar, fotografiar la hoja rellenada equivalente y corregir por PC y móvil. Probar ordinarias y reservas, hoja ligeramente inclinada. Si el registro no es seguro se usa lector universal.
+5. Probar hoja desconocida sin modelo, TEST 10, simulacro 24, hoja 2023 y reservas. Deben mantener el flujo anterior sin diálogos nuevos.
+6. Releer hoja, comprobar vista previa y conservación de revisiones manuales, anular/desanular, recalcular, guardar y reabrir. El modelo, las imágenes y los recortes deben mantenerse cuando se usó el reconocimiento por modelo.
+7. Comprobar que el QR reutilizable y la biblioteca funcionan como en STABLE. No hay cambios en el OCR de solucionarios.

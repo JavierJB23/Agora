@@ -119,3 +119,6 @@ v0.6.26 (06D FIX05): corregida omisión de letra durante OCR de columnas observa
 
 ### BLOCK 06D FIX06 · v0.6.27
 Corrección del OCR de solucionarios tras compilación 95. Recuperación de número, letra y fila omitidos con lectura física independiente. No se adelanta 06E. Cerrar 06D únicamente tras compilar y validar la foto del simulacro 19 en Windows.
+
+### BLOCK 06E · v0.6.28 RC1
+06D FIX06 (v0.6.27) confirmado por el usuario. Integrar reconocimiento por QR de identificación de modelos propios, geometría exacta y marcas negras, reconocimiento visual de modelos en blanco aprendidos, separación de tinta/impresión y fallback universal. Se conserva lectura automática sin seleccionar modelos manualmente; nombre visible al consultar hoja. Pruebas de modelos predefinidos, personalizados, reservas, perspectiva, ambigüedad, persistencia y smoke EXE. Pendiente validación Windows y hojas físicas antes de declarar 06E STABLE. Tras ello seguir con el siguiente módulo acordado, sin reabrir innecesariamente OMR.
