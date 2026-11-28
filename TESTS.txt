@@ -454,3 +454,6 @@ Compilación Windows 94 (FIX04): 180 pruebas, 1 error en test_columns_reserve_la
 Batería local completa: 182 pruebas descubiertas, 139 aprobadas, 43 omitidas por falta de PySide6, 0 errores y 0 fallos. Tesseract 5.5.0 local; Windows/Tesseract 5.5.3 pendiente.
 Fotografía simulacro 19: 129/129 coincidencias con transcripción visual independiente (120 ordinarias + 9 reservas). PDF S24: 120 + 9; PDF temas 56–59: 107 + 0. Documentos privados excluidos del ZIP.
 Python compileall correcto. Compilación exclusivamente manual.
+
+=== v0.6.27 FIX06 ===
+Compilación Windows 95: 182 pruebas, 2 errores por OCR «.a» sin número. Recuperación independiente de ambos campos y filas omitidas. 188 pruebas locales: 145 correctas, 43 omitidas por PySide6 no disponible, 0 fallos. Incluye las seis nuevas regresiones con OCR real y omisiones simuladas; pruebas anteriores FIX04 y FIX05 conservadas. Prueba adicional sintética de 120 ordinarias + 9 reservas: 129/129 correctas; importación de los PDF privados S24 (120+9) y temas 56-59 (107+0) correcta. La foto original del simulacro 19 no se ha reejecutado en esta revisión. No se incluyen documentos privados. Windows con Tesseract 5.5.3 y EXE pendientes de validar.

@@ -116,3 +116,6 @@ BLOCK 06B: OCR local y numeración universal; BLOCK 06C: Mi temario / Mis modelo
 v0.6.25 (06D FIX04): refinamiento visual del predictor, selector QR nativo único y fallback OCR de solucionarios en columnas con reservas. No se altera el motor OMR, la biblioteca ni el sistema de anulaciones. Próximo bloque tras validación: 06E, integrar modelos propios y aprendidos con lector.
 
 v0.6.26 (06D FIX05): corregida omisión de letra durante OCR de columnas observada en Windows; pruebas de regresión sin alterar el flujo ni el motor OMR. 06E queda pendiente hasta validar FIX05.
+
+### BLOCK 06D FIX06 · v0.6.27
+Corrección del OCR de solucionarios tras compilación 95. Recuperación de número, letra y fila omitidos con lectura física independiente. No se adelanta 06E. Cerrar 06D únicamente tras compilar y validar la foto del simulacro 19 en Windows.
