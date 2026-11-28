@@ -664,6 +664,7 @@ class UITests(unittest.TestCase):
             storage.save_template('Tema 57',{'config':asdict(ExamConfig(name='Tema 57',questions=2,reserves=0)),'key':['A','C']})
             w=MainWindow(storage); w.show(); w.go('manual'); m=w.manual
             m.template_search.setText('psicologia 24'); self.assertEqual(m.template_suggestions.stringList(),['Psicología tema 24'])
+            popup=m.template_completer.popup(); self.assertTrue(popup.hasMouseTracking()); self.assertTrue(popup.alternatingRowColors()); self.assertIn('::item:hover',popup.styleSheet())
             m.pick_template_suggestion('Psicología tema 24'); self.assertEqual(m.templates_combo.currentData(),tid); self.assertEqual(m.key,['A','B'])
             w.close(); w.deleteLater(); self.app.processEvents()
 

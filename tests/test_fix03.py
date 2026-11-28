@@ -61,5 +61,5 @@ class Fix03Tests(unittest.TestCase):
         self.assertEqual(extract_key(buf.getvalue(),'clave.png').key,['A','B','C','A','B'])
     def test_mobile_pickers_and_extensions(self):
         p=mobile_page()
-        for x in ('id="camera"','id="photos"','id="file"','capture="environment"','PDF, Word o fotos','Tiempo agotado','Móvil desconectado'): self.assertIn(x,p)
-        self.assertEqual(set(KEY_EXTENSIONS),set(RESPONSE_EXTENSIONS)); self.assertNotIn('id="camera" type="file" multiple',p)
+        for x in ('id="file"','Seleccionar archivos','Enviar archivos','Tiempo agotado','Móvil desconectado'): self.assertIn(x,p)
+        self.assertEqual(set(KEY_EXTENSIONS),set(RESPONSE_EXTENSIONS)); self.assertNotIn('capture=',p); self.assertNotIn('id="camera"',p); self.assertNotIn('id="photos"',p); self.assertIn("f.removeAttribute('accept')",p)
