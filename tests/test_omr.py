@@ -311,6 +311,18 @@ class VerifiedNumberingTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'cabecera'):
             omr.verify_numbered_rows(im,[m])
 
+    def test_dark_square_row_is_not_a_header(self):
+        im=np.full((omr.HEIGHT,omr.WIDTH,3),240,np.uint8); marks=[]
+        for j in range(5):
+            y=300+j*30; cv.rectangle(im,(100,y),(240,y+24),(20,20,20),-1)
+            for i in range(4): cv.rectangle(im,(104+i*35,y+4),(124+i*35,y+20),(115,115,115),-1)
+            marks.append(omr.Mark(str(j+1),'A','Azul detectado',(30,0,0,0),(0,0,0,0),(100,y,240,y+25)))
+        # Only the middle row is dark; keep neighboring rows light.
+        for j in (0,1,3,4): im[300+j*30:325+j*30,100:240]=240
+        self.assertEqual(len(omr.verify_numbered_rows(im,marks,square_grid=True)),5)
+        im[360:385,100:240]=20
+        with self.assertRaisesRegex(ValueError,'cabecera'): omr.verify_numbered_rows(im,marks,square_grid=True)
+
     def test_header_anchors_allow_column_specific_heights(self):
         im=np.full((omr.HEIGHT,omr.WIDTH,3),240,np.uint8)
         for col in range(4):

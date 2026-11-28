@@ -620,17 +620,37 @@ class UITests(unittest.TestCase):
             w.models_page.refresh(); self.assertEqual(w.models_page.external.count(),1); self.assertEqual(w.models_page.presets.count(),4)
             from agora.external_ui import get_library
             self.assertEqual(get_library(w.models_page).entries()[0][0],dlg.saved_id)
-            section=w.models_page.external_section; self.assertFalse(section.expanded); section.header.click(); section.anim.setCurrentTime(section.anim.duration()); self.assertTrue(section.expanded); self.assertGreater(section.viewport.height(),0); section.header.click(); section.anim.setCurrentTime(section.anim.duration()); self.assertFalse(section.expanded); self.assertEqual(section.viewport.height(),0)
+            section=w.models_page.external_section; self.assertFalse(section.expanded); section.header.click(); section.anim.setCurrentTime(section.anim.duration()); self.assertTrue(section.expanded); self.assertGreater(section.viewport.height(),0); self.app.processEvents(); self.assertGreaterEqual(section.viewport.height(),section.content.height()); section.header.click(); section.anim.setCurrentTime(section.anim.duration()); self.assertFalse(section.expanded); self.assertEqual(section.viewport.height(),0)
             view=ReviewDialog(w,'Modelo externo',pages,m.questions,m.reserves,m.options,[],lib,True); self.assertFalse(bool(view.table.item(0,3).flags() & Qt.ItemFlag.ItemIsEditable)); view.reject(); dlg.deleteLater(); view.deleteLater(); w.close(); w.deleteLater(); self.app.processEvents()
 
-    def test_import_model_button_does_not_change_exam(self):
-        from unittest.mock import patch
+    def test_blank_model_import_only_in_library(self):
         from PySide6.QtWidgets import QPushButton
         with tempfile.TemporaryDirectory() as d:
             w=MainWindow(Storage(d)); w.show(); w.go('automatic'); p=w.automatic
             p.install_key(ImportedKey(tuple('ABC'),()),'prueba.pdf',3); p.move_stage(2); self.app.processEvents()
-            before=list(p.answers); key=list(p.key); target=next(b for b in p.content.findChildren(QPushButton) if b.text()=='Importar modelo en blanco')
-            # The callback is bound when the stage is rendered; re-render after patching.
-            with patch('agora.external_ui.import_model',return_value=None) as imp:
-                p.render(); self.app.processEvents(); target=next(b for b in p.content.findChildren(QPushButton) if b.text()=='Importar modelo en blanco' and b.isVisible()); target.click(); imp.assert_called_once_with(p)
-            self.assertEqual(p.answers,before); self.assertEqual(p.key,key); self.assertEqual(p.stage,2); w.close(); w.deleteLater(); self.app.processEvents()
+            self.assertFalse(any(b.text()=='Importar modelo en blanco' for b in p.content.findChildren(QPushButton)))
+            self.assertTrue(any(b.text()=='Importar modelo en blanco' for b in w.models_page.findChildren(QPushButton)))
+            w.close(); w.deleteLater(); self.app.processEvents()
+
+    def test_template_search_filters_without_changing_exam(self):
+        from dataclasses import asdict
+        from agora.grading import ExamConfig
+        with tempfile.TemporaryDirectory() as d:
+            storage=Storage(d)
+            for name in ('Psicología tema 24','Tema 57','Otra'):
+                storage.save_template(name,{'config':asdict(ExamConfig(name=name,questions=2,reserves=0)),'key':['A','B']})
+            w=MainWindow(storage); w.show(); w.go('manual'); p=w.manual; p.refresh_templates()
+            before=list(p.key); p.template_search.setText('psicologia 24'); self.assertEqual(p.templates_combo.count(),2); self.assertEqual(p.key,before)
+            p.template_search.setText('inexistente'); self.assertEqual(p.templates_combo.count(),1); p.template_search.clear(); self.assertEqual(p.templates_combo.count(),4)
+            w.close(); w.deleteLater(); self.app.processEvents()
+
+    def test_model_range_validation(self):
+        from agora.models_ui import ModelSpinBox
+        from PySide6.QtGui import QValidator
+        w=ModelSpinBox(1,500,120)
+        self.assertEqual(w.validate('501',3)[0],QValidator.State.Intermediate); self.assertEqual(w.validate('0',1)[0],QValidator.State.Intermediate)
+        self.assertEqual(w.validate('500',3)[0],QValidator.State.Acceptable); self.assertEqual(w.value(),120)
+
+    def test_home_phrases_and_renamed_module(self):
+        with tempfile.TemporaryDirectory() as d:
+            w=MainWindow(Storage(d)); first=w.greeting.text(); w.refresh_home(); self.assertNotEqual(first,w.greeting.text()); self.assertEqual(w.nav['errors'].text(),'Repasar respuestas'); w.close(); w.deleteLater(); self.app.processEvents()

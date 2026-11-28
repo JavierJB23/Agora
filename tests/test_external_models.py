@@ -65,3 +65,16 @@ class ExternalTests(unittest.TestCase):
     def test_mismatch_printed_rows_rejected(self):
         im=np.full((500,500,3),255,np.uint8); b=manual_block([(40,50),(120,50),(120,150),(40,150)],5,3,'1'); p=Page(im,[b],'test',('1','2','3','4','5','6'))
         with self.assertRaises(ValueError): metadata([p],5,0,3)
+
+    def test_edit_model_preserves_id_and_updates_pages_atomically(self):
+        m=PRESETS[0]; data=pdf_bytes(m); items=[('blank.pdf',data)]
+        pages=learn_items(items,3); suggest_numbering(pages,120,9)
+        with tempfile.TemporaryDirectory() as d:
+            lib=ExternalLibrary(d); mid=lib.save('Original',items,pages,120,9,3)
+            self.assertEqual(lib.update(mid,'Original',items,pages[:1],120,0,3),mid)
+            self.assertEqual(lib.entries()[0][3]['reserves'],0); self.assertEqual(len(lib.files(mid,'reference')),1)
+            self.assertEqual(lib.files(mid,'original'),items)
+            with self.assertRaises(ValueError): lib.update(mid,'Original',items,pages,120,0,3)
+            self.assertEqual(len(lib.files(mid,'reference')),1)
+            lib.update(mid,'Original',items,pages,120,9,3)
+            self.assertEqual(lib.entries()[0][0],mid); self.assertEqual(len(lib.files(mid,'reference')),2)
