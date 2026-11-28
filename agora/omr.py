@@ -23,6 +23,7 @@ class Mark:
     crop: tuple[int,int,int,int]
     quad: tuple[tuple[float,float],...] = ()  # ordered corners of the actual row
     number_check: str = ""  # OCR, sequence, geometry, unavailable; empty for historical records
+    model_name: str = ""  # optional reference name; old archives remain compatible
 
 def decode(name,data):
     ext=Path(name).suffix.lower()
@@ -454,7 +455,7 @@ def flag_strikes(im, marks):
 
 
 def proposed(mark):
-    if 'Posible anulada' in mark.status: return ''
+    if 'Posible anulada' in mark.status or 'Tinta dudosa' in mark.status: return ''
     if mark.suggestion and 'débil' not in mark.status: return mark.suggestion
     if not mark.suggestion and max(mark.scores)<5 and max(mark.red)<=20: return '-'
     return ''

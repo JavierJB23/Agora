@@ -25,7 +25,7 @@ def unpack(row,slot):
     _,original,normalized,metadata=row
     with Image.open(BytesIO(original)) as im: original=np.array(im.convert('RGB'))
     with Image.open(BytesIO(normalized)) as im: normalized=np.array(im.convert('RGB'))
-    marks=[Mark(m['number'],m['suggestion'],m['status'],tuple(m['scores']),tuple(m['red']),tuple(m['crop']),tuple(tuple(float(v) for v in pt) for pt in m.get('quad',())),m.get('number_check','')) for m in json.loads(metadata)]
+    marks=[Mark(m['number'],m['suggestion'],m['status'],tuple(m['scores']),tuple(m['red']),tuple(m['crop']),tuple(tuple(float(v) for v in pt) for pt in m.get('quad',())),m.get('number_check',''),m.get('model_name','')) for m in json.loads(metadata)]
     import re
     if normalized.shape!=(HEIGHT,WIDTH,3) or not 1<=len(marks)<=600: raise ValueError('Imagen guardada no válida.')
     seen=set()
@@ -37,6 +37,7 @@ def unpack(row,slot):
             q=np.asarray(m.quad,np.float32)
             if q.shape!=(4,2) or not np.isfinite(q).all() or np.any(q<0) or np.any(q[:,0]>=WIDTH) or np.any(q[:,1]>=HEIGHT) or not cv.isContourConvex(q) or cv.contourArea(q)<4: raise ValueError('Geometría guardada no válida.')
         if m.number_check not in ('','OCR','sequence','geometry','unavailable'): raise ValueError('Verificación OCR guardada no válida.')
+        if not isinstance(m.model_name,str) or len(m.model_name)>100: raise ValueError('Nombre de modelo guardado no válido.')
         seen.add(m.number)
     return original,normalized,marks
 

@@ -52,10 +52,12 @@ class RestoreAutomatic(Exception):
 
 class ReadWorker(QThread):
     progress=Signal(int,str)
-    def __init__(self,items,config,parent=None):
-        super().__init__(parent); self.items=items; self.config=config; self.results=[]; self.errors=[]; self.failure=None
+    def __init__(self,items,config,parent=None,directory=None):
+        super().__init__(parent); self.directory=directory; self.items=items; self.config=config; self.results=[]; self.errors=[]; self.failure=None
     def run(self):
         try:
+            from .model_reader import ModelReader
+            reader=ModelReader(self.directory)
             pages=[]
             for j,(name,data) in enumerate(self.items):
                 self.progress.emit(round(20*j/len(self.items)),f'Abriendo archivo {j+1} de {len(self.items)}')
@@ -69,7 +71,7 @@ class ReadWorker(QThread):
                 try:
                     def stage(fraction,label):
                         self.progress.emit(20+round(75*(j+fraction)/len(pages)),f'Hoja {j+1} de {len(pages)} · {label}')
-                    aligned,marks=omr.automatic_page(im,self.config.questions,self.config.reserves,self.config.options,progress=stage,verify_ocr=True)
+                    aligned,marks=reader.read(im,self.config,progress=stage)
                     stage(.90,'Conservando imagen')
                     self.results.append((im,aligned,marks,record(im,aligned,marks)))
                 except Exception as e: self.errors.append(f'{name} · página {k}: {e}')
@@ -164,7 +166,7 @@ class OpticalPage(QWidget):
             return None
     def run_import(self,items):
         # Worker touches only arrays and files. All widget and storage changes stay on GUI thread.
-        worker=ReadWorker(items,self.config,self); loop=QEventLoop(); timer=QTimer(self); timer.setInterval(250)
+        worker=ReadWorker(items,self.config,self,directory=self.storage.directory if self.storage else None); loop=QEventLoop(); timer=QTimer(self); timer.setInterval(250)
         state=[0,'Preparando archivos']; reading=[None,None]
         def update():
             value,phase=state
@@ -295,6 +297,8 @@ class OpticalPage(QWidget):
             return
         import cv2 as cv
         d=QDialog(self); d.setWindowTitle('Hoja de respuestas'); d.resize(690,780); l=QVBoxLayout(d)
+        models=list(dict.fromkeys(m.model_name for m in self.marks[i] if m.model_name))
+        if models: l.addWidget(text('Modelo identificado: '+', '.join(models)))
         row=QHBoxLayout(); im=QLabel(); im.setAlignment(A.AlignCenter)
         def show(original):
             img=self.images[i] if original else self.aligned[i].copy()
@@ -305,7 +309,8 @@ class OpticalPage(QWidget):
         row.addWidget(btn('Hoja original',lambda:show(True))); row.addWidget(btn('Casillas leídas',lambda:show(False))); l.addLayout(row)
         sc=QScrollArea(); sc.setWidget(im); sc.setWidgetResizable(True); l.addWidget(sc,1); l.addWidget(btn('Cerrar',d.accept),0,A.AlignCenter); show(True); d.exec()
     def automatic_candidate(self,original):
-        return omr.automatic_page(original,self.config.questions,self.config.reserves,self.config.options,verify_ocr=True)
+        from .model_reader import ModelReader
+        return ModelReader(self.storage.directory if self.storage else None).read(original,self.config)
 
     def adjust_existing_block(self,canvas,marks):
         """One common editor for circles and squares, starting from the detected columns."""
